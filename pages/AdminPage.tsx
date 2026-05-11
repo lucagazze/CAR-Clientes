@@ -132,7 +132,8 @@ export default function AdminPage() {
       meta_account_id: c.meta_account_id || '',
       klaviyo_api_key: c.klaviyo_api_key || '',
       chatwoot_url: c.chatwoot_url || '',
-      chatwoot_token: c.chatwoot_token || ''
+      chatwoot_token: c.chatwoot_token || '',
+      new_password: ''
     });
     setEditingClient(c);
   };
@@ -152,7 +153,17 @@ export default function AdminPage() {
       }).eq('id', editingClient.id);
       
       if (error) throw error;
-      showToast('Integraciones actualizadas ✓', 'success');
+
+      // Update password if provided
+      if (editForm.new_password && supabaseAdmin) {
+        const { error: pwdErr } = await supabaseAdmin.auth.admin.updateUserById(
+          editingClient.user_id,
+          { password: editForm.new_password }
+        );
+        if (pwdErr) throw pwdErr;
+      }
+
+      showToast('Actualizado correctamente ✓', 'success');
       setEditingClient(null);
       load();
     } catch (err: any) {
@@ -397,6 +408,31 @@ export default function AdminPage() {
                   </Field>
                   <Field label="Token del widget">
                     <input type="text" value={editForm.chatwoot_token} onChange={e => ef('chatwoot_token', e.target.value)} placeholder="token_xxxxxx" className={inputCls} />
+                  </Field>
+                </div>
+              </SectionBox>
+
+              {/* Password Change */}
+              <SectionBox title="Acceso y Seguridad">
+                <div className="grid grid-cols-1 gap-4">
+                  <Field label="Nueva Contraseña (dejar vacío para no cambiar)">
+                    <div className="relative">
+                      <input 
+                        type={showPwd ? 'text' : 'password'} 
+                        value={editForm.new_password} 
+                        onChange={e => ef('new_password', e.target.value)} 
+                        placeholder="Mínimo 6 caracteres" 
+                        className={inputCls + ' pr-20'} 
+                      />
+                      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-1">
+                        <button type="button" onClick={() => setShowPwd(s => !s)} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all">
+                          {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        <button type="button" onClick={() => ef('new_password', genPwd())} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all" title="Generar">
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   </Field>
                 </div>
               </SectionBox>
