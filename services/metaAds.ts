@@ -176,25 +176,43 @@ export const metaAds = {
     }),
 
   // ── INSIGHTS ──────────────────────────────────────────────
-  getInsights: async (
-    objectId: string,
-    fields = INSIGHT_FIELDS,
-    datePreset?: DatePreset,
-    timeRange?: TimeRange,
-    timeIncrement?: number | 'all_days'
-  ) => {
-    const params: Record<string, string> = { fields, limit: '500' };
-    if (timeRange) {
-      params.time_range = JSON.stringify(timeRange);
-    } else {
-      params.date_preset = datePreset || 'last_28d';
+  getInsights: async (accountId: string, fields: string[] | string, preset?: DatePreset, range?: { since: string, until: string }, timeIncrement?: number) => {
+    const fieldsStr = Array.isArray(fields) ? fields.join(',') : fields;
+    let url = `${BASE}/${accountId}/insights?fields=${fieldsStr}&access_token=${getToken()}`;
+    if (range) url += `&time_range={"since":"${range.since}","until":"${range.until}"}`;
+    else if (preset) url += `&date_preset=${preset}`;
+    if (timeIncrement) url += `&time_increment=${timeIncrement}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    if (data.error) throw data.error;
+    
+    if (timeIncrement === 1) {
+      return data.data.map((d: any) => ({
+        ...d,
+        spend: parseFloat(d.spend || 0),
+        reach: parseInt(d.reach || 0),
+        results: parseFloat(d.actions?.find((a: any) => a.action_type === 'purchase' || a.action_type === 'lead')?.value || 0),
+        purchase_value: parseFloat(d.action_values?.find((a: any) => a.action_type === 'purchase')?.value || 0),
+        roas: parseFloat(d.purchase_roas?.[0]?.value || 0),
+        date: d.date_start
+      }));
     }
-    if (timeIncrement) {
-      params.time_increment = String(timeIncrement);
-    }
-    const res = await apiGet(`${objectId}/insights`, params);
-    if (timeIncrement) return res.data || [];
-    return (res.data || [])[0] || null;
+    
+    const insights = data.data[0] || {};
+    return {
+      ...insights,
+      spend: parseFloat(insights.spend || 0),
+      reach: parseInt(insights.reach || 0),
+      results: parseFloat(insights.actions?.find((a: any) => a.action_type === 'purchase' || a.action_type === 'lead')?.value || 0),
+      purchase_value: parseFloat(insights.action_values?.find((a: any) => a.action_type === 'purchase')?.value || 0),
+      roas: parseFloat(insights.purchase_roas?.[0]?.value || 0)
+    };
+  },
+
+  getInsightsDaily: async (accountId: string, fields: string[] | string, preset?: DatePreset, range?: { since: string, until: string }) => {
+    return metaAds.getInsights(accountId, fields, preset, range, 1);
   },
 
   // ── INSIGHTS AT ADSET LEVEL (for segment classification) ──

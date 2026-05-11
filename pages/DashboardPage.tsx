@@ -1,29 +1,43 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { db, MetaMetric, ClientLink } from '../services/db';
-import { metaAds, DatePreset, presetToRange, getPrevPeriod, today, daysAgo } from '../services/metaAds';
+import { supabase } from '../services/supabase';
+import { metaAds, INSIGHT_FIELDS, DatePreset, presetToRange, getPrevPeriod, today, daysAgo } from '../services/metaAds';
 import { klaviyo } from '../services/klaviyo';
 import { 
-  BarChart2, ExternalLink, TrendingUp, Mail,
-  AlertCircle, Calendar as CalendarIcon, Layers, Circle, ChevronDown, 
-  Loader2, Check, ChevronLeft, ChevronRight, LayoutDashboard, Send, MousePointer2, ShoppingBag
+  LayoutDashboard, Users, MessageSquare, Mail, Link as LinkIcon, FileText, 
+  Settings, LogOut, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Search, Bell,
+  ArrowUpRight, ArrowDownRight, Eye, EyeOff, RefreshCw
 } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 // ── Components ─────────────────────────────────────────────────────────
 
-const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const DAYS_ES   = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+interface ClientLink {
+  id: string;
+  title: string;
+  url: string;
+  icon: string;
+}
 
-function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
-function getFirstDayOfWeek(year: number, month: number) {
-  const d = new Date(year, month, 1).getDay();
-  return d === 0 ? 6 : d - 1;
+interface MetaMetric {
+  name: string;
+  value: string | number;
+  change: number;
+  trend: 'up' | 'down';
+}
+
+const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const DAYS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+function getDaysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate(); }
+function getFirstDayOfWeek(y: number, m: number) { 
+  const d = new Date(y, m, 1).getDay();
+  return d === 0 ? 6 : d - 1; 
 }
 function isoDate(y: number, m: number, d: number) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
 
-const MiniCal = ({ year, month, since, until, hovering, onDay, onHover }: any) => {
+const MiniCal = ({ year, month, since, until, hovering, onDay, onHover, onPrev, onNext }: any) => {
   const days = getDaysInMonth(year, month);
   const offset = getFirstDayOfWeek(year, month);
   const cells = [...Array(offset).fill(null), ...Array.from({length:days},(_,i)=>i+1)];
@@ -31,30 +45,57 @@ const MiniCal = ({ year, month, since, until, hovering, onDay, onHover }: any) =
 
   return (
     <div className="select-none min-w-[200px]">
-      <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 text-center mb-3">{MONTHS_ES[month]} {year}</p>
+      <div className="flex items-center justify-between mb-3 px-1">
+        {onPrev ? (
+          <button onClick={onPrev} className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 transition-all">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        ) : <div className="w-6" />}
+        
+        <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100">{MONTHS_ES[month]} {year}</p>
+
+        {onNext ? (
+          <button onClick={onNext} className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 transition-all">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        ) : <div className="w-6" />}
+      </div>
       <div className="grid grid-cols-7 mb-1 text-center">
         {DAYS_ES.map(d => <div key={d} className="text-[10px] font-bold text-zinc-400 pb-1">{d}</div>)}
       </div>
-      <div className="grid grid-cols-7 gap-y-0.5">
-        {cells.map((day, i) => {
-          if (!day) return <div key={i} />;
-          const iso = isoDate(year, month, day);
-          const isStart = iso === since;
-          const isEnd = iso === until;
-          const inRange = since && until && iso > since && iso < until;
-          const inHover = hovering && since && !until && iso > since && iso <= hovering;
+      <div className="grid grid-cols-7 gap-y-1">
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const iso = isoDate(year, month, d);
           const isToday = iso === today();
           const isFuture = iso > today();
+          const isSince = iso === since;
+          const isUntil = iso === until;
+          
+          let isInRange = false;
+          if (since && until) {
+            isInRange = iso > since && iso < until;
+          } else if (since && hovering) {
+            const start = since < hovering ? since : hovering;
+            const end = since < hovering ? hovering : since;
+            isInRange = iso > start && iso < end;
+          }
+
           return (
-            <button key={i} disabled={isFuture} onClick={() => onDay(iso)} onMouseEnter={() => onHover(iso)}
-              className={`h-7 w-full text-[11px] font-medium relative transition-all ${
-                isStart || isEnd ? 'bg-violet-600 text-white rounded-md z-10' :
-                (inRange || inHover) ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-200' :
-                isToday ? 'border-2 border-violet-500 text-violet-600 font-bold rounded-md' :
-                isFuture ? 'opacity-30 cursor-not-allowed' :
-                'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-md'
-              }`}>
-              {day}
+            <button
+              key={i}
+              disabled={isFuture}
+              onMouseEnter={() => onHover(iso)}
+              onClick={() => onDay(iso)}
+              className={`
+                h-8 w-8 text-[11px] font-medium rounded-full transition-all relative
+                ${isFuture ? 'opacity-20 cursor-default' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'}
+                ${isToday ? 'border border-blue-500 text-blue-500 font-bold' : ''}
+                ${isSince || isUntil ? 'bg-blue-600 text-white font-bold scale-110 z-10' : ''}
+                ${isInRange ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded-none' : ''}
+              `}
+            >
+              {d}
             </button>
           );
         })}
@@ -63,61 +104,119 @@ const MiniCal = ({ year, month, since, until, hovering, onDay, onHover }: any) =
   );
 };
 
-const ShopifyMetric = ({ label, value, change, trend, data, color = "#6366f1", loading }: any) => (
-  <div className="flex flex-col flex-1 min-w-[140px] px-4 py-3 border-r border-zinc-100 dark:border-zinc-800 last:border-r-0 group relative">
-    <div className="flex items-center gap-1.5 mb-0.5">
-      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-tight">{label}</span>
-    </div>
-    <div className="flex items-end justify-between">
-      <div className="flex flex-col">
+const ShopifyMetric = ({ label, value, change, trend, data, color, loading, active, onClick }: any) => (
+  <div 
+    onClick={onClick}
+    className={`flex-1 min-w-[200px] p-5 border-r last:border-r-0 border-black/[0.06] dark:border-white/[0.06] hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-all cursor-pointer relative group ${active ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''}`}
+  >
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">{label}</span>
+        {active && <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />}
+      </div>
+      <div className="flex items-baseline gap-2">
         {loading ? (
-          <div className="h-5 w-16 bg-zinc-100 dark:bg-zinc-800 animate-pulse rounded-md mt-1" />
+          <div className="h-6 w-20 bg-zinc-100 dark:bg-zinc-800 animate-pulse rounded" />
         ) : (
-          <span className="text-[17px] font-bold text-zinc-900 dark:text-white truncate">{value}</span>
-        )}
-        {!loading && change !== undefined && (
-          <div className={`flex items-center text-[10px] font-bold mt-0.5 ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
-            {trend === 'up' ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
-          </div>
+          <span className="text-xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">{value}</span>
         )}
       </div>
-      {!loading && data && data.length > 0 && (
-        <div className="h-10 w-24 sm:w-28 ml-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
-              <Area type="monotone" dataKey="val" stroke={color} fill={color} fillOpacity={0.1} strokeWidth={2} dot={false} isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+      <div className="flex items-center gap-1.5 mt-1">
+        <div className={`flex items-center text-[11px] font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+          {trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+          {change ? `${Math.abs(change).toFixed(1)}%` : '0%'}
+        </div>
+      </div>
+    </div>
+    <div className="absolute right-4 bottom-4 w-20 h-14 opacity-60 group-hover:opacity-100 transition-opacity" style={{ minHeight: '40px', display: 'block' }}>
+      {data && data.length > 0 ? (
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data}>
+            <Area type="monotone" dataKey="val" stroke={color} fill={color} fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center opacity-20">
+          <div className="w-8 h-[1px] bg-zinc-400" />
         </div>
       )}
     </div>
   </div>
 );
 
-const DATE_OPTIONS: { label: string, value: DatePreset | 'custom' }[] = [
-  { label: 'Hoy', value: 'today' },
-  { label: 'Ayer', value: 'yesterday' },
-  { label: 'Últimos 7 días', value: 'last_7d' },
-  { label: 'Últimos 14 días', value: 'last_14d' },
-  { label: 'Últimos 28 días', value: 'last_28d' },
-  { label: 'Este mes', value: 'this_month' },
-  { label: 'Mes pasado', value: 'last_month' },
-  { label: 'Personalizado', value: 'custom' },
-];
+const MetricDetailChart = ({ data, color, label }: any) => (
+  <div className="mt-4 p-6 bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm animate-in slide-in-from-top-2 duration-300">
+    <div className="flex items-center justify-between mb-6">
+      <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Evolución de {label}</h3>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+          <span className="text-[12px] font-medium text-zinc-600 dark:text-zinc-400">Datos diarios</span>
+        </div>
+      </div>
+    </div>
+    <div className="h-[200px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data}>
+          <defs>
+            <linearGradient id={`gradient-${label}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.1}/>
+              <stop offset="95%" stopColor={color} stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-zinc-100 dark:text-zinc-800" />
+          <XAxis 
+            dataKey="name" 
+            hide 
+          />
+          <YAxis 
+            hide 
+            domain={['auto', 'auto']}
+          />
+          <Tooltip 
+            content={({ active, payload }: any) => {
+              if (active && payload && payload.length) {
+                return (
+                  <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-2 rounded-lg shadow-xl">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">{payload[0].payload.date}</p>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {typeof payload[0].value === 'number' && payload[0].value > 1000 ? `$ ${payload[0].value.toLocaleString()}` : payload[0].value}
+                    </p>
+                  </div>
+                );
+              }
+              return null;
+            }}
+          />
+          <Area 
+            type="monotone" 
+            dataKey="val" 
+            stroke={color} 
+            strokeWidth={2}
+            fillOpacity={1} 
+            fill={`url(#gradient-${label})`}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+);
 
 export default function DashboardPage() {
   const { profile } = useAuth();
   const [links, setLinks] = useState<ClientLink[]>([]);
-  const [metaMetrics, setMetaMetrics] = useState<MetaMetric[]>([]);
+  const [metaDaily, setMetaDaily] = useState<any[]>([]);
   
   // Date States
-  const [activePreset, setActivePreset] = useState<DatePreset | 'custom'>('yesterday');
-  const [activeSince, setActiveSince] = useState(daysAgo(1));
-  const [activeUntil, setActiveUntil] = useState(daysAgo(1));
-  const [pendingPreset, setPendingPreset] = useState<DatePreset | 'custom'>('yesterday');
-  const [pendingSince, setPendingSince] = useState(daysAgo(1));
-  const [pendingUntil, setPendingUntil] = useState(daysAgo(1));
+  const [activePreset, setActivePreset] = useState<DatePreset | 'custom'>('today');
+  const [activeSince, setActiveSince] = useState(today());
+  const [activeUntil, setActiveUntil] = useState(today());
 
+  // Date Picker Pending States
+  const [pendingPreset, setPendingPreset] = useState<DatePreset | 'custom'>('today');
+  const [pendingSince, setPendingSince] = useState(today());
+  const [pendingUntil, setPendingUntil] = useState(today());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hovering, setHovering] = useState('');
   const nowD = new Date();
@@ -127,7 +226,6 @@ export default function DashboardPage() {
   // Meta Data States
   const [currentMeta, setCurrentMeta] = useState<any>(null);
   const [prevMeta, setPrevMeta] = useState<any>(null);
-  const [metaTrend, setMetaTrend] = useState<any[]>([]);
   const [fetchingMeta, setFetchingMeta] = useState(false);
 
   // Klaviyo Data States
@@ -138,6 +236,7 @@ export default function DashboardPage() {
   const [loadingInitial, setLoadingInitial] = useState(true);
   const datePickerRef = useRef<HTMLDivElement>(null);
   const fetchLock = useRef(false);
+  const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -154,21 +253,16 @@ export default function DashboardPage() {
     const range = p === 'custom' ? { since: s, until: u } : presetToRange(p);
     const prevRange = getPrevPeriod(range.since, range.until);
 
-    // Meta Trend
-    let metaTrendRange = { ...range };
-    if (Math.ceil((new Date(range.until).getTime() - new Date(range.since).getTime()) / 864e5) < 6) {
-      metaTrendRange = { since: daysAgo(7), until: range.until };
-    }
-
     if (profile?.meta_account_id) {
       setFetchingMeta(true);
       try {
-        const [curr, prev, trend] = await Promise.all([
-          metaAds.getInsights(profile.meta_account_id, metaAds.INSIGHT_FIELDS, p === 'custom' ? undefined : p, p === 'custom' ? range : undefined),
-          metaAds.getInsights(profile.meta_account_id, metaAds.INSIGHT_FIELDS, undefined, prevRange),
-          metaAds.getInsights(profile.meta_account_id, metaAds.INSIGHT_FIELDS, undefined, metaTrendRange, 1)
+        const [curr, prev, daily] = await Promise.all([
+          metaAds.getInsights(profile.meta_account_id, INSIGHT_FIELDS, p === 'custom' ? undefined : p, p === 'custom' ? range : undefined),
+          metaAds.getInsights(profile.meta_account_id, INSIGHT_FIELDS, undefined, prevRange),
+          metaAds.getInsightsDaily(profile.meta_account_id, INSIGHT_FIELDS, p === 'custom' ? undefined : p, p === 'custom' ? range : undefined)
         ]);
-        setCurrentMeta(curr); setPrevMeta(prev); setMetaTrend(Array.isArray(trend) ? trend.filter(Boolean) : []);
+        console.log("Meta Daily Data:", daily);
+        setCurrentMeta(curr); setPrevMeta(prev); setMetaDaily(daily);
       } catch (err) { console.error("Meta Fetch Error:", err); }
       finally { setFetchingMeta(false); }
     }
@@ -188,142 +282,328 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!profile) return;
-    (async () => {
-      const [meta, linksData] = await Promise.all([db.meta.getByClientId(profile.id), db.links.getByClientId(profile.id)]);
-      setMetaMetrics(meta); setLinks(linksData.slice(0, 4)); setLoadingInitial(false);
-    })();
-  }, [profile]);
-
-  useEffect(() => {
-    if (profile) fetchData(activePreset, activeSince, activeUntil);
+    if (profile) {
+      fetchData(activePreset, activeSince, activeUntil);
+      
+      const loadLinks = async () => {
+        const { data } = await supabase.from('client_links').select('*').eq('client_id', profile.id).order('created_at');
+        if (data) setLinks(data);
+      };
+      loadLinks();
+      setLoadingInitial(false);
+    }
   }, [profile, activePreset, activeSince, activeUntil]);
 
-  const applySelection = () => {
-    if (pendingPreset === 'custom' && (!pendingSince || !pendingUntil)) return;
+  const handleApply = () => {
     setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil); setShowDatePicker(false);
   };
 
-  const getMetaChange = (curr: any, prev: any, field: string) => {
-    const cVal = parseFloat(curr?.[field] || 0);
-    const pVal = parseFloat(prev?.[field] || 0);
-    if (pVal === 0) return { change: undefined, trend: 'up' };
-    const change = ((cVal - pVal) / pVal) * 100;
-    return { change, trend: change >= 0 ? 'up' : 'down' };
-  };
-
-  const getConversions = (data: any) => parseFloat(data?.actions?.find((a: any) => a.action_type === 'purchase' || a.action_type === 'lead')?.value || 0);
-  const getConvValue = (data: any) => parseFloat(data?.action_values?.find((a: any) => a.action_type === 'purchase')?.value || 0);
-
-  const currConv = getConversions(currentMeta);
-  const prevConv = getConversions(prevMeta);
-  const currentRoas = parseFloat(currentMeta?.purchase_roas?.[0]?.value || 0);
-  const prevRoas = parseFloat(prevMeta?.purchase_roas?.[0]?.value || 0);
-
-  const getTrendMetric = (field: string, type: 'basic' | 'action' | 'value' | 'roas' = 'basic') => {
-    return metaTrend.map(d => {
-      if (type === 'action') return { val: getConversions(d) };
-      if (type === 'value') return { val: getConvValue(d) };
-      if (type === 'roas') return { val: parseFloat(d.purchase_roas?.[0]?.value || 0) };
-      return { val: parseFloat(d[field] || 0) };
-    });
-  };
-
-  const getKlaviyoChange = (curr: number, prev: number) => (!prev ? undefined : ((curr - prev) / prev) * 100);
+  const getMetaChange = (curr: number, prev: number) => (!prev ? 0 : ((curr - prev) / prev) * 100);
+  const getKlaviyoChange = (curr: number, prev: number) => (!prev ? 0 : ((curr - prev) / prev) * 100);
 
   const activePrevRange = getPrevPeriod(activeSince, activeUntil);
   const fmtDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '...';
 
-  if (loadingInitial) return <div className="space-y-6 p-4 animate-pulse"><div className="h-8 w-48 bg-zinc-200 dark:bg-zinc-800 rounded-full" /></div>;
+  if (loadingInitial) return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <span className="text-[13px] font-medium text-zinc-500">Cargando dashboard...</span>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-5 pb-10 fade-in px-2 sm:px-0 max-w-[1600px] mx-auto">
-      
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="p-8 max-w-[1400px] mx-auto space-y-10">
+      {/* Header & Date Picker */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200 dark:shadow-none">
+            <LayoutDashboard className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">Portal C.A.R</h1>
+            <p className="text-[13px] text-zinc-500 font-medium">Algoritmia · 2026</p>
+          </div>
+        </div>
+
         <div className="relative" ref={datePickerRef}>
-          <button onClick={() => { setPendingPreset(activePreset); setPendingSince(activeSince); setPendingUntil(activeUntil); setShowDatePicker(!showDatePicker); }}
-            className={`h-8 px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-2 text-[12px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm transition-all ${showDatePicker ? 'ring-2 ring-violet-500/20 border-violet-500' : ''}`}>
-            <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
-            <span>{activePreset === 'custom' ? `${fmtDate(activeSince)} - ${fmtDate(activeUntil)}` : DATE_OPTIONS.find(o => o.value === activePreset)?.label}</span>
-            <ChevronDown className="w-3 h-3 text-zinc-400" />
-          </button>
+          <div className="flex items-center gap-2 p-1 bg-white dark:bg-zinc-900 rounded-[14px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm">
+            <button onClick={() => setShowDatePicker(!showDatePicker)} className="flex items-center gap-2.5 px-4 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-[10px] transition-all">
+              <CalendarIcon className="w-4 h-4 text-zinc-400" />
+              <span className="text-[13px] font-bold text-zinc-700 dark:text-zinc-300">
+                {activePreset === 'custom' ? `${fmtDate(activeSince)} - ${fmtDate(activeUntil)}` : 
+                 activePreset === 'today' ? 'Hoy' :
+                 activePreset === 'yesterday' ? 'Ayer' :
+                 activePreset === 'last_7d' ? 'Últimos 7 días' :
+                 activePreset === 'last_28d' ? 'Últimos 28 días' :
+                 activePreset === 'this_month' ? 'Este mes' : 'Mes pasado'}
+              </span>
+              <ChevronLeft className="w-3.5 h-3.5 text-zinc-300 rotate-[-90deg]" />
+            </button>
+            <div className="w-[1px] h-4 bg-zinc-100 dark:bg-zinc-800 mx-1" />
+            <div className="flex items-center gap-2 px-4 py-2 text-[12px] font-bold text-blue-600 bg-blue-50/50 dark:bg-blue-900/20 rounded-[10px]">
+              <TrendingUp className="w-3.5 h-3.5" />
+              vs {fmtDate(activePrevRange.since)} - {fmtDate(activePrevRange.until)}
+            </div>
+          </div>
+
           {showDatePicker && (
-            <div className="absolute top-full left-0 mt-1.5 bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 z-50 overflow-hidden flex flex-col md:flex-row" style={{ minWidth: 600 }}>
-              <div className="w-48 border-r border-zinc-100 dark:border-zinc-800 py-2 flex-shrink-0">
-                {DATE_OPTIONS.map(opt => (
-                  <button key={opt.value} onClick={() => { setPendingPreset(opt.value); if (opt.value !== 'custom') { const r = presetToRange(opt.value); setPendingSince(r.since); setPendingUntil(r.until); } }}
-                    className={`w-full text-left px-4 py-2 text-[12.5px] transition-colors ${pendingPreset === opt.value ? 'bg-violet-50 dark:bg-violet-500/10 text-violet-600 font-bold' : 'text-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{opt.label}</button>
+            <div className="absolute right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-[100] flex overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="w-[160px] border-r border-zinc-50 dark:border-zinc-800 p-3 flex flex-col gap-1">
+                {[
+                  { id: 'today', label: 'Hoy' },
+                  { id: 'yesterday', label: 'Ayer' },
+                  { id: 'last_7d', label: 'Últimos 7 días' },
+                  { id: 'last_28d', label: 'Últimos 28 días' },
+                  { id: 'this_month', label: 'Este mes' },
+                  { id: 'last_month', label: 'Mes pasado' }
+                ].map(p => (
+                  <button key={p.id} onClick={() => { setPendingPreset(p.id as any); const r = presetToRange(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }}
+                    className={`text-left px-4 py-2.5 rounded-[10px] text-[12px] font-bold transition-all ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+                    {p.label}
+                  </button>
                 ))}
               </div>
               <div className="flex-1 p-5">
                 <div className="flex gap-8">
-                  <MiniCal year={calYear} month={calMonth} since={pendingSince} until={pendingUntil} hovering={hovering} onDay={(iso: string) => { setPendingPreset('custom'); if (!pendingSince || (pendingSince && pendingUntil)) { setPendingSince(iso); setPendingUntil(''); } else { setPendingUntil(iso); } }} onHover={setHovering} />
-                  <MiniCal year={calMonth === 11 ? calYear + 1 : calYear} month={calMonth === 11 ? 0 : calMonth + 1} since={pendingSince} until={pendingUntil} hovering={hovering} onDay={(iso: string) => { setPendingPreset('custom'); if (!pendingSince || (pendingSince && pendingUntil)) { setPendingSince(iso); setPendingUntil(''); } else { setPendingUntil(iso); } }} onHover={setHovering} />
+                  <MiniCal 
+                    year={calYear} month={calMonth} 
+                    since={pendingSince} until={pendingUntil} hovering={hovering} 
+                    onDay={(iso: string) => { 
+                      setPendingPreset('custom'); 
+                      if (!pendingSince || (pendingSince && pendingUntil)) { 
+                        setPendingSince(iso); setPendingUntil(''); 
+                      } else { 
+                        if (iso < pendingSince) { setPendingUntil(pendingSince); setPendingSince(iso); }
+                        else { setPendingUntil(iso); }
+                      } 
+                    }} 
+                    onHover={setHovering} 
+                    onPrev={() => { if (calMonth === 0) { setCalYear(calYear - 1); setCalMonth(11); } else { setCalMonth(calMonth - 1); } }}
+                  />
+                  <MiniCal 
+                    year={calMonth === 11 ? calYear + 1 : calYear} month={calMonth === 11 ? 0 : calMonth + 1} 
+                    since={pendingSince} until={pendingUntil} hovering={hovering} 
+                    onDay={(iso: string) => { 
+                      setPendingPreset('custom'); 
+                      if (!pendingSince || (pendingSince && pendingUntil)) { 
+                        setPendingSince(iso); setPendingUntil(''); 
+                      } else { 
+                        if (iso < pendingSince) { setPendingUntil(pendingSince); setPendingSince(iso); }
+                        else { setPendingUntil(iso); }
+                      } 
+                    }} 
+                    onHover={setHovering}
+                    onNext={() => { if (calMonth === 11) { setCalYear(calYear + 1); setCalMonth(0); } else { setCalMonth(calMonth + 1); } }}
+                  />
                 </div>
                 <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-zinc-50 dark:border-zinc-800">
                   <button onClick={() => setShowDatePicker(false)} className="px-4 py-1.5 rounded-lg text-[12px] font-bold text-zinc-500">Cancelar</button>
-                  <button onClick={applySelection} className="px-5 py-1.5 rounded-lg text-[12px] font-bold bg-violet-600 text-white">Aplicar</button>
+                  <button onClick={handleApply} className="px-5 py-1.5 rounded-lg bg-blue-600 text-white text-[12px] font-bold shadow-md shadow-blue-200 dark:shadow-none">Aplicar</button>
                 </div>
               </div>
             </div>
           )}
         </div>
-        <div className="h-8 px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-2 text-[12px] font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm"><LayoutDashboard className="w-3.5 h-3.5 text-zinc-400" /><span>C.A.R Dashboard</span></div>
-        {!fetchingMeta && !fetchingKlaviyo && <div className="h-8 px-2.5 rounded-lg bg-violet-50 dark:bg-violet-500/5 text-[10px] font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1.5 border border-violet-100 dark:border-violet-500/10"><TrendingUp className="w-3 h-3" /> vs {fmtDate(activePrevRange.since)} - {fmtDate(activePrevRange.until)}</div>}
-        {(fetchingMeta || fetchingKlaviyo) && <div className="flex items-center gap-2 text-[11px] text-zinc-400 ml-auto mr-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Actualizando...</div>}
       </div>
 
-      {/* Captación (Meta Ads) */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Captación (Meta Ads)</h2></div>
-        <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden flex overflow-x-auto scrollbar-hide">
-          <ShopifyMetric label="Inversión" value={`$ ${parseFloat(currentMeta?.spend || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`} {...getMetaChange(currentMeta, prevMeta, 'spend')} data={getTrendMetric('spend')} loading={fetchingMeta} />
-          <ShopifyMetric label="Alcance" value={parseInt(currentMeta?.reach || 0).toLocaleString('es-AR')} {...getMetaChange(currentMeta, prevMeta, 'reach')} data={getTrendMetric('reach')} loading={fetchingMeta} />
-          <ShopifyMetric label="Conversiones" value={currConv} change={getKlaviyoChange(currConv, prevConv)} trend={currConv >= prevConv ? 'up' : 'down'} data={getTrendMetric('', 'action')} color="#10b981" loading={fetchingMeta} />
-          <ShopifyMetric label="Retorno Publicidad" value={`$ ${getConvValue(currentMeta).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`} change={getKlaviyoChange(getConvValue(currentMeta), getConvValue(prevMeta))} trend={getConvValue(currentMeta) >= getConvValue(prevMeta) ? 'up' : 'down'} data={getTrendMetric('', 'value')} color="#0ea5e9" loading={fetchingMeta} />
-          <ShopifyMetric label="ROAS" value={`${currentRoas.toFixed(2)}x`} change={getKlaviyoChange(currentRoas, prevRoas)} trend={currentRoas >= prevRoas ? 'up' : 'down'} data={getTrendMetric('', 'roas')} color="#a855f7" loading={fetchingMeta} />
+      <div className="grid grid-cols-1 gap-10">
+        {/* CAPTACIÓN (META ADS) */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Captación (Meta Ads)</h2></div>
+          <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden flex overflow-x-auto scrollbar-hide">
+            <ShopifyMetric 
+              label="Inversión" 
+              value={`$ ${currentMeta?.spend?.toLocaleString('es-AR', { maximumFractionDigits: 0 }) || 0}`} 
+              change={getMetaChange(currentMeta?.spend, prevMeta?.spend)} 
+              trend={(currentMeta?.spend || 0) >= (prevMeta?.spend || 0) ? 'up' : 'down'} 
+              data={metaDaily?.map((d: any) => ({ val: d.spend, date: d.date }))} 
+              color="#3b82f6" 
+              loading={fetchingMeta}
+              active={expandedMetric === 'meta-inversion'}
+              onClick={() => setExpandedMetric(expandedMetric === 'meta-inversion' ? null : 'meta-inversion')}
+            />
+            <ShopifyMetric 
+              label="Alcance" 
+              value={currentMeta?.reach?.toLocaleString('es-AR') || 0} 
+              change={getMetaChange(currentMeta?.reach, prevMeta?.reach)} 
+              trend={(currentMeta?.reach || 0) >= (prevMeta?.reach || 0) ? 'up' : 'down'} 
+              data={metaDaily?.map((d: any) => ({ val: d.reach, date: d.date }))} 
+              color="#6366f1" 
+              loading={fetchingMeta}
+              active={expandedMetric === 'meta-alcance'}
+              onClick={() => setExpandedMetric(expandedMetric === 'meta-alcance' ? null : 'meta-alcance')}
+            />
+            <ShopifyMetric 
+              label="Conversiones" 
+              value={currentMeta?.results || 0} 
+              change={getMetaChange(currentMeta?.results, prevMeta?.results)} 
+              trend={(currentMeta?.results || 0) >= (prevMeta?.results || 0) ? 'up' : 'down'} 
+              data={metaDaily?.map((d: any) => ({ val: d.results, date: d.date }))} 
+              color="#10b981" 
+              loading={fetchingMeta}
+              active={expandedMetric === 'meta-conv'}
+              onClick={() => setExpandedMetric(expandedMetric === 'meta-conv' ? null : 'meta-conv')}
+            />
+            <ShopifyMetric 
+              label="Retorno Publicidad" 
+              value={`$ ${currentMeta?.purchase_value?.toLocaleString('es-AR', { maximumFractionDigits: 0 }) || 0}`} 
+              change={getMetaChange(currentMeta?.purchase_value, prevMeta?.purchase_value)} 
+              trend={(currentMeta?.purchase_value || 0) >= (prevMeta?.purchase_value || 0) ? 'up' : 'down'} 
+              data={metaDaily?.map((d: any) => ({ val: d.purchase_value, date: d.date }))} 
+              color="#0ea5e9" 
+              loading={fetchingMeta}
+              active={expandedMetric === 'meta-roas-v'}
+              onClick={() => setExpandedMetric(expandedMetric === 'meta-roas-v' ? null : 'meta-roas-v')}
+            />
+            <ShopifyMetric 
+              label="ROAS" 
+              value={`${currentMeta?.roas?.toFixed(2) || 0}x`} 
+              change={getMetaChange(currentMeta?.roas, prevMeta?.roas)} 
+              trend={(currentMeta?.roas || 0) >= (prevMeta?.roas || 0) ? 'up' : 'down'} 
+              data={metaDaily?.map((d: any) => ({ val: d.roas, date: d.date }))} 
+              color="#8b5cf6" 
+              loading={fetchingMeta}
+              active={expandedMetric === 'meta-roas'}
+              onClick={() => setExpandedMetric(expandedMetric === 'meta-roas' ? null : 'meta-roas')}
+            />
+          </div>
+
+          {expandedMetric?.startsWith('meta-') && (
+            <MetricDetailChart 
+              label={expandedMetric === 'meta-inversion' ? 'Inversión' : expandedMetric === 'meta-alcance' ? 'Alcance' : expandedMetric === 'meta-conv' ? 'Conversiones' : expandedMetric === 'meta-roas-v' ? 'Retorno' : 'ROAS'}
+              color={expandedMetric === 'meta-inversion' ? '#3b82f6' : expandedMetric === 'meta-alcance' ? '#6366f1' : expandedMetric === 'meta-conv' ? '#10b981' : expandedMetric === 'meta-roas-v' ? '#0ea5e9' : '#8b5cf6'}
+              data={
+                expandedMetric === 'meta-inversion' ? metaDaily?.map((d: any) => ({ val: d.spend, date: d.date })) :
+                expandedMetric === 'meta-alcance' ? metaDaily?.map((d: any) => ({ val: d.reach, date: d.date })) :
+                expandedMetric === 'meta-conv' ? metaDaily?.map((d: any) => ({ val: d.results, date: d.date })) :
+                expandedMetric === 'meta-roas-v' ? metaDaily?.map((d: any) => ({ val: d.purchase_value, date: d.date })) :
+                metaDaily?.map((d: any) => ({ val: d.roas, date: d.date }))
+              }
+            />
+          )}
         </div>
-      </div>
 
-      {/* Retención (Klaviyo) */}
-      {profile?.klaviyo_api_key && (
+        {/* RETENCIÓN (KLAVIYO) */}
         <div className="space-y-2">
           <div className="flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /><h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Retención (Klaviyo)</h2></div>
           <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden flex overflow-x-auto scrollbar-hide">
-            <ShopifyMetric label="Ingresos Klaviyo" value={currentKlaviyo ? `$ ${currentKlaviyo.revenue?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : 'Sin datos'} change={getKlaviyoChange(currentKlaviyo?.revenue, prevKlaviyo?.revenue)} trend={(currentKlaviyo?.revenue || 0) >= (prevKlaviyo?.revenue || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyRevenue?.map((v: any) => ({ val: v }))} color="#10b981" loading={fetchingKlaviyo} />
-            <ShopifyMetric label="Mails Enviados" value={currentKlaviyo ? currentKlaviyo.sent?.toLocaleString('es-AR') : '0'} change={getKlaviyoChange(currentKlaviyo?.sent, prevKlaviyo?.sent)} trend={(currentKlaviyo?.sent || 0) >= (prevKlaviyo?.sent || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailySent?.map((v: any) => ({ val: v }))} color="#6366f1" loading={fetchingKlaviyo} />
-            <ShopifyMetric label="Aperturas" value={currentKlaviyo ? currentKlaviyo.opens?.toLocaleString('es-AR') : '0'} change={getKlaviyoChange(currentKlaviyo?.opens, prevKlaviyo?.opens)} trend={(currentKlaviyo?.opens || 0) >= (prevKlaviyo?.opens || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyOpens?.map((v: any) => ({ val: v }))} color="#8b5cf6" loading={fetchingKlaviyo} />
-            <ShopifyMetric label="Clics" value={currentKlaviyo ? currentKlaviyo.clicks?.toLocaleString('es-AR') : '0'} change={getKlaviyoChange(currentKlaviyo?.clicks, prevKlaviyo?.clicks)} trend={(currentKlaviyo?.clicks || 0) >= (prevKlaviyo?.clicks || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyClicks?.map((v: any) => ({ val: v }))} color="#0ea5e9" loading={fetchingKlaviyo} />
-            <ShopifyMetric label="Conversiones" value={currentKlaviyo ? currentKlaviyo.conversions : '0'} change={getKlaviyoChange(currentKlaviyo?.conversions, prevKlaviyo?.conversions)} trend={(currentKlaviyo?.conversions || 0) >= (prevKlaviyo?.conversions || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyConversions?.map((v: any) => ({ val: v }))} color="#f59e0b" loading={fetchingKlaviyo} />
+            <ShopifyMetric 
+              label="Ingresos Klaviyo" 
+              value={currentKlaviyo ? `$ ${currentKlaviyo.revenue?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : 'Sin datos'} 
+              change={getKlaviyoChange(currentKlaviyo?.revenue, prevKlaviyo?.revenue)} 
+              trend={(currentKlaviyo?.revenue || 0) >= (prevKlaviyo?.revenue || 0) ? 'up' : 'down'} 
+              data={currentKlaviyo?.dailyRevenue?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} 
+              color="#10b981" 
+              loading={fetchingKlaviyo} 
+              active={expandedMetric === 'k-revenue'}
+              onClick={() => setExpandedMetric(expandedMetric === 'k-revenue' ? null : 'k-revenue')}
+            />
+            <ShopifyMetric 
+              label="Mails Enviados" 
+              value={currentKlaviyo ? currentKlaviyo.sent?.toLocaleString('es-AR') : '0'} 
+              change={getKlaviyoChange(currentKlaviyo?.sent, prevKlaviyo?.sent)} 
+              trend={(currentKlaviyo?.sent || 0) >= (prevKlaviyo?.sent || 0) ? 'up' : 'down'} 
+              data={currentKlaviyo?.dailySent?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} 
+              color="#6366f1" 
+              loading={fetchingKlaviyo} 
+              active={expandedMetric === 'k-sent'}
+              onClick={() => setExpandedMetric(expandedMetric === 'k-sent' ? null : 'k-sent')}
+            />
+            <ShopifyMetric 
+              label="Aperturas" 
+              value={currentKlaviyo ? currentKlaviyo.opens?.toLocaleString('es-AR') : '0'} 
+              change={getKlaviyoChange(currentKlaviyo?.opens, prevKlaviyo?.opens)} 
+              trend={(currentKlaviyo?.opens || 0) >= (prevKlaviyo?.opens || 0) ? 'up' : 'down'} 
+              data={currentKlaviyo?.dailyOpens?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} 
+              color="#8b5cf6" 
+              loading={fetchingKlaviyo} 
+              active={expandedMetric === 'k-opens'}
+              onClick={() => setExpandedMetric(expandedMetric === 'k-opens' ? null : 'k-opens')}
+            />
+            <ShopifyMetric 
+              label="Clics" 
+              value={currentKlaviyo ? currentKlaviyo.clicks?.toLocaleString('es-AR') : '0'} 
+              change={getKlaviyoChange(currentKlaviyo?.clicks, prevKlaviyo?.clicks)} 
+              trend={(currentKlaviyo?.clicks || 0) >= (prevKlaviyo?.clicks || 0) ? 'up' : 'down'} 
+              data={currentKlaviyo?.dailyClicks?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} 
+              color="#0ea5e9" 
+              loading={fetchingKlaviyo} 
+              active={expandedMetric === 'k-clicks'}
+              onClick={() => setExpandedMetric(expandedMetric === 'k-clicks' ? null : 'k-clicks')}
+            />
+            <ShopifyMetric 
+              label="Conversiones" 
+              value={currentKlaviyo ? currentKlaviyo.conversions : '0'} 
+              change={getKlaviyoChange(currentKlaviyo?.conversions, prevKlaviyo?.conversions)} 
+              trend={(currentKlaviyo?.conversions || 0) >= (prevKlaviyo?.conversions || 0) ? 'up' : 'down'} 
+              data={currentKlaviyo?.dailyConversions?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} 
+              color="#f59e0b" 
+              loading={fetchingKlaviyo} 
+              active={expandedMetric === 'k-conv'}
+              onClick={() => setExpandedMetric(expandedMetric === 'k-conv' ? null : 'k-conv')}
+            />
           </div>
-        </div>
-      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
-        <div className="lg:col-span-2 card p-5">
-          <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white mb-5">Rendimiento Histórico</h3>
-          <div className="h-56">
-            {metaMetrics.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={[...metaMetrics].reverse().slice(-6).map(m => ({ name: new Date(m.period_start).toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }), inv: m.spend, conv: m.conversions }))}>
-                  <Area type="monotone" dataKey="inv" stroke="#6366f1" fill="#6366f1" fillOpacity={0.05} strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
-                  <Area type="monotone" dataKey="conv" stroke="#10b981" fill="#10b981" fillOpacity={0.05} strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : <div className="h-full flex flex-col items-center justify-center text-zinc-400 text-sm"><BarChart2 className="w-8 h-8 opacity-20 mb-2" />Sin datos históricos</div>}
+          {expandedMetric?.startsWith('k-') && (
+            <MetricDetailChart 
+              label={expandedMetric === 'k-revenue' ? 'Ingresos' : expandedMetric === 'k-sent' ? 'Enviados' : expandedMetric === 'k-opens' ? 'Aperturas' : expandedMetric === 'k-clicks' ? 'Clics' : 'Conversiones'}
+              color={expandedMetric === 'k-revenue' ? '#10b981' : expandedMetric === 'k-sent' ? '#6366f1' : expandedMetric === 'k-opens' ? '#8b5cf6' : expandedMetric === 'k-clicks' ? '#0ea5e9' : '#f59e0b'}
+              data={
+                expandedMetric === 'k-revenue' ? currentKlaviyo?.dailyRevenue?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) :
+                expandedMetric === 'k-sent' ? currentKlaviyo?.dailySent?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) :
+                expandedMetric === 'k-opens' ? currentKlaviyo?.dailyOpens?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) :
+                expandedMetric === 'k-clicks' ? currentKlaviyo?.dailyClicks?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) :
+                currentKlaviyo?.dailyConversions?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))
+              }
+            />
+          )}
+        </div>
+      </div>
+
+      {/* HISTÓRICO Y ACCESOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm">
+          <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-50 mb-8 tracking-tight">Rendimiento Histórico</h2>
+          <div className="h-[300px] flex flex-col items-center justify-center text-zinc-400 gap-4">
+            <BarChart2 className="w-10 h-10 opacity-20" />
+            <p className="text-[13px] font-medium opacity-60">Sin datos históricos</p>
           </div>
         </div>
-        <div className="card p-3 flex flex-col gap-1.5">
-          <p className="px-3 py-2 text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Accesos Directos</p>
-          {links.map(link => (
-            <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="flex items-center justify-between p-3 rounded-[10px] hover:bg-zinc-50 transition-all group">
-              <div className="flex items-center gap-3"><span className="text-[16px]">{link.icon || '🔗'}</span><span className="text-[12px] font-semibold text-zinc-700 dark:text-zinc-200">{link.label}</span></div>
-              <ExternalLink className="w-3.5 h-3.5 text-zinc-300 group-hover:text-violet-500 transition-all" />
-            </a>
-          ))}
+
+        <div className="bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm">
+          <h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-8">Accesos Directos</h2>
+          <div className="space-y-3">
+            {links.length > 0 ? links.map(link => (
+              <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="flex items-center justify-between p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-transparent hover:border-blue-100 dark:hover:border-blue-900/30 hover:bg-white dark:hover:bg-zinc-800 transition-all group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-blue-600 transition-colors">
+                    {link.icon === 'chat' ? <MessageSquare className="w-5 h-5" /> : link.icon === 'mail' ? <Mail className="w-5 h-5" /> : <ExternalLink className="w-5 h-5" />}
+                  </div>
+                  <span className="text-[13px] font-bold text-zinc-700 dark:text-zinc-300">{link.title}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-blue-600 transition-colors" />
+              </a>
+            )) : (
+              <div className="text-center py-10">
+                <p className="text-[12px] text-zinc-400 font-medium">No hay accesos configurados</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// ── Icons ─────────────────────────────────────────────────────────────
+const TrendingUp = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+);
+const BarChart2 = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+);
+const ExternalLink = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+);
