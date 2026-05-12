@@ -14,6 +14,11 @@ export interface ClientProfile {
   meta_pixel_id?: string;
   klaviyo_api_key?: string;
   klaviyo_list_id?: string;
+  ecommerce_platform?: string;
+  shopify_domain?: string;
+  shopify_access_token?: string;
+  tiendanube_store_id?: string;
+  tiendanube_access_token?: string;
   active?: boolean;
   is_admin?: boolean;
   created_at: string;

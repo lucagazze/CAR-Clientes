@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield,
+  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -12,18 +12,19 @@ interface SidebarProps {
   toggleDarkMode: () => void;
 }
 
-const navItems = [
-  { path: '/',          icon: Home,      label: 'Inicio' },
-  { path: '/captacion', icon: BarChart2, label: 'C - Captación (Ads)' },
-  { path: '/atencion',  icon: MessageCircle, label: 'A - Atención (IA)' },
-  { path: '/retencion', icon: Mail,      label: 'R - Retención (Email)' },
-  { path: '/links',     icon: Link2,     label: 'Mis Links' },
-  { path: '/reportes',  icon: FileText,  label: 'Reportes' },
-];
-
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, toggleDarkMode }) => {
   const location = useLocation();
   const { profile, signOut } = useAuth();
+
+  const navItems = [
+    { path: '/',          icon: Home,      label: 'Inicio', condition: true },
+    { path: '/captacion', icon: BarChart2, label: 'C - Captación (Ads)', condition: !!profile?.meta_account_id },
+    { path: '/atencion',  icon: MessageCircle, label: 'A - Atención (IA)', condition: !!profile?.chatwoot_token },
+    { path: '/retencion', icon: Mail,      label: 'R - Retención (Email)', condition: !!profile?.klaviyo_api_key },
+    { path: '/tienda',    icon: ShoppingBag, label: 'Tienda', condition: !!(profile as any)?.ecommerce_platform },
+    { path: '/links',     icon: Link2,     label: 'Mis Links', condition: true },
+    { path: '/reportes',  icon: FileText,  label: 'Reportes', condition: true },
+  ].filter(item => item.condition);
 
   const initials = profile?.business_name
     ? profile.business_name.slice(0, 2).toUpperCase()

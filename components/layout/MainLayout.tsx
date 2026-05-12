@@ -9,6 +9,7 @@ import DashboardPage from '../../pages/DashboardPage';
 import CaptacionPage from '../../pages/CaptacionPage';
 import AtencionPage from '../../pages/AtencionPage';
 import RetencionPage from '../../pages/RetencionPage';
+import TiendaPage from '../../pages/TiendaPage';
 import LinksPage from '../../pages/LinksPage';
 import ReportsPage from '../../pages/ReportsPage';
 import AdminPage from '../../pages/AdminPage';
@@ -60,12 +61,13 @@ export const MainLayout = () => {
           </span>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto w-full pb-24 md:pb-10">
+        <div className="flex-1 overflow-auto p-4 md:p-8 lg:p-10 w-full pb-24 md:pb-10">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/captacion" element={<CaptacionPage />} />
             <Route path="/atencion" element={<AtencionPage />} />
             <Route path="/retencion" element={<RetencionPage />} />
+            <Route path="/tienda" element={<TiendaPage />} />
             <Route path="/links" element={<LinksPage />} />
             <Route path="/reportes" element={<ReportsPage />} />
             <Route path="/admin" element={<AdminPage />} />

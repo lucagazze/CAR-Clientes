@@ -16,6 +16,8 @@ interface ClientRow {
   chatwoot_url?: string; chatwoot_token?: string;
   meta_account_id?: string; meta_pixel_id?: string;
   klaviyo_api_key?: string; klaviyo_list_id?: string;
+  ecommerce_platform?: string; shopify_domain?: string; shopify_access_token?: string;
+  tiendanube_store_id?: string; tiendanube_access_token?: string;
   created_at: string;
 }
 
@@ -133,6 +135,11 @@ export default function AdminPage() {
       klaviyo_api_key: c.klaviyo_api_key || '',
       chatwoot_url: c.chatwoot_url || '',
       chatwoot_token: c.chatwoot_token || '',
+      ecommerce_platform: c.ecommerce_platform || '',
+      shopify_domain: c.shopify_domain || '',
+      shopify_access_token: c.shopify_access_token || '',
+      tiendanube_store_id: c.tiendanube_store_id || '',
+      tiendanube_access_token: c.tiendanube_access_token || '',
       new_password: ''
     });
     setEditingClient(c);
@@ -150,6 +157,11 @@ export default function AdminPage() {
         klaviyo_api_key: editForm.klaviyo_api_key || null,
         chatwoot_url: editForm.chatwoot_url || null,
         chatwoot_token: editForm.chatwoot_token || null,
+        ecommerce_platform: editForm.ecommerce_platform || null,
+        shopify_domain: editForm.shopify_domain || null,
+        shopify_access_token: editForm.shopify_access_token || null,
+        tiendanube_store_id: editForm.tiendanube_store_id || null,
+        tiendanube_access_token: editForm.tiendanube_access_token || null,
       }).eq('id', editingClient.id);
       
       if (error) throw error;
@@ -330,10 +342,13 @@ export default function AdminPage() {
                         Meta: {c.meta_account_id ? (metaAccounts.find(a => a.id === c.meta_account_id)?.name || c.meta_account_id) : 'No configurado'}
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-[5px] border ${c.klaviyo_api_key ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' : 'bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 border-zinc-200 dark:border-zinc-700'}`}>
-                        Klaviyo: {c.klaviyo_api_key ? 'Conectado' : 'No configurado'}
+                        Klaviyo: {c.klaviyo_api_key ? 'Conectado' : 'No conf.'}
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-[5px] border ${c.chatwoot_url ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20' : 'bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 border-zinc-200 dark:border-zinc-700'}`}>
-                        Chatwoot: {c.chatwoot_url ? 'Conectado' : 'No configurado'}
+                        Chat: {c.chatwoot_url ? 'Conectado' : 'No conf.'}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-[5px] border ${c.ecommerce_platform ? 'bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-500/20' : 'bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 border-zinc-200 dark:border-zinc-700'}`}>
+                        Tienda: {c.ecommerce_platform === 'shopify' ? 'Shopify' : c.ecommerce_platform === 'tiendanube' ? 'Tiendanube' : 'No conf.'}
                       </span>
                     </div>
                   </div>
@@ -409,6 +424,41 @@ export default function AdminPage() {
                   <Field label="Token del widget">
                     <input type="text" value={editForm.chatwoot_token} onChange={e => ef('chatwoot_token', e.target.value)} placeholder="token_xxxxxx" className={inputCls} />
                   </Field>
+                </div>
+              </SectionBox>
+
+              {/* E-commerce */}
+              <SectionBox title="Tienda Online (E-commerce)" badge="T — Tienda">
+                <div className="grid grid-cols-1 gap-4">
+                  <Field label="Plataforma">
+                    <select value={editForm.ecommerce_platform} onChange={e => ef('ecommerce_platform', e.target.value)} className={inputCls}>
+                      <option value="">No configurado</option>
+                      <option value="shopify">Shopify</option>
+                      <option value="tiendanube">Tiendanube</option>
+                    </select>
+                  </Field>
+                  
+                  {editForm.ecommerce_platform === 'shopify' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label="Dominio Shopify">
+                        <input type="text" value={editForm.shopify_domain} onChange={e => ef('shopify_domain', e.target.value)} placeholder="mitienda.myshopify.com" className={inputCls} />
+                      </Field>
+                      <Field label="Access Token (Admin API)">
+                        <input type="text" value={editForm.shopify_access_token} onChange={e => ef('shopify_access_token', e.target.value)} placeholder="shpat_xxxxxx" className={inputCls} />
+                      </Field>
+                    </div>
+                  )}
+
+                  {editForm.ecommerce_platform === 'tiendanube' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label="ID de Tienda (Store ID)">
+                        <input type="text" value={editForm.tiendanube_store_id} onChange={e => ef('tiendanube_store_id', e.target.value)} placeholder="1234567" className={inputCls} />
+                      </Field>
+                      <Field label="Access Token">
+                        <input type="text" value={editForm.tiendanube_access_token} onChange={e => ef('tiendanube_access_token', e.target.value)} placeholder="bearer token..." className={inputCls} />
+                      </Field>
+                    </div>
+                  )}
                 </div>
               </SectionBox>
 
