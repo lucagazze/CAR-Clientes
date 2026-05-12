@@ -8,38 +8,38 @@ export const ecommerce = {
       const untilIso = new Date(`${until}T23:59:59Z`).toISOString();
       
       let allOrders: any[] = [];
-      let nextLink = `orders?status=any&created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=250`;
+      let nextLink = `orders.json?status=any&created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=250`;
       
       // Simple pagination (max 3 pages to avoid rate limits / slow loading)
       for (let i = 0; i < 3; i++) {
         if (!nextLink) break;
         
-        const res = await fetch(`${BASE}/${nextLink}`, {
+        const res = await fetch(`${BASE}/${domain}/${nextLink}`, {
           headers: {
-            'x-shopify-domain': domain,
             'x-shopify-access-token': token
           }
         });
         
         if (!res.ok) {
-          console.error('[Shopify] Error fetching orders', await res.text());
-          break;
+          const errorText = await res.text();
+          console.error('[Shopify] Error fetching orders', errorText);
+          throw new Error(`Shopify API Error: ${res.status} ${errorText}`);
         }
         
         const data = await res.json();
+        console.log(`[Shopify] Fetched ${data.orders?.length || 0} orders from ${domain}`);
         if (data.orders) {
           allOrders = [...allOrders, ...data.orders];
         }
 
         // Shopify pagination uses Link header, simplified here: we just take max 250 for now
-        // To implement full cursor pagination we'd need to parse the Link header.
-        break; // For MVP, we'll just take the first 250 orders of the period
+        break; 
       }
 
       return allOrders;
     } catch (e) {
       console.error('[Shopify] Fetch Exception:', e);
-      return [];
+      throw e;
     }
   },
 

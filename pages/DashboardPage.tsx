@@ -202,8 +202,8 @@ const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
               fillOpacity={hoveredLine ? 0.02 : 1} 
               fill={`url(#gradient-${label})`} 
               dot={(p: any) => p.value > 0 ? (
-                <circle key={p.cx} cx={p.cx} cy={p.cy} r={4} fill={color} stroke="#fff" strokeWidth={2} fillOpacity={hoveredLine ? 0.1 : 1} strokeOpacity={hoveredLine ? 0.1 : 1} />
-              ) : <path d="" />} 
+                <circle key={`dot-${p.index}-${p.cx}`} cx={p.cx} cy={p.cy} r={4} fill={color} stroke="#fff" strokeWidth={2} fillOpacity={hoveredLine ? 0.1 : 1} strokeOpacity={hoveredLine ? 0.1 : 1} />
+              ) : <path key={`empty-${p.index}-${p.cx}`} d="" />} 
               activeDot={{ r: 6, strokeWidth: 0 }} 
             />
           </AreaChart>

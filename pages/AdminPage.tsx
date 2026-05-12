@@ -4,10 +4,12 @@ import { metaAds } from '../services/metaAds';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
 import { useNavigate } from 'react-router-dom';
+import { ecommerce } from '../services/ecommerce';
+import { klaviyo } from '../services/klaviyo';
 import {
   UserPlus, Users, Eye, EyeOff, Check, X, Loader2,
   Shield, Building2, RefreshCw, Copy, ChevronDown, ChevronUp,
-  AlertTriangle, Pencil
+  AlertTriangle, Pencil, Globe, Mail, Facebook, MessageSquare
 } from 'lucide-react';
 
 interface ClientRow {
@@ -69,6 +71,10 @@ export default function AdminPage() {
   const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
   const [editForm, setEditForm] = useState<any>({});
   const [savingConfig, setSavingConfig] = useState(false);
+  const [testingShopify, setTestingShopify] = useState(false);
+  const [testingKlaviyo, setTestingKlaviyo] = useState(false);
+  const [testingMeta, setTestingMeta] = useState(false);
+  const [testingChatwoot, setTestingChatwoot] = useState(false);
 
   useEffect(() => {
     metaAds.getAllAdAccounts().then(res => setMetaAccounts(res?.data || [])).catch(() => {});
@@ -147,6 +153,74 @@ export default function AdminPage() {
 
   const ef = (k: string, v: string) => setEditForm((p: any) => ({ ...p, [k]: v }));
 
+  const testShopify = async () => {
+    if (!editForm.shopify_domain || !editForm.shopify_access_token) {
+      showToast('Ingresá el dominio y el token para probar', 'warning');
+      return;
+    }
+    setTestingShopify(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await ecommerce.getShopifyOrders(
+        editForm.shopify_domain,
+        editForm.shopify_access_token,
+        today,
+        today
+      );
+      showToast('¡Conexión con Shopify Exitosa! ✓', 'success');
+    } catch (err: any) {
+      showToast('Error de conexión: ' + (err.message || 'Verificá los datos'), 'error');
+    } finally {
+      setTestingShopify(false);
+    }
+  };
+
+  const testKlaviyo = async () => {
+    if (!editForm.klaviyo_api_key) {
+      showToast('Ingresá la API Key de Klaviyo para probar', 'warning');
+      return;
+    }
+    setTestingKlaviyo(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await klaviyo.getDashboardData(editForm.klaviyo_api_key, today, today);
+      if (!res) throw new Error('No se pudo obtener datos (verificá la API Key)');
+      showToast('¡Conexión con Klaviyo Exitosa! ✓', 'success');
+    } catch (err: any) {
+      showToast('Error Klaviyo: ' + (err.message || 'Verificá la API Key'), 'error');
+    } finally { setTestingKlaviyo(false); }
+  };
+
+  const testMeta = async () => {
+    if (!editForm.meta_account_id) {
+      showToast('Seleccioná una cuenta de Meta para probar', 'warning');
+      return;
+    }
+    setTestingMeta(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await metaAds.getAccountInsights(editForm.meta_account_id, today, today);
+      if (!res) throw new Error('No se pudo obtener datos (verificá el Token General)');
+      showToast('¡Conexión con Meta Exitosa! ✓', 'success');
+    } catch (err: any) {
+      showToast('Error Meta: ' + (err.message || 'Verificá la cuenta'), 'error');
+    } finally { setTestingMeta(false); }
+  };
+
+  const testChatwoot = async () => {
+    if (!editForm.chatwoot_url || !editForm.chatwoot_token) {
+      showToast('Ingresá la URL y el Token de Chatwoot', 'warning');
+      return;
+    }
+    setTestingChatwoot(true);
+    try {
+      const res = await fetch(editForm.chatwoot_url, { mode: 'no-cors' });
+      showToast('¡Dominio de Chatwoot alcanzado! ✓ (Validación parcial)', 'success');
+    } catch (err: any) {
+      showToast('Error Chatwoot: El dominio no responde', 'error');
+    } finally { setTestingChatwoot(false); }
+  };
+
   const saveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingClient) return;
@@ -166,7 +240,6 @@ export default function AdminPage() {
       
       if (error) throw error;
 
-      // Update password if provided
       if (editForm.new_password && supabaseAdmin) {
         const { error: pwdErr } = await supabaseAdmin.auth.admin.updateUserById(
           editingClient.user_id,
@@ -404,6 +477,10 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </Field>
+                <button type="button" onClick={testMeta} disabled={testingMeta || !editForm.meta_account_id} className="w-full h-9 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2">
+                  {testingMeta ? <Loader2 className="w-3 h-3 animate-spin" /> : <Facebook className="w-3 h-3" />}
+                  Probar Conexión Meta
+                </button>
               </SectionBox>
 
               {/* Klaviyo */}
@@ -412,6 +489,10 @@ export default function AdminPage() {
                   <Field label="API Key de Klaviyo (Privada)">
                     <input type="text" value={editForm.klaviyo_api_key} onChange={e => ef('klaviyo_api_key', e.target.value)} placeholder="pk_xxxxxxxxxxxxxxxx" className={inputCls} />
                   </Field>
+                  <button type="button" onClick={testKlaviyo} disabled={testingKlaviyo || !editForm.klaviyo_api_key} className="w-full h-9 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2">
+                    {testingKlaviyo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                    Probar Conexión Klaviyo
+                  </button>
                 </div>
               </SectionBox>
 
@@ -425,6 +506,10 @@ export default function AdminPage() {
                     <input type="text" value={editForm.chatwoot_token} onChange={e => ef('chatwoot_token', e.target.value)} placeholder="token_xxxxxx" className={inputCls} />
                   </Field>
                 </div>
+                <button type="button" onClick={testChatwoot} disabled={testingChatwoot || !editForm.chatwoot_url} className="w-full h-9 rounded-lg border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-2">
+                  {testingChatwoot ? <Loader2 className="w-3 h-3 animate-spin" /> : <MessageSquare className="w-3 h-3" />}
+                  Probar Conexión Chatwoot
+                </button>
               </SectionBox>
 
               {/* E-commerce */}
@@ -446,6 +531,20 @@ export default function AdminPage() {
                       <Field label="Access Token (Admin API)">
                         <input type="text" value={editForm.shopify_access_token} onChange={e => ef('shopify_access_token', e.target.value)} placeholder="shpat_xxxxxx" className={inputCls} />
                       </Field>
+                      <div className="md:col-span-2">
+                        <button
+                          type="button"
+                          onClick={testShopify}
+                          disabled={testingShopify}
+                          className="w-full h-9 rounded-lg border border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[12px] font-bold hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all flex items-center justify-center gap-2"
+                        >
+                          {testingShopify ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Probando conexión...</>
+                          ) : (
+                            <><RefreshCw className="w-3.5 h-3.5" /> Probar Conexión con Shopify</>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
 

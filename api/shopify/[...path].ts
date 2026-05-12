@@ -2,9 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const pathSegments = req.query.path as string[];
-  const shopifyPath = pathSegments ? pathSegments.join('/') : '';
+  // El primer segmento ahora es el dominio
+  const domain = pathSegments?.[0];
+  const shopifyPath = pathSegments ? pathSegments.slice(1).join('/') : '';
   
-  const domain = req.headers['x-shopify-domain'] as string;
   const token = req.headers['x-shopify-access-token'] as string;
 
   if (!domain || !token) {
@@ -23,7 +24,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Format: https://{domain}/admin/api/2024-01/{path}.json
   // Make sure domain doesn't contain protocol
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const targetUrl = `https://${cleanDomain}/admin/api/2024-01/${shopifyPath}.json${qs ? `?${qs}` : ''}`;
+  
+  let targetUrl = `https://${cleanDomain}/admin/api/2024-01/${shopifyPath}${qs ? `?${qs}` : ''}`;
+  if (shopifyPath.includes('oauth/access_token')) {
+    targetUrl = `https://${cleanDomain}/admin/${shopifyPath}${qs ? `?${qs}` : ''}`;
+  }
 
   try {
     const fetchOptions: RequestInit = {
