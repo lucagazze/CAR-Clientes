@@ -8,7 +8,7 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // Klaviyo metric-aggregates: XS = 1/s burst, 15/m steady
 // We space requests at least 4.5 seconds apart to stay safely under 15/min
 let lastRequestTime = 0;
-const MIN_GAP_MS = 6000;
+const MIN_GAP_MS = 4100; // 15 req/min = 1 req every 4s. 4.1s is safe.
 
 const rateLimitedFetch = async (url: string, options: RequestInit, retryCount = 0): Promise<Response> => {
   // Enforce minimum gap between requests + jitter to avoid tab synchronization

@@ -8,13 +8,14 @@ export const ecommerce = {
       const untilIso = new Date(`${until}T23:59:59Z`).toISOString();
       
       let allOrders: any[] = [];
-      let nextLink = `orders.json?status=any&created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=250`;
+      // Usamos el dominio como parámetro "shop" para que el proxy lo detecte sin fallos
+      let nextLink = `orders.json?status=any&created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=250&shop=${domain}`;
       
       // Simple pagination (max 3 pages to avoid rate limits / slow loading)
       for (let i = 0; i < 3; i++) {
         if (!nextLink) break;
         
-        const res = await fetch(`${BASE}/${domain}/${nextLink}`, {
+        const res = await fetch(`${BASE}/${nextLink}`, {
           headers: {
             'x-shopify-access-token': token
           }

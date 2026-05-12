@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag
+  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag, Zap
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -18,11 +18,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const navItems = [
     { path: '/',          icon: Home,      label: 'Inicio', condition: true },
-    { path: '/captacion', icon: BarChart2, label: 'C - Captación (Ads)', condition: !!profile?.meta_account_id },
-    { path: '/atencion',  icon: MessageCircle, label: 'A - Atención (IA)', condition: !!profile?.chatwoot_token },
-    { path: '/retencion', icon: Mail,      label: 'R - Retención (Email)', condition: !!profile?.klaviyo_api_key },
-    { path: '/tienda',    icon: ShoppingBag, label: 'Tienda', condition: !!(profile as any)?.ecommerce_platform },
-    { path: '/links',     icon: Link2,     label: 'Mis Links', condition: true },
+    { path: '/captacion', icon: BarChart2, label: 'C — Captación', condition: !!profile?.meta_account_id },
+    { path: '/atencion',  icon: MessageCircle, label: 'A — Atención', condition: !!profile?.chatwoot_token },
+    { path: '/retencion', icon: Mail,      label: 'R — Retención', condition: !!profile?.klaviyo_api_key },
+    { path: '/tienda',    icon: ShoppingBag, label: 'Tienda Online', condition: !!(profile as any)?.ecommerce_platform },
+    { path: '/links',     icon: Link2,     label: 'Mis Accesos', condition: true },
     { path: '/reportes',  icon: FileText,  label: 'Reportes', condition: true },
   ].filter(item => item.condition);
 
@@ -35,147 +35,138 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
       {/* Mobile backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-md z-40 md:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-[220px]
-        bg-white/90 dark:bg-[#161618]/95
-        backdrop-blur-2xl
-        border-r border-black/[0.06] dark:border-white/[0.05]
+        fixed inset-y-0 left-0 z-50 w-[240px]
+        bg-white dark:bg-[#09090b]
+        border-r border-zinc-200 dark:border-white/[0.05]
         flex flex-col
-        transform transition-transform duration-300 ease-in-out
+        transform transition-all duration-300 ease-in-out
         md:translate-x-0 md:static md:h-screen
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${isOpen ? 'translate-x-0 shadow-[20px_0_60px_rgba(0,0,0,0.2)]' : '-translate-x-full'}
       `}>
 
         {/* Logo / Brand */}
-        <div className="h-[60px] flex items-center px-5 border-b border-black/[0.05] dark:border-white/[0.04] flex-shrink-0">
-          {/* Light mode logo */}
-          <img
-            src="/assets/logoAlgoritmia1.webp"
-            alt="Algoritmia"
-            className="block dark:hidden h-7 w-auto object-contain flex-shrink-0"
-          />
-          {/* Dark mode logo */}
-          <img
-            src="/assets/logoSinFondo.png"
-            alt="Algoritmia"
-            className="hidden dark:block h-7 w-auto object-contain flex-shrink-0"
-          />
-          <button
-            className="md:hidden ml-auto p-1.5 rounded-[6px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-white/10 transition-all"
-            onClick={() => setIsOpen(false)}
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="h-[72px] flex items-center px-6 border-b border-zinc-100 dark:border-white/[0.03] flex-shrink-0">
+          <div className="flex items-center gap-3 group">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20 group-hover:scale-110 transition-transform">
+              <Zap className="w-4 h-4 text-white fill-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[14px] font-black text-zinc-900 dark:text-white tracking-tighter leading-none">ALGORITMIA</span>
+              <span className="text-[10px] font-bold text-violet-500 tracking-[0.2em] mt-1">C.A.R</span>
+            </div>
+          </div>
+          
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all"
+              title="Cambiar apariencia"
+            >
+              {darkMode ? <Sun className="w-4.5 h-4.5 text-amber-400" /> : <Moon className="w-4.5 h-4.5" />}
+            </button>
+            <button
+              className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all"
+              onClick={() => setIsOpen(false)}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-          <p className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.08em] px-3 mb-2">
-            Mi Panel
-          </p>
-          {navItems.map(({ path, icon: Icon, label }) => {
-            const isActive = location.pathname === path ||
-              (path !== '/' && location.pathname.startsWith(path));
-            return (
-              <Link
-                key={path}
-                to={path}
-                onClick={() => window.innerWidth < 768 && setIsOpen(false)}
-                className={`group flex items-center gap-2.5 px-3 py-[7px] rounded-[8px] text-[13px] font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.06]'
-                }`}
-              >
-                <Icon className={`w-[15px] h-[15px] flex-shrink-0 ${
-                  isActive ? 'text-white dark:text-zinc-900' : 'text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-300'
-                }`} />
-                <span className="tracking-[-0.01em]">{label}</span>
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scrollbar-hide">
+          {/* Main Section */}
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.2em] px-3 mb-4">
+              Mi Dashboard
+            </p>
+            {navItems.map(({ path, icon: Icon, label }) => {
+              const isActive = location.pathname === path ||
+                (path !== '/' && location.pathname.startsWith(path));
+              return (
+                <Link
+                  key={path}
+                  to={path}
+                  onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+                  className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
+                    isActive
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-lg shadow-black/10 dark:shadow-white/5'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-transform group-hover:scale-110 ${
+                    isActive ? 'text-white dark:text-zinc-900' : 'text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-200'
+                  }`} />
+                  <span className="tracking-tight">{label}</span>
+                  {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />}
+                </Link>
+              );
+            })}
+          </div>
 
-          {/* Admin link */}
+          {/* Admin Section */}
           {profile?.is_admin && (
-            <div className="mt-3 pt-3 border-t border-black/[0.05] dark:border-white/[0.04]">
-              <p className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.08em] px-3 mb-2">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.2em] px-3 mb-4">
                 Administración
               </p>
               <Link
                 to="/admin"
                 onClick={() => window.innerWidth < 768 && setIsOpen(false)}
-                className={`flex items-center gap-2.5 px-3 py-[7px] rounded-[8px] text-[13px] font-medium transition-all duration-150 ${
+                className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
                   location.pathname === '/admin'
-                    ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10'
+                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/5'
                 }`}
               >
-                <Shield className="w-[15px] h-[15px]" />
-                <span>Gestión de Clientes</span>
+                <Shield className="w-[18px] h-[18px]" />
+                <span>Gestión Clientes</span>
               </Link>
               <Link
                 to="/admin/meta"
                 onClick={() => window.innerWidth < 768 && setIsOpen(false)}
-                className={`flex items-center gap-2.5 px-3 py-[7px] rounded-[8px] text-[13px] font-medium transition-all duration-150 ${
+                className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
                   location.pathname === '/admin/meta'
-                    ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/5'
                 }`}
               >
-                <BarChart2 className="w-[15px] h-[15px]" />
+                <BarChart2 className="w-[18px] h-[18px]" />
                 <span>Meta Ads Global</span>
               </Link>
             </div>
           )}
-
-          {/* Messaging button */}
-          {profile?.chatwoot_url && profile?.chatwoot_token && (
-            <div className="mt-3 pt-3 border-t border-black/[0.05] dark:border-white/[0.04]">
-              <a
-                href={`${profile.chatwoot_url}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2.5 px-3 py-[7px] rounded-[8px] text-[13px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all"
-              >
-                <MessageCircle className="w-[15px] h-[15px]" />
-                <span className="tracking-[-0.01em]">Contactar soporte</span>
-                <span className="ml-auto w-2 h-2 bg-emerald-500 rounded-full live-dot" />
-              </a>
-            </div>
-          )}
         </nav>
 
-        {/* Footer: user + dark mode */}
-        <div className="flex-shrink-0 px-3 py-3 border-t border-black/[0.05] dark:border-white/[0.04]">
-          <div className="flex items-center gap-2.5 px-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-[0_1px_4px_rgba(0,0,0,0.15)]">
+        {/* Footer Info */}
+        <div className="flex-shrink-0 p-4 border-t border-zinc-100 dark:border-white/[0.03] bg-zinc-50/50 dark:bg-white/[0.01]">
+          <div className="flex items-center gap-3 bg-white dark:bg-[#111] p-3 rounded-2xl border border-zinc-200 dark:border-white/[0.05] shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-800 to-black dark:from-zinc-200 dark:to-white text-white dark:text-black flex items-center justify-center text-[12px] font-black shadow-inner">
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-zinc-900 dark:text-white tracking-[-0.01em] leading-none truncate">
+              <p className="text-[13px] font-bold text-zinc-900 dark:text-white truncate">
                 {profile?.business_name || 'Mi Empresa'}
               </p>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5">Cliente</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">Online</span>
+              </div>
             </div>
-            <button
-              onClick={toggleDarkMode}
-              className="p-1.5 rounded-[7px] text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/[0.08] transition-all flex-shrink-0"
-              title="Cambiar tema"
-            >
-              {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={signOut}
-              className="p-1.5 rounded-[7px] text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all flex-shrink-0"
-              title="Cerrar sesión"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={signOut}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </aside>

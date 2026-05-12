@@ -43,12 +43,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><label className={labelCls}>{label}</label>{children}</div>;
 }
 
-function SectionBox({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
+function SectionBox({ title, badge, children, status }: { title: string; badge?: string; children: React.ReactNode; status?: 'ok' | 'error' | null }) {
   return (
     <div className="rounded-[12px] border border-zinc-100 dark:border-zinc-700/60 overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-700/60">
         <span className="text-[11px] font-bold uppercase tracking-[0.07em] text-zinc-500 dark:text-zinc-400">{title}</span>
         {badge && <span className="text-[10px] bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 px-2 py-0.5 rounded-full font-medium">{badge}</span>}
+        <div className="ml-auto flex items-center gap-2">
+          {status === 'ok' && <div className="flex items-center gap-1 text-emerald-500 text-[10px] font-bold uppercase"><Check className="w-3 h-3" /> Conectado</div>}
+          {status === 'error' && <div className="flex items-center gap-1 text-red-500 text-[10px] font-bold uppercase"><X className="w-3 h-3" /> Error</div>}
+        </div>
       </div>
       <div className="p-4 space-y-3">{children}</div>
     </div>
@@ -75,6 +79,9 @@ export default function AdminPage() {
   const [testingKlaviyo, setTestingKlaviyo] = useState(false);
   const [testingMeta, setTestingMeta] = useState(false);
   const [testingChatwoot, setTestingChatwoot] = useState(false);
+
+  // Estados de conexión persistentes (locales al formulario por ahora)
+  const [statuses, setStatuses] = useState<Record<string, 'ok' | 'error' | null>>({});
 
   useEffect(() => {
     metaAds.getAllAdAccounts().then(res => setMetaAccounts(res?.data || [])).catch(() => {});
@@ -161,18 +168,13 @@ export default function AdminPage() {
     setTestingShopify(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      await ecommerce.getShopifyOrders(
-        editForm.shopify_domain,
-        editForm.shopify_access_token,
-        today,
-        today
-      );
+      await ecommerce.getShopifyOrders(editForm.shopify_domain, editForm.shopify_access_token, today, today);
       showToast('¡Conexión con Shopify Exitosa! ✓', 'success');
+      setStatuses(p => ({ ...p, shopify: 'ok' }));
     } catch (err: any) {
-      showToast('Error de conexión: ' + (err.message || 'Verificá los datos'), 'error');
-    } finally {
-      setTestingShopify(false);
-    }
+      showToast('Error Shopify: ' + (err.message || 'Verificá los datos'), 'error');
+      setStatuses(p => ({ ...p, shopify: 'error' }));
+    } finally { setTestingShopify(false); }
   };
 
   const testKlaviyo = async () => {
@@ -186,8 +188,10 @@ export default function AdminPage() {
       const res = await klaviyo.getDashboardData(editForm.klaviyo_api_key, today, today);
       if (!res) throw new Error('No se pudo obtener datos (verificá la API Key)');
       showToast('¡Conexión con Klaviyo Exitosa! ✓', 'success');
+      setStatuses(p => ({ ...p, klaviyo: 'ok' }));
     } catch (err: any) {
       showToast('Error Klaviyo: ' + (err.message || 'Verificá la API Key'), 'error');
+      setStatuses(p => ({ ...p, klaviyo: 'error' }));
     } finally { setTestingKlaviyo(false); }
   };
 
@@ -202,8 +206,10 @@ export default function AdminPage() {
       const res = await metaAds.getAccountInsights(editForm.meta_account_id, today, today);
       if (!res) throw new Error('No se pudo obtener datos (verificá el Token General)');
       showToast('¡Conexión con Meta Exitosa! ✓', 'success');
+      setStatuses(p => ({ ...p, meta: 'ok' }));
     } catch (err: any) {
       showToast('Error Meta: ' + (err.message || 'Verificá la cuenta'), 'error');
+      setStatuses(p => ({ ...p, meta: 'error' }));
     } finally { setTestingMeta(false); }
   };
 
@@ -216,8 +222,10 @@ export default function AdminPage() {
     try {
       const res = await fetch(editForm.chatwoot_url, { mode: 'no-cors' });
       showToast('¡Dominio de Chatwoot alcanzado! ✓ (Validación parcial)', 'success');
+      setStatuses(p => ({ ...p, chatwoot: 'ok' }));
     } catch (err: any) {
       showToast('Error Chatwoot: El dominio no responde', 'error');
+      setStatuses(p => ({ ...p, chatwoot: 'error' }));
     } finally { setTestingChatwoot(false); }
   };
 
@@ -468,7 +476,7 @@ export default function AdminPage() {
             
             <form onSubmit={saveConfig} className="p-6 space-y-6">
               {/* Meta Ads */}
-              <SectionBox title="Meta Ads" badge="C — Captación">
+              <SectionBox title="Meta Ads" badge="C — Captación" status={statuses.meta}>
                 <Field label="Ad Account">
                   <select value={editForm.meta_account_id} onChange={e => ef('meta_account_id', e.target.value)} className={inputCls}>
                     <option value="">Seleccionar cuenta...</option>
@@ -484,7 +492,7 @@ export default function AdminPage() {
               </SectionBox>
 
               {/* Klaviyo */}
-              <SectionBox title="Klaviyo" badge="R — Retención">
+              <SectionBox title="Klaviyo" badge="R — Retención" status={statuses.klaviyo}>
                 <div className="grid grid-cols-1 gap-4">
                   <Field label="API Key de Klaviyo (Privada)">
                     <input type="text" value={editForm.klaviyo_api_key} onChange={e => ef('klaviyo_api_key', e.target.value)} placeholder="pk_xxxxxxxxxxxxxxxx" className={inputCls} />
@@ -497,7 +505,7 @@ export default function AdminPage() {
               </SectionBox>
 
               {/* Chatwoot */}
-              <SectionBox title="Chatwoot" badge="A — Atención">
+              <SectionBox title="Chatwoot" badge="A — Atención" status={statuses.chatwoot}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field label="URL del chat">
                     <input type="url" value={editForm.chatwoot_url} onChange={e => ef('chatwoot_url', e.target.value)} placeholder="https://app.chatwoot.com" className={inputCls} />
@@ -513,7 +521,7 @@ export default function AdminPage() {
               </SectionBox>
 
               {/* E-commerce */}
-              <SectionBox title="Tienda Online (E-commerce)" badge="T — Tienda">
+              <SectionBox title="Tienda Online (E-commerce)" badge="T — Tienda" status={statuses.shopify}>
                 <div className="grid grid-cols-1 gap-4">
                   <Field label="Plataforma">
                     <select value={editForm.ecommerce_platform} onChange={e => ef('ecommerce_platform', e.target.value)} className={inputCls}>

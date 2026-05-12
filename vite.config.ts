@@ -13,30 +13,25 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/klaviyo/, ''),
       },
       '/api/shopify': {
-        target: 'https://shopify.com', // placeholder — overridden by router()
+        target: 'https://shopify.com',
         changeOrigin: true,
         secure: false,
         router: (req) => {
-          // Vite strips the matched prefix (/api/shopify) before passing req.url
-          // So req.url here is: /theskirtingfactory.myshopify.com/orders.json?...
+          // Usamos Regex para extraer el shop= independientemente de cómo venga la URL
           const url = req.url || '';
-          const parts = url.split('/').filter(Boolean); // ["theskirtingfactory.myshopify.com", "orders.json?..."]
-          const domain = parts[0];
+          const match = url.match(/[?&]shop=([^&]+)/);
+          const shop = match ? match[1] : null;
 
-          if (domain && domain.includes('.')) {
-            const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          if (shop) {
+            const clean = shop.replace(/^https?:\/\//, '').replace(/\/$/, '');
             if (url.includes('/oauth/access_token')) {
-              return `https://${cleanDomain}/admin`;
+              return `https://${clean}/admin`;
             }
-            return `https://${cleanDomain}/admin/api/2024-01`;
+            return `https://${clean}/admin/api/2024-01`;
           }
           return 'https://shopify.com';
         },
-        rewrite: (path) => {
-          // path comes in as: /api/shopify/theskirtingfactory.myshopify.com/orders.json?...
-          // Strip /api/shopify/<domain> so Shopify gets just /orders.json?...
-          return path.replace(/^\/api\/shopify\/[^/]+/, '');
-        },
+        rewrite: (path) => path.replace(/^\/api\/shopify/, ''),
       },
     },
   },

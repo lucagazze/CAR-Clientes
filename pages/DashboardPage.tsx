@@ -7,7 +7,7 @@ import { ecommerce } from '../services/ecommerce';
 import { 
   BarChart2, Mail, ExternalLink, TrendingUp, DollarSign, Users, Link2,
   AlertCircle, Calendar, Layers, Circle, CreditCard, ChevronDown, 
-  MoveUpRight, MoveDownRight, Package, RefreshCw, ChevronRight, MessageSquare
+  MoveUpRight, MoveDownRight, Package, RefreshCw, ChevronRight, MessageSquare, Zap
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
@@ -298,9 +298,8 @@ export default function DashboardPage() {
       if (profile?.klaviyo_api_key) {
         setFetchingKlaviyo(true);
         try {
-          // Sequential (not parallel) to avoid Klaviyo 429 rate limits
+          // The global queue in klaviyo.ts handles the rate limiting
           const curr = await klaviyo.getDashboardData(profile.klaviyo_api_key, range.since, range.until);
-          await new Promise(r => setTimeout(r, 3000)); // 3s gap between period fetches
           const prev = await klaviyo.getDashboardData(profile.klaviyo_api_key, prevRange.since, prevRange.until);
           setCurrentKlaviyo(curr); setPrevKlaviyo(prev);
         } catch (err) { console.error("Klaviyo Fetch Error:", err); } finally { setFetchingKlaviyo(false); }
@@ -425,14 +424,23 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="p-4 sm:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-        <div>
+    <div className="p-4 sm:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 space-y-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
+        <div className="space-y-2">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200 dark:shadow-none"><BarChart2 className="w-6 h-6" /></div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Dashboard de Rendimiento</h1>
+            <div className="w-10 h-10 rounded-[12px] bg-gradient-to-tr from-violet-600 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+              <Zap className="w-5 h-5 text-white fill-white" />
+            </div>
+            <span className="text-[11px] font-black text-violet-500 dark:text-violet-400 uppercase tracking-[0.3em]">
+              Algoritmia • Ecosistema C.A.R
+            </span>
           </div>
-          <p className="text-zinc-500 dark:text-zinc-400 text-[13px] font-medium">Análisis de métricas y crecimiento del Sistema C.A.R.</p>
+          <h1 className="text-[28px] sm:text-[36px] font-black text-zinc-900 dark:text-white tracking-tight leading-tight">
+            ¡Hola, {profile?.business_name || 'Bienvenido'}!
+            <span className="block text-[15px] sm:text-[17px] font-medium text-zinc-500 dark:text-zinc-500 mt-2 tracking-normal">
+              {new Date().getHours() < 12 ? 'Buenos días' : new Date().getHours() < 20 ? 'Buenas tardes' : 'Buenas noches'}. Aquí tienes el pulso de tu negocio hoy.
+            </span>
+          </h1>
         </div>
         <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative" ref={datePickerRef}>
           <div className="relative">
@@ -450,12 +458,13 @@ export default function DashboardPage() {
                       'last_7d': 'Últimos 7 días',
                       'last_14d': 'Últimos 14 días',
                       'last_28d': 'Últimos 28 días',
+                      'last_30d': 'Últimos 30 días',
                       'last_90d': 'Últimos 90 días',
                       'this_month': 'Este mes',
                       'last_month': 'Mes pasado',
                       'this_year': 'Este año',
                       'last_year': 'Año pasado'
-                    }[activePreset] || activePreset
+                    }[activePreset as any] || activePreset
                 }
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
@@ -464,7 +473,7 @@ export default function DashboardPage() {
             {showDatePicker && (
               <div className="absolute right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-[100] flex overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 <div className="w-[160px] border-r border-zinc-50 dark:border-zinc-800 p-3 flex flex-col gap-1">
-                  {[{ id: 'today', label: 'Hoy' }, { id: 'yesterday', label: 'Ayer' }, { id: 'last_7d', label: 'Últimos 7 días' }, { id: 'last_14d', label: 'Últimos 14 días' }, { id: 'last_28d', label: 'Últimos 28 días' }, { id: 'last_90d', label: 'Últimos 90 días' }, { id: 'this_month', label: 'Este mes' }, { id: 'last_month', label: 'Mes pasado' }, { id: 'this_year', label: 'Este año' }, { id: 'last_year', label: 'Año pasado' }].map(p => (
+                  {[{ id: 'today', label: 'Hoy' }, { id: 'yesterday', label: 'Ayer' }, { id: 'last_7d', label: 'Últimos 7 días' }, { id: 'last_14d', label: 'Últimos 14 días' }, { id: 'last_28d', label: 'Últimos 28 días' }, { id: 'last_30d', label: 'Últimos 30 días' }, { id: 'last_90d', label: 'Últimos 90 días' }, { id: 'this_month', label: 'Este mes' }, { id: 'last_month', label: 'Mes pasado' }, { id: 'this_year', label: 'Este año' }, { id: 'last_year', label: 'Año pasado' }].map(p => (
                     <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`text-left px-4 py-1.5 rounded-[10px] text-[12px] font-bold transition-all ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
                   ))}
                 </div>
@@ -494,7 +503,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-6">
-        {(profile as any)?.ecommerce_platform && (
+        {/* Shopify Section - Only show if has platform AND we got data (or still loading) */}
+        {(profile as any)?.ecommerce_platform && (fetchingStore || currentStore) && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-pink-500" /><h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Tienda Online ({(profile as any).ecommerce_platform})</h2></div>
             <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 sm:grid-cols-3 xl:flex">
@@ -506,7 +516,8 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {profile?.meta_account_id && (
+        {/* Meta Ads Section - Only show if has account AND we got data (or still loading) */}
+        {profile?.meta_account_id && (fetchingMeta || currentMeta) && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Captación (Meta Ads)</h2></div>
             <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 sm:grid-cols-3 xl:flex">
@@ -527,7 +538,8 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {profile?.klaviyo_api_key && (
+        {/* Klaviyo Section - Only show if has key AND we got data (or still loading) */}
+        {profile?.klaviyo_api_key && (fetchingKlaviyo || currentKlaviyo) && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /><h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Retención (Klaviyo)</h2></div>
             <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden flex overflow-x-auto scrollbar-hide">

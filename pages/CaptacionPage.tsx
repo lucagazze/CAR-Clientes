@@ -17,6 +17,7 @@ const PRESETS: { id: DatePreset | 'custom'; label: string }[] = [
   { id: 'last_7d', label: 'Últimos 7 días' },
   { id: 'last_14d', label: 'Últimos 14 días' },
   { id: 'last_28d', label: 'Últimos 28 días' },
+  { id: 'last_30d', label: 'Últimos 30 días' },
   { id: 'last_90d', label: 'Últimos 90 días' },
   { id: 'this_month', label: 'Este mes' },
   { id: 'last_month', label: 'Mes pasado' },
@@ -80,11 +81,11 @@ export default function CaptacionPage() {
   const datePickerRef = useRef<HTMLDivElement>(null);
 
   // Date State
-  const [activePreset, setActivePreset] = useState<DatePreset>('last_7d');
+  const [activePreset, setActivePreset] = useState<DatePreset | 'custom'>('last_7d');
   const [activeSince, setActiveSince] = useState(presetToRange('last_7d').since);
   const [activeUntil, setActiveUntil] = useState(presetToRange('last_7d').until);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [pendingPreset, setPendingPreset] = useState<DatePreset>(activePreset);
+  const [pendingPreset, setPendingPreset] = useState<DatePreset | 'custom'>(activePreset);
   const [pendingSince, setPendingSince] = useState(activeSince);
   const [pendingUntil, setPendingUntil] = useState(activeUntil);
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -427,6 +428,9 @@ export default function CaptacionPage() {
                 fill="url(#colorVis)" 
                 dot={{ r: 4, fill: BLUE, strokeWidth: 2, stroke: '#fff' }} 
                 activeDot={{ r: 6, strokeWidth: 0 }} 
+                isAnimationActive={true}
+                animationDuration={1500}
+                animationEasing="ease-in-out"
               />
             </AreaChart>
           </ResponsiveContainer>
