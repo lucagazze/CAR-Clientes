@@ -4,6 +4,7 @@ import { ToastProvider } from './components/Toast';
 import { MainLayout } from './components/layout/MainLayout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ViewAsProvider } from './contexts/ViewAsContext';
 import LoginPage from './pages/LoginPage';
 
 const ProtectedRoute = () => {
@@ -33,15 +34,17 @@ export default function App() {
     <Router>
       <ThemeProvider>
         <AuthProvider>
-          <ToastProvider>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              
-              <Route element={<ProtectedRoute />}>
-                 <Route path="/*" element={<MainLayout />} />
-              </Route>
-            </Routes>
-          </ToastProvider>
+          <ViewAsProvider>
+            <ToastProvider>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                
+                <Route element={<ProtectedRoute />}>
+                   <Route path="/*" element={<MainLayout />} />
+                </Route>
+              </Routes>
+            </ToastProvider>
+          </ViewAsProvider>
         </AuthProvider>
       </ThemeProvider>
     </Router>

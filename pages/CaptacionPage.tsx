@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useViewAs } from '../contexts/ViewAsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { metaAds, DatePreset, presetToRange, daysAgo, today, getPrevPeriod } from '../services/metaAds';
 import {
@@ -80,8 +81,10 @@ const GENDER_COLORS: Record<string, string> = { male: '#3b82f6', female: '#ec489
 const PLATFORM_COLORS: Record<string, string> = { facebook: '#1877f2', instagram: '#e1306c', audience_network: '#f59e0b', messenger: '#00b2ff', threads: '#000000' };
 
 export default function CaptacionPage() {
-  const { profile } = useAuth();
+  const { profile: authProfile } = useAuth();
   const { darkMode } = useTheme();
+  const { viewAsProfile, isViewingAs } = useViewAs();
+  const profile = isViewingAs ? viewAsProfile : authProfile;
   const datePickerRef = useRef<HTMLDivElement>(null);
 
   // Date State

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useViewAs } from '../contexts/ViewAsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { metaAds, INSIGHT_FIELDS, DAILY_FIELDS, DatePreset, presetToRange, getPrevPeriod, today, daysAgo } from '../services/metaAds';
@@ -223,8 +224,10 @@ const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
 };
 
 export default function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile: authProfile } = useAuth();
   const { darkMode } = useTheme();
+  const { viewAsProfile, isViewingAs } = useViewAs();
+  const profile = isViewingAs ? viewAsProfile : authProfile;
   const [links, setLinks] = useState<ClientLink[]>([]);
   const [metaDaily, setMetaDaily] = useState<any[]>([]);
   const [prevMetaDaily, setPrevMetaDaily] = useState<any[]>([]);
@@ -254,6 +257,17 @@ export default function DashboardPage() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [allClients, setAllClients] = useState<any[]>([]);
+  const { setViewAsProfile } = useViewAs();
+
+  // Load all clients if admin
+  useEffect(() => {
+    if (authProfile?.is_admin) {
+      supabase.from('car_clients').select('*').order('business_name').then(({ data }) => {
+        if (data) setAllClients(data.filter(c => !c.is_admin));
+      });
+    }
+  }, [authProfile?.is_admin]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) { if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) setShowDatePicker(false); }
@@ -435,6 +449,61 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 sm:space-y-10">
+
+      {/* Admin Client Picker */}
+      {authProfile?.is_admin && allClients.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 rounded-[16px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm p-3">
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <div className="w-2 h-2 rounded-full bg-violet-500" />
+            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Seleccionar cliente</span>
+            {isViewingAs && (
+              <button
+                onClick={() => setViewAsProfile(null)}
+                className="ml-auto text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors"
+              >
+                Volver a mi vista
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {allClients.map(c => {
+              const isSelected = viewAsProfile?.id === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    const cp: any = {
+                      id: c.id, user_id: c.user_id, business_name: c.business_name,
+                      industry: c.industry, plan: c.plan, active: c.active, is_admin: false,
+                      meta_account_id: c.meta_account_id, klaviyo_api_key: c.klaviyo_api_key,
+                      chatwoot_url: c.chatwoot_url, chatwoot_token: c.chatwoot_token,
+                      ecommerce_platform: c.ecommerce_platform,
+                      shopify_domain: c.shopify_domain, shopify_access_token: c.shopify_access_token,
+                    };
+                    setViewAsProfile(isSelected ? null : cp);
+                  }}
+                  className={`flex-shrink-0 flex flex-col items-center gap-1.5 px-4 py-2.5 rounded-[12px] transition-all ${
+                    isSelected
+                      ? 'bg-violet-600 shadow-lg shadow-violet-300/20 dark:shadow-violet-900/30'
+                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center text-[13px] font-black ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                  }`}>
+                    {c.business_name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className={`text-[10px] font-bold whitespace-nowrap max-w-[80px] truncate ${
+                    isSelected ? 'text-white' : 'text-zinc-500 dark:text-zinc-400'
+                  }`}>{c.business_name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
         <div className="space-y">
           <div className="flex items-center gap-3 mb-2">
@@ -485,7 +554,7 @@ export default function DashboardPage() {
             {showDatePicker && (
               <div className="fixed inset-x-0 bottom-0 top-0 sm:absolute sm:inset-auto sm:right-0 sm:top-full mt-0 sm:mt-3 bg-white dark:bg-zinc-900 rounded-t-[30px] sm:rounded-[20px] border-t sm:border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-[100] flex flex-col sm:flex-row overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-top-2 fade-in duration-300 sm:duration-200">
                 <div className="w-full sm:w-[160px] border-b sm:border-b-0 sm:border-r border-zinc-50 dark:border-zinc-800 p-2 sm:p-3 flex flex-row sm:flex-col gap-1 overflow-x-auto sm:overflow-x-visible scrollbar-hide">
-                  {[{ id: 'today', label: 'Hoy' }, { id: 'yesterday', label: 'Ayer' }, { id: 'last_7d', label: '7d' }, { id: 'last_30d', label: '30d' }, { id: 'last_90d', label: '90d' }, { id: 'this_month', label: 'Mes' }].map(p => (
+                  {[{ id: 'today', label: 'Hoy' }, { id: 'yesterday', label: 'Ayer' }, { id: 'last_7d', label: 'Últimos 7 días' }, { id: 'last_14d', label: 'Últimos 14 días' }, { id: 'last_28d', label: 'Últimos 28 días' }, { id: 'last_90d', label: 'Últimos 90 días' }, { id: 'this_month', label: 'Este mes' }, { id: 'last_month', label: 'Mes pasado' }, { id: 'this_year', label: 'Este año' }, { id: 'last_year', label: 'Año pasado' }].map(p => (
                     <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`text-center sm:text-left px-3 sm:px-4 py-1.5 rounded-[10px] text-[11px] sm:text-[12px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
                   ))}
                 </div>
@@ -553,17 +622,20 @@ export default function DashboardPage() {
         )}
 
         {/* Klaviyo Section */}
-        {profile?.klaviyo_api_key && currentKlaviyo && !fetchingKlaviyo && (
+        {profile?.klaviyo_api_key && (currentKlaviyo || fetchingKlaviyo) && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /><h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Retención (Klaviyo)</h2></div>
-            <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden flex overflow-x-auto scrollbar-hide">
-              <ShopifyMetric label="Ingresos Klaviyo" value={currentKlaviyo ? `$ ${currentKlaviyo.revenue?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : 'Sin datos'} change={getKlaviyoChange(currentKlaviyo?.revenue, prevKlaviyo?.revenue)} trend={(currentKlaviyo?.revenue || 0) >= (prevKlaviyo?.revenue || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyRevenue?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-revenue'} onClick={() => setExpandedMetric(expandedMetric === 'k-revenue' ? null : 'k-revenue')} />
-              <ShopifyMetric label="Mails Enviados" value={currentKlaviyo ? currentKlaviyo.sent?.toLocaleString('es-AR') : '0'} change={getKlaviyoChange(currentKlaviyo?.sent, prevKlaviyo?.sent)} trend={(currentKlaviyo?.sent || 0) >= (prevKlaviyo?.sent || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailySent?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-sent'} onClick={() => setExpandedMetric(expandedMetric === 'k-sent' ? null : 'k-sent')} />
-              <ShopifyMetric label="Aperturas" value={currentKlaviyo ? currentKlaviyo.opens?.toLocaleString('es-AR') : '0'} change={getKlaviyoChange(currentKlaviyo?.opens, prevKlaviyo?.opens)} trend={(currentKlaviyo?.opens || 0) >= (prevKlaviyo?.opens || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyOpens?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-opens'} onClick={() => setExpandedMetric(expandedMetric === 'k-opens' ? null : 'k-opens')} />
-              <ShopifyMetric label="Clics" value={currentKlaviyo ? currentKlaviyo.clicks?.toLocaleString('es-AR') : '0'} change={getKlaviyoChange(currentKlaviyo?.clicks, prevKlaviyo?.clicks)} trend={(currentKlaviyo?.clicks || 0) >= (prevKlaviyo?.clicks || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyClicks?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-clicks'} onClick={() => setExpandedMetric(expandedMetric === 'k-clicks' ? null : 'k-clicks')} />
-              <ShopifyMetric label="Conversiones" value={currentKlaviyo ? currentKlaviyo.conversions : '0'} change={getKlaviyoChange(currentKlaviyo?.conversions, prevKlaviyo?.conversions)} trend={(currentKlaviyo?.conversions || 0) >= (prevKlaviyo?.conversions || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyConversions?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-conv'} onClick={() => setExpandedMetric(expandedMetric === 'k-conv' ? null : 'k-conv')} />
+            <div className="flex items-center gap-2 px-1">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Retención (Klaviyo)</h2>
+              {fetchingKlaviyo && <div className="ml-2 w-3 h-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />}
             </div>
-            {expandedMetric?.startsWith('k-') && (<MetricDetailChart label={expandedMetric === 'k-revenue' ? 'Ingresos' : expandedMetric === 'k-sent' ? 'Enviados' : expandedMetric === 'k-opens' ? 'Aperturas' : expandedMetric === 'k-clicks' ? 'Clics' : 'Conversiones'} color={MAIN_COLOR} data={expandedMetric === 'k-revenue' ? currentKlaviyo?.dailyRevenue?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) : expandedMetric === 'k-sent' ? currentKlaviyo?.dailySent?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) : expandedMetric === 'k-opens' ? currentKlaviyo?.dailyOpens?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) : expandedMetric === 'k-clicks' ? currentKlaviyo?.dailyClicks?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) : currentKlaviyo?.dailyConversions?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} />)}
+            <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden flex overflow-x-auto scrollbar-hide">
+              <ShopifyMetric label="Total Ingresos" value={currentKlaviyo ? `$ ${currentKlaviyo.revenue?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : '...'} change={getKlaviyoChange(currentKlaviyo?.revenue, prevKlaviyo?.revenue)} trend={(currentKlaviyo?.revenue || 0) >= (prevKlaviyo?.revenue || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyRevenue?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-revenue'} onClick={() => setExpandedMetric(expandedMetric === 'k-revenue' ? null : 'k-revenue')} />
+              <ShopifyMetric label="Ingresos Klaviyo" value="Próximamente" change={0} trend="up" data={[]} color={MAIN_COLOR} loading={false} active={false} onClick={() => {}} />
+              <ShopifyMetric label="Entregas" value={currentKlaviyo ? currentKlaviyo.sent?.toLocaleString('es-AR') : '...'} change={getKlaviyoChange(currentKlaviyo?.sent, prevKlaviyo?.sent)} trend={(currentKlaviyo?.sent || 0) >= (prevKlaviyo?.sent || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailySent?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-sent'} onClick={() => setExpandedMetric(expandedMetric === 'k-sent' ? null : 'k-sent')} />
+              <ShopifyMetric label="Tasa de Apertura" value={currentKlaviyo ? `${((currentKlaviyo.opens / (currentKlaviyo.sent || 1)) * 100).toFixed(1)}%` : '...'} change={getKlaviyoChange((currentKlaviyo?.opens / (currentKlaviyo?.sent || 1)), (prevKlaviyo?.opens / (prevKlaviyo?.sent || 1)))} trend={((currentKlaviyo?.opens / (currentKlaviyo?.sent || 1)) || 0) >= ((prevKlaviyo?.opens / (prevKlaviyo?.sent || 1)) || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyOpens?.map((v: any, i: number) => ({ val: ((v / (currentKlaviyo.dailySent[i] || 1)) * 100), date: `Día ${i+1}` }))} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-open-rate'} onClick={() => setExpandedMetric(expandedMetric === 'k-open-rate' ? null : 'k-open-rate')} />
+            </div>
+            {expandedMetric?.startsWith('k-') && (<MetricDetailChart label={expandedMetric === 'k-revenue' ? 'Total Ingresos' : expandedMetric === 'k-sent' ? 'Entregas' : 'Tasa de Apertura'} color={MAIN_COLOR} data={expandedMetric === 'k-revenue' ? currentKlaviyo?.dailyRevenue?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) : expandedMetric === 'k-sent' ? currentKlaviyo?.dailySent?.map((v: any, i: number) => ({ val: v, date: `Día ${i+1}` })) : currentKlaviyo?.dailyOpens?.map((v: any, i: number) => ({ val: ((v / (currentKlaviyo.dailySent[i] || 1)) * 100), date: `Día ${i+1}` }))} />)}
           </div>
         )}
 

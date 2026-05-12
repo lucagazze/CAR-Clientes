@@ -9,9 +9,10 @@ import { klaviyo } from '../services/klaviyo';
 import {
   UserPlus, Users, Eye, EyeOff, Check, X, Loader2,
   Shield, Building2, RefreshCw, Copy, ChevronDown, ChevronUp,
-  AlertTriangle, Pencil, Globe, Mail, Facebook, MessageSquare, Sun, Moon
+  AlertTriangle, Pencil, Globe, Mail, Facebook, MessageSquare, Sun, Moon, MonitorPlay
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useViewAs } from '../contexts/ViewAsContext';
 
 interface ClientRow {
   id: string; user_id: string; business_name: string;
@@ -65,6 +66,7 @@ export default function AdminPage() {
   const { darkMode, toggleDarkMode } = useTheme();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const { viewAsProfile, setViewAsProfile } = useViewAs();
 
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -442,18 +444,50 @@ export default function AdminPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button onClick={() => toggleActive(c)} className={`p-2 rounded-[7px] transition-all ${c.active ? 'text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10' : 'text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'}`}
-                      title={c.active ? 'Desactivar' : 'Activar'}>
-                      {c.active ? <X className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
-                    </button>
-                    <button onClick={() => openEdit(c)} className="p-2 rounded-[7px] text-zinc-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all" title="Configurar Integraciones">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => setExpanded(expanded === c.id ? null : c.id)} className="p-2 rounded-[7px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all">
-                      {expanded === c.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
+                   <div className="flex items-center gap-1.5 flex-shrink-0">
+                     <button 
+                       onClick={async () => {
+                         // Build a ClientProfile-like object from the ClientRow
+                         const clientProfile: any = {
+                           id: c.id,
+                           user_id: c.user_id,
+                           business_name: c.business_name,
+                           industry: c.industry,
+                           plan: c.plan,
+                           active: c.active,
+                           is_admin: c.is_admin,
+                           meta_account_id: c.meta_account_id,
+                           klaviyo_api_key: c.klaviyo_api_key,
+                           chatwoot_url: c.chatwoot_url,
+                           chatwoot_token: c.chatwoot_token,
+                           ecommerce_platform: c.ecommerce_platform,
+                           shopify_domain: c.shopify_domain,
+                           shopify_access_token: c.shopify_access_token,
+                         };
+                         setViewAsProfile(viewAsProfile?.id === c.id ? null : clientProfile);
+                         if (viewAsProfile?.id !== c.id) navigate('/');
+                       }}
+                       className={`p-2 rounded-[7px] transition-all text-[10px] font-bold flex items-center gap-1 ${
+                         viewAsProfile?.id === c.id
+                           ? 'bg-violet-600 text-white shadow-md shadow-violet-300/20'
+                           : 'text-zinc-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10'
+                       }`}
+                       title="Ver como este cliente"
+                     >
+                       <MonitorPlay className="w-3.5 h-3.5" />
+                       <span className="hidden sm:inline">{viewAsProfile?.id === c.id ? 'Viendo' : 'Ver'}</span>
+                     </button>
+                     <button onClick={() => toggleActive(c)} className={`p-2 rounded-[7px] transition-all ${c.active ? 'text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10' : 'text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'}`}
+                       title={c.active ? 'Desactivar' : 'Activar'}>
+                       {c.active ? <X className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
+                     </button>
+                     <button onClick={() => openEdit(c)} className="p-2 rounded-[7px] text-zinc-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all" title="Configurar Integraciones">
+                       <Pencil className="w-3.5 h-3.5" />
+                     </button>
+                     <button onClick={() => setExpanded(expanded === c.id ? null : c.id)} className="p-2 rounded-[7px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all">
+                       {expanded === c.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                     </button>
+                   </div>
                 </div>
 
                 {expanded === c.id && (

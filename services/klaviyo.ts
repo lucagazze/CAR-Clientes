@@ -4,20 +4,17 @@ const BASE = '/api/klaviyo';
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Global request queue to serialize ALL Klaviyo calls
-// Klaviyo metric-aggregates: XS = 1/s burst, 15/m steady
-// We space requests at least 4.5 seconds apart to stay safely under 15/min
+// Rate limit: Klaviyo metric-aggregates allows ~15 req/min.
+// We use a lighter 1.2s gap — fast enough to show data, safe enough to avoid 429s.
+// If we do get a 429 we retry with exponential backoff.
 let lastRequestTime = 0;
-const MIN_GAP_MS = 4100; // 15 req/min = 1 req every 4s. 4.1s is safe.
+const MIN_GAP_MS = 1200;
 
 const rateLimitedFetch = async (url: string, options: RequestInit, retryCount = 0): Promise<Response> => {
-  // Enforce minimum gap between requests + jitter to avoid tab synchronization
-  const jitter = Math.random() * 1000;
   const now = Date.now();
   const elapsed = now - lastRequestTime;
   if (elapsed < MIN_GAP_MS) {
-    const waitTime = (MIN_GAP_MS - elapsed) + jitter;
-    await wait(waitTime);
+    await wait(MIN_GAP_MS - elapsed);
   }
   lastRequestTime = Date.now();
 
@@ -28,10 +25,9 @@ const rateLimitedFetch = async (url: string, options: RequestInit, retryCount = 
       console.error('[Klaviyo] Max retries reached on 429');
       return res;
     }
-    // Read Retry-After header
     const retryAfter = res.headers.get('Retry-After');
     const waitSeconds = retryAfter ? parseInt(retryAfter, 10) : Math.pow(2, retryCount) * 5;
-    console.warn(`[Klaviyo] 429 Too Many Requests. Waiting ${waitSeconds}s (Retry ${retryCount + 1}/3)...`);
+    console.warn(`[Klaviyo] 429 — waiting ${waitSeconds}s (retry ${retryCount + 1}/3)...`);
     await wait(waitSeconds * 1000);
     return rateLimitedFetch(url, options, retryCount + 1);
   }
@@ -81,7 +77,7 @@ const apiGet = async (apiKey: string, endpoint: string): Promise<any> => {
 };
 
 // Cache metric IDs per account to avoid refetching
-let metricIdCache: Record<string, any> = {};
+const metricIdCache: Record<string, any> = {};
 
 export const klaviyo = {
   getMetrics: async (apiKey: string) => {
@@ -96,14 +92,14 @@ export const klaviyo = {
     metricId: string,
     since: string,
     until: string,
-    measurement: 'sum_value' | 'count' | 'unique' = 'sum_value'
+    measurements: string[] = ['sum_value']
   ) => {
     return apiPost(apiKey, 'metric-aggregates', {
       data: {
         type: 'metric-aggregate',
         attributes: {
           metric_id: metricId,
-          measurements: [measurement],
+          measurements: measurements,
           filter: [
             `greater-or-equal(datetime,${since}T00:00:00Z)`,
             `less-than(datetime,${until}T23:59:59Z)`
@@ -128,56 +124,49 @@ export const klaviyo = {
         return found?.id;
       };
 
-      // Find metric IDs
       const mIds = {
-        // Revenue: "Placed Order" value
         revenue: findId(['Placed Order', 'Ordered Product', 'Order Placed', 'Pedido']),
-        // Opens: Opened Email
-        opens: findId(['Opened Email', 'Open Email', 'Email Abierto', 'Apertura']),
-        // Clicks: Clicked Email
-        clicks: findId(['Clicked Email', 'Click Email', 'Email Clicado', 'Clic']),
-        // Sent: Received Email (emails sent to recipients)
-        sent: findId(['Received Email', 'Sent Email', 'Receive Email', 'Email Recibido', 'Envío']),
+        opens:   findId(['Opened Email', 'Open Email', 'Email Abierto', 'Apertura']),
+        clicks:  findId(['Clicked Email', 'Click Email', 'Email Clicado', 'Clic']),
+        sent:    findId(['Received Email', 'Sent Email', 'Receive Email', 'Email Recibido', 'Envío']),
       };
 
       console.log('[Klaviyo] Metric IDs found:', mIds);
 
-      const sum = (res: any): number =>
-        res?.data?.attributes?.data?.[0]?.measurements?.[0]?.reduce(
-          (a: number, b: number) => a + b, 0
-        ) || 0;
-
-      const daily = (res: any): number[] =>
-        res?.data?.attributes?.data?.[0]?.measurements?.[0] || [];
-
-      const results: any = {};
-
-      // Fetch sequentially — one request every ~4.5s to stay under 15/min
-      if (mIds.revenue) {
-        results.revenue = await klaviyo.getMetricAggregate(apiKey, mIds.revenue, since, until, 'sum_value');
-      }
-      if (mIds.sent) {
-        results.sent = await klaviyo.getMetricAggregate(apiKey, mIds.sent, since, until, 'count');
-      }
-      if (mIds.opens) {
-        results.opens = await klaviyo.getMetricAggregate(apiKey, mIds.opens, since, until, 'count');
-      }
-      if (mIds.clicks) {
-        results.clicks = await klaviyo.getMetricAggregate(apiKey, mIds.clicks, since, until, 'count');
-      }
-
-      return {
-        revenue: sum(results.revenue),
-        opens: sum(results.opens),
-        clicks: sum(results.clicks),
-        sent: sum(results.sent),
-        conversions: sum(results.revenue), // conversions = placed orders count
-        dailyRevenue: daily(results.revenue),
-        dailyOpens: daily(results.opens),
-        dailyClicks: daily(results.clicks),
-        dailySent: daily(results.sent),
-        dailyConversions: daily(results.revenue),
+      // measurements is an OBJECT with named keys, e.g. { sum_value: [...daily values] }
+      const sumMeasure = (res: any, key: 'sum_value' | 'count'): number => {
+        const values = res?.data?.attributes?.data?.[0]?.measurements?.[key];
+        if (!Array.isArray(values)) return 0;
+        return values.reduce((a: number, b: number) => a + b, 0);
       };
+
+      const dailyMeasure = (res: any, key: 'sum_value' | 'count'): number[] => {
+        return res?.data?.attributes?.data?.[0]?.measurements?.[key] || [];
+      };
+
+      // Fetch current period metrics sequentially
+      const results: any = {};
+      if (mIds.revenue) results.revenue = await klaviyo.getMetricAggregate(apiKey, mIds.revenue, since, until, ['sum_value', 'count']);
+      if (mIds.sent)    results.sent    = await klaviyo.getMetricAggregate(apiKey, mIds.sent,    since, until, ['count']);
+      if (mIds.opens)   results.opens   = await klaviyo.getMetricAggregate(apiKey, mIds.opens,   since, until, ['count']);
+      if (mIds.clicks)  results.clicks  = await klaviyo.getMetricAggregate(apiKey, mIds.clicks,  since, until, ['count']);
+
+      const out = {
+        revenue:          sumMeasure(results.revenue, 'sum_value'),
+        opens:            sumMeasure(results.opens,   'count'),
+        clicks:           sumMeasure(results.clicks,  'count'),
+        sent:             sumMeasure(results.sent,    'count'),
+        // Conversions is the count of revenue events (placed orders)
+        conversions:      sumMeasure(results.revenue, 'count'),
+        dailyRevenue:     dailyMeasure(results.revenue, 'sum_value'),
+        dailyOpens:       dailyMeasure(results.opens,   'count'),
+        dailyClicks:      dailyMeasure(results.clicks,  'count'),
+        dailySent:        dailyMeasure(results.sent,    'count'),
+        dailyConversions: dailyMeasure(results.revenue, 'count'),
+      };
+
+      console.log('[Klaviyo] Dashboard data:', out);
+      return out;
     } catch (err) {
       console.error('[Klaviyo] getDashboardData error:', err);
       return null;

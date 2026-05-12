@@ -12,26 +12,27 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/klaviyo/, ''),
       },
-      '/api/shopify': {
-        target: 'https://shopify.com',
-        changeOrigin: true,
-        secure: false,
-        router: (req) => {
-          // Usamos Regex para extraer el shop= independientemente de cómo venga la URL
-          const url = req.url || '';
-          const match = url.match(/[?&]shop=([^&]+)/);
-          const shop = match ? match[1] : null;
 
-          if (shop) {
-            const clean = shop.replace(/^https?:\/\//, '').replace(/\/$/, '');
-            if (url.includes('/oauth/access_token')) {
-              return `https://${clean}/admin`;
-            }
+      // Shopify: domain is encoded in the path as /api/shopify/<domain>/...
+      // This proxy strips /api/shopify/<domain> and forwards to the correct admin API
+      '/api/shopify': {
+        target: 'https://placeholder.myshopify.com', // overridden by router
+        changeOrigin: true,
+        secure: true,
+        router: (req) => {
+          // URL pattern: /api/shopify/<domain>/orders.json?...
+          const match = req.url?.match(/^\/api\/shopify\/([^/?]+)/);
+          if (match?.[1]) {
+            const domain = decodeURIComponent(match[1]);
+            const clean = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
             return `https://${clean}/admin/api/2024-01`;
           }
-          return 'https://shopify.com';
+          return 'https://placeholder.myshopify.com';
         },
-        rewrite: (path) => path.replace(/^\/api\/shopify/, ''),
+        rewrite: (path) => {
+          // Remove /api/shopify/<domain> prefix, keep the rest
+          return path.replace(/^\/api\/shopify\/[^/?]+/, '');
+        },
       },
     },
   },
