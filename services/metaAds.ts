@@ -61,14 +61,14 @@ export const presetToRange = (preset: DatePreset): TimeRange => {
   const t = today();
   if (preset === 'today')       return { since: t, until: t };
   if (preset === 'yesterday')   { const y = daysAgo(1); return { since: y, until: y }; }
-  if (preset === 'last_7d')     return { since: daysAgo(8), until: daysAgo(1) };
-  if (preset === 'last_14d')    return { since: daysAgo(15), until: daysAgo(1) };
-  if (preset === 'last_28d')    return { since: daysAgo(29), until: daysAgo(1) };
-  if (preset === 'last_30d')    return { since: daysAgo(31), until: daysAgo(1) };
-  if (preset === 'last_90d')    return { since: daysAgo(91), until: daysAgo(1) };
+  if (preset === 'last_7d')     return { since: daysAgo(7), until: daysAgo(1) };
+  if (preset === 'last_14d')    return { since: daysAgo(14), until: daysAgo(1) };
+  if (preset === 'last_28d')    return { since: daysAgo(28), until: daysAgo(1) };
+  if (preset === 'last_30d')    return { since: daysAgo(30), until: daysAgo(1) };
+  if (preset === 'last_90d')    return { since: daysAgo(90), until: daysAgo(1) };
   if (preset === 'this_year') {
     const now = new Date();
-    return { since: `${now.getFullYear()}-01-01`, until: t };
+    return { since: `${now.getFullYear()}-01-01`, until: daysAgo(1) };
   }
   if (preset === 'last_year') {
     const prevYear = new Date().getFullYear() - 1;
@@ -76,7 +76,7 @@ export const presetToRange = (preset: DatePreset): TimeRange => {
   }
   if (preset === 'this_month') {
     const now = new Date();
-    return { since: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, until: t };
+    return { since: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, until: daysAgo(1) };
   }
   if (preset === 'last_month') {
     const now = new Date();
@@ -202,12 +202,21 @@ export const metaAds = {
     if (data.error) throw data.error;
     
     const extractResults = (actions: any[]) => {
-      if (!actions) return 0;
-      // Priority: Purchase -> Lead -> Other conversions
-      const purchase = actions.find(a => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase');
-      if (purchase) return parseFloat(purchase.value);
-      const lead = actions.find(a => a.action_type === 'lead' || a.action_type === 'offsite_conversion.fb_pixel_lead');
-      if (lead) return parseFloat(lead.value);
+      if (!actions || !Array.isArray(actions)) return 0;
+      const purchase = actions.find(a => 
+        a.action_type === 'purchase' || 
+        a.action_type === 'offsite_conversion.fb_pixel_purchase' ||
+        a.action_type === 'omni_purchase'
+      );
+      if (purchase) return parseFloat(purchase.value || 0);
+
+      const lead = actions.find(a => 
+        a.action_type === 'lead' || 
+        a.action_type === 'offsite_conversion.fb_pixel_lead' ||
+        a.action_type === 'onsite_conversion.lead_grouped'
+      );
+      if (lead) return parseFloat(lead.value || 0);
+
       return 0;
     };
 

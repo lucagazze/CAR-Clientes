@@ -52,15 +52,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
         {/* Logo / Brand */}
         <div className="h-[60px] flex items-center px-5 border-b border-black/[0.05] dark:border-white/[0.04] flex-shrink-0">
-          <div className="w-7 h-7 rounded-[8px] bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-[0_2px_8px_rgba(109,40,217,0.4)]">
-            <span className="text-white text-[11px] font-bold tracking-tight">C</span>
-          </div>
-          <div className="ml-3 flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-zinc-900 dark:text-white tracking-[-0.02em] leading-none">Portal C.A.R</p>
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-600 font-medium mt-0.5 tracking-wider">Algoritmia · 2026</p>
-          </div>
+          {/* Light mode logo */}
+          <img
+            src="/assets/logoAlgoritmia1.webp"
+            alt="Algoritmia"
+            className="block dark:hidden h-7 w-auto object-contain flex-shrink-0"
+          />
+          {/* Dark mode logo */}
+          <img
+            src="/assets/logoSinFondo.png"
+            alt="Algoritmia"
+            className="hidden dark:block h-7 w-auto object-contain flex-shrink-0"
+          />
           <button
-            className="md:hidden p-1.5 rounded-[6px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-white/10 transition-all"
+            className="md:hidden ml-auto p-1.5 rounded-[6px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-white/10 transition-all"
             onClick={() => setIsOpen(false)}
           >
             <X className="w-4 h-4" />
