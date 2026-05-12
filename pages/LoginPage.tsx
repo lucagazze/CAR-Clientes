@@ -97,7 +97,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-14 bg-gradient-to-r from-violet-600 to-blue-600 rounded-[16px] text-white text-[15px] font-bold shadow-[0_8px_30px_rgba(124,58,237,0.3)] hover:shadow-[0_12px_40px_rgba(124,58,237,0.4)] hover:-translate-y-[2px] active:translate-y-[0] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none group"
+              className="w-full h-14 bg-violet-600 text-white hover:bg-violet-700 rounded-[16px] text-[15px] font-bold shadow-xl shadow-violet-500/20 hover:-translate-y-[2px] active:translate-y-[0] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none group"
             >
               <div className="flex items-center justify-center gap-3">
                 {loading ? (

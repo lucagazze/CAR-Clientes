@@ -58,7 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
             </div>
             <div className="flex flex-col">
               <span className="text-[14px] font-black text-zinc-900 dark:text-white tracking-tighter leading-none">ALGORITMIA</span>
-              <span className="text-[10px] font-bold text-violet-500 tracking-[0.2em] mt-1">C.A.R</span>
+              <span className="text-[10px] font-bold text-violet-500 tracking-[0.2em] mt-1 uppercase">Gestión</span>
             </div>
           </div>
           
