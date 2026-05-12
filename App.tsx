@@ -3,6 +3,7 @@ import { HashRouter as Router, Routes, Route, Navigate, useLocation, Outlet } fr
 import { ToastProvider } from './components/Toast';
 import { MainLayout } from './components/layout/MainLayout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import LoginPage from './pages/LoginPage';
 
 const ProtectedRoute = () => {
@@ -30,17 +31,19 @@ const ProtectedRoute = () => {
 export default function App() {
   return (
     <Router>
-      <AuthProvider>
-        <ToastProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            
-            <Route element={<ProtectedRoute />}>
-               <Route path="/*" element={<MainLayout />} />
-            </Route>
-          </Routes>
-        </ToastProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              
+              <Route element={<ProtectedRoute />}>
+                 <Route path="/*" element={<MainLayout />} />
+              </Route>
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </Router>
   );
 }
