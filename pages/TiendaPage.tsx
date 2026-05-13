@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ShoppingBag, DollarSign, Package, Users, MousePointerClick, Calendar, ChevronDown } from 'lucide-react';
+import { ShoppingBag, DollarSign, Package, Calendar, ChevronDown, Receipt, Tag, TrendingUp, CheckCircle, Clock, BarChart2 } from 'lucide-react';
 import { ecommerce } from '../services/ecommerce';
 import { getPrevPeriod, today, daysAgo, presetToRange } from '../services/metaAds';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
+import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
+
+const PINK = '#ec4899';
 
 export default function TiendaPage() {
   const { profile } = useAuth();
   const [data, setData] = useState<any>(null);
+  const [prevData, setPrevData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedMetric, setExpandedMetric] = useState<string | null>('s-revenue');
 
   // Date Picker State
   const [activePreset, setActivePreset] = useState<any>('last_30d');
@@ -45,9 +50,14 @@ export default function TiendaPage() {
       
       setLoading(true);
       const range = activePreset === 'custom' ? { since: activeSince, until: activeUntil } : presetToRange(activePreset);
+      const prevRange = getPrevPeriod(range.since, range.until);
       try {
-        const res = await ecommerce.getDashboardData(p.ecommerce_platform, p.shopify_domain, p.shopify_access_token, range.since, range.until);
+        const [res, prevRes] = await Promise.all([
+          ecommerce.getDashboardData(p.ecommerce_platform, p.shopify_domain, p.shopify_access_token, range.since, range.until),
+          ecommerce.getDashboardData(p.ecommerce_platform, p.shopify_domain, p.shopify_access_token, prevRange.since, prevRange.until)
+        ]);
         setData(res);
+        setPrevData(prevRes);
       } catch (err) {
         console.error(err);
       } finally {
@@ -164,20 +174,20 @@ export default function TiendaPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto animate-fade-in pb-20">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-[10px] bg-pink-500 flex items-center justify-center text-white shadow-sm">
-            <ShoppingBag className="w-[20px] h-[20px]" />
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center">
+              <ShoppingBag className="w-5 h-5 text-pink-500" />
+            </div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Rendimiento de Tienda</h1>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">Rendimiento de Tienda</h1>
-            <p className="text-[13px] text-zinc-500 mt-0.5">{(profile as any).ecommerce_platform}</p>
-          </div>
+          <p className="text-zinc-500 dark:text-zinc-400 text-[13px] font-medium">Métricas principales de tu e-commerce ({(profile as any).ecommerce_platform}).</p>
         </div>
 
         <div className="flex items-center gap-3 print:hidden">
-          <div className="relative z-50 w-fit" ref={datePickerRef}>
-            <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative">
+          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative" ref={datePickerRef}>
               <button 
                 onClick={() => setShowDatePicker(!showDatePicker)} 
                 className="flex items-center gap-2 px-4 h-8 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group"
@@ -205,7 +215,7 @@ export default function TiendaPage() {
               </button>
               
               {showDatePicker && (
-                <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-[100] flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
+                <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-30 flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
                   <div className="w-full md:w-[160px] border-b md:border-b-0 md:border-r border-zinc-50 dark:border-zinc-800 p-2 md:p-3 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible scrollbar-hide">
                     {[{ id: 'today', label: 'Hoy' }, { id: 'yesterday', label: 'Ayer' }, { id: 'last_7d', label: 'Últimos 7 días' }, { id: 'last_14d', label: 'Últimos 14 días' }, { id: 'last_28d', label: 'Últimos 28 días' }, { id: 'last_30d', label: 'Últimos 30 días' }, { id: 'last_90d', label: 'Últimos 90 días' }, { id: 'this_month', label: 'Este mes' }, { id: 'last_month', label: 'Mes pasado' }, { id: 'this_year', label: 'Este año' }, { id: 'last_year', label: 'Año pasado' }].map(p => (
                       <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`flex-shrink-0 text-center md:text-left px-3 md:px-4 py-1.5 rounded-[10px] text-[11px] md:text-[12px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-pink-600 text-white shadow-md shadow-pink-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
@@ -225,10 +235,9 @@ export default function TiendaPage() {
                   </div>
                 </div>
               )}
-            </div>
           </div>
         </div>
-      </header>
+      </div>
 
       {loading ? (
         <div className="space-y-6 animate-pulse">
@@ -255,79 +264,280 @@ export default function TiendaPage() {
       ) : data ? (
         <div className="space-y-6">
           {/* Top Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
-            <StatCard icon={Package} label="Pedidos" value={data.orders?.toLocaleString('es-AR')} />
-            <StatCard icon={DollarSign} label="Ingresos" value={`$ ${data.revenue?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`} />
-            <StatCard icon={ShoppingBag} label="Ticket Promedio" value={`$ ${data.aov?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`} />
-            <StatCard icon={DollarSign} label="Descuentos" value={`$ ${data.totalDiscounts?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`} />
+          <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap overflow-x-auto scrollbar-hide">
+            <DashboardMetric 
+              icon={Package}
+              label="Pedidos" 
+              value={data.orders?.toLocaleString('es-AR') || '0'} 
+              change={prevData?.orders ? ((data.orders - prevData.orders) / prevData.orders) * 100 : 0} 
+              trend={(data.orders || 0) >= (prevData?.orders || 0) ? 'up' : 'down'} 
+              data={data.daily?.map((d: any) => ({ val: d.orders, date: d.date }))} 
+              color={PINK} 
+              loading={loading} 
+              active={expandedMetric === 's-orders'} 
+              onClick={() => setExpandedMetric(expandedMetric === 's-orders' ? null : 's-orders')} 
+            />
+            <DashboardMetric 
+              icon={DollarSign}
+              label="Ingresos" 
+              value={`$ ${data.revenue?.toLocaleString('es-AR', { maximumFractionDigits: 0 }) || '0'}`} 
+              change={prevData?.revenue ? ((data.revenue - prevData.revenue) / prevData.revenue) * 100 : 0} 
+              trend={(data.revenue || 0) >= (prevData?.revenue || 0) ? 'up' : 'down'} 
+              data={data.daily?.map((d: any) => ({ val: d.revenue, date: d.date }))} 
+              color={PINK} 
+              loading={loading} 
+              active={expandedMetric === 's-revenue'} 
+              onClick={() => setExpandedMetric(expandedMetric === 's-revenue' ? null : 's-revenue')} 
+            />
+            <DashboardMetric 
+              icon={Receipt}
+              label="Ticket Promedio" 
+              value={`$ ${data.aov?.toLocaleString('es-AR', { maximumFractionDigits: 0 }) || '0'}`} 
+              change={prevData?.aov ? ((data.aov - prevData.aov) / prevData.aov) * 100 : 0} 
+              trend={(data.aov || 0) >= (prevData?.aov || 0) ? 'up' : 'down'} 
+              data={data.daily?.map((d: any) => ({ val: d.aov, date: d.date }))} 
+              color={PINK} 
+              loading={loading} 
+              active={expandedMetric === 's-aov'} 
+              onClick={() => setExpandedMetric(expandedMetric === 's-aov' ? null : 's-aov')} 
+            />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chart */}
-            <div className="lg:col-span-2 bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 shadow-sm">
-              <h3 className="text-[14px] font-bold text-zinc-900 dark:text-white mb-6">Ingresos Diarios</h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.daily} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={0.2} />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717a' }} dy={10} minTickGap={30} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#71717a' }} dx={-10} tickFormatter={val => `$${val}`} width={35} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', fontSize: '12px' }}
-                      itemStyle={{ color: '#fff' }}
-                      formatter={(value: any) => [`$ ${Number(value).toLocaleString('es-AR')}`, 'Ingresos']}
-                      labelFormatter={label => `Fecha: ${label}`}
-                    />
-                    <Area type="monotone" dataKey="revenue" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorRev)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+          {/* Expanded Chart */}
+          {expandedMetric && (
+            <MetricDetailChart 
+              label={
+                expandedMetric === 's-orders' ? 'Pedidos' :
+                expandedMetric === 's-revenue' ? 'Ingresos' :
+                'Ticket Promedio'
+              } 
+              color={PINK} 
+              data={data.daily?.map((d: any) => ({ 
+                val: expandedMetric === 's-orders' ? d.orders : 
+                     expandedMetric === 's-revenue' ? d.revenue : d.aov, 
+                date: d.date 
+              }))} 
+              prevData={prevData?.daily?.map((d: any) => ({ 
+                val: expandedMetric === 's-orders' ? d.orders : 
+                     expandedMetric === 's-revenue' ? d.revenue : d.aov, 
+                date: d.date 
+              }))} 
+            />
+          )}
 
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Top Products */}
-            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 shadow-sm flex flex-col">
-              <h3 className="text-[14px] font-bold text-zinc-900 dark:text-white mb-4">Productos Más Vendidos</h3>
+            <div className="lg:col-span-2 bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 shadow-sm flex flex-col">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-8 h-8 rounded-xl bg-pink-500/10 flex items-center justify-center">
+                  <Package className="w-4 h-4 text-pink-500" />
+                </div>
+                <h3 className="text-[14px] font-bold text-zinc-900 dark:text-white">Productos Más Vendidos</h3>
+              </div>
               {data.topProducts && data.topProducts.length > 0 ? (
-                <div className="space-y-4 flex-1">
-                  {data.topProducts.map((p: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <p className="text-[13px] font-bold text-zinc-900 dark:text-white truncate" title={p.title}>{p.title}</p>
-                        <p className="text-[11px] text-zinc-500 mt-0.5">{p.quantity} unid. vendidas</p>
+                <div className="space-y-3 flex-1">
+                  {data.topProducts.map((p: any, i: number) => {
+                    const maxRev = data.topProducts[0]?.revenue || 1;
+                    const pct = Math.round((p.revenue / maxRev) * 100);
+                    return (
+                      <div key={i} className="group">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[10px] font-black text-pink-500 w-4 shrink-0">#{i+1}</span>
+                            <p className="text-[12px] font-bold text-zinc-900 dark:text-white truncate" title={p.title}>{p.title}</p>
+                          </div>
+                          <div className="text-right shrink-0 ml-3">
+                            <p className="text-[12px] font-black text-pink-600 dark:text-pink-400">${p.revenue.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p>
+                            <p className="text-[10px] text-zinc-400">{p.quantity} unid.</p>
+                          </div>
+                        </div>
+                        <div className="h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-pink-500 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[13px] font-black text-pink-600 dark:text-pink-400">
-                          ${p.revenue.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-zinc-500 text-[13px]">No hay productos registrados</div>
               )}
             </div>
+
+            {/* Revenue Bar Chart */}
+            <div className="lg:col-span-3 bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 shadow-sm flex flex-col">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-pink-500/10 flex items-center justify-center">
+                    <BarChart2 className="w-4 h-4 text-pink-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-zinc-900 dark:text-white">Ingresos Diarios</h3>
+                    <p className="text-[11px] text-zinc-400">Evolución del período</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold">Total</p>
+                  <p className="text-[16px] font-black text-pink-600 dark:text-pink-400">
+                    ${data.revenue?.toLocaleString('es-AR', { maximumFractionDigits: 0 }) || '0'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex-1 min-h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.daily || []} barSize={6} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v) => { const p = v.split('-'); return `${p[2]}/${p[1]}`; }}
+                      tick={{ fontSize: 9, fill: '#9ca3af' }}
+                      axisLine={false} tickLine={false}
+                      interval={Math.floor((data.daily?.length || 1) / 6)}
+                    />
+                    <YAxis tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={35}
+                      tickFormatter={(v) => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}
+                    />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0];
+                        return (
+                          <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 shadow-xl">
+                            <p className="text-[10px] text-zinc-400 mb-1">{d.payload.date}</p>
+                            <p className="text-[13px] font-black text-pink-400">${Number(d.value).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p>
+                            <p className="text-[10px] text-zinc-400">{d.payload.orders} pedidos</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="revenue" radius={[3, 3, 0, 0]}>
+                      {(data.daily || []).map((_: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={PINK} fillOpacity={0.8} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Quick stats row */}
+              <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="text-center">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Mejor día</p>
+                  <p className="text-[13px] font-black text-zinc-900 dark:text-white">
+                    ${Math.max(...(data.daily || [{ revenue: 0 }]).map((d: any) => d.revenue || 0)).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+                <div className="text-center border-x border-zinc-100 dark:border-zinc-800">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Promedio</p>
+                  <p className="text-[13px] font-black text-zinc-900 dark:text-white">
+                    ${(data.daily?.length ? data.revenue / data.daily.length : 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Días activos</p>
+                  <p className="text-[13px] font-black text-zinc-900 dark:text-white">
+                    {(data.daily || []).filter((d: any) => d.revenue > 0).length}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Bottom row: Fulfillment + Orders trend */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Fulfillment Status */}
             <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 shadow-sm">
-              <h3 className="text-[14px] font-bold text-zinc-900 dark:text-white mb-4">Estado de Preparación</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-8 h-8 rounded-xl bg-pink-500/10 flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-pink-500" />
+                </div>
+                <h3 className="text-[14px] font-bold text-zinc-900 dark:text-white">Estado de Envíos</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
-                  <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Enviados</p>
-                  <p className="text-[24px] font-black text-emerald-700 dark:text-emerald-300">{data.fulfillmentSplit?.fulfilled || 0}</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                    <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Enviados</p>
+                  </div>
+                  <p className="text-[26px] font-black text-emerald-700 dark:text-emerald-300">{data.fulfillmentSplit?.fulfilled || 0}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20">
-                  <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">Pendientes</p>
-                  <p className="text-[24px] font-black text-amber-700 dark:text-amber-300">{data.fulfillmentSplit?.unfulfilled || 0}</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock className="w-3.5 h-3.5 text-amber-500" />
+                    <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Pendientes</p>
+                  </div>
+                  <p className="text-[26px] font-black text-amber-700 dark:text-amber-300">{data.fulfillmentSplit?.unfulfilled || 0}</p>
                 </div>
+              </div>
+              {(data.fulfillmentSplit?.fulfilled || data.fulfillmentSplit?.unfulfilled) ? (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 mb-1.5">
+                    <span>Tasa de entrega</span>
+                    <span className="font-bold text-emerald-500">
+                      {Math.round((data.fulfillmentSplit.fulfilled / ((data.fulfillmentSplit.fulfilled + data.fulfillmentSplit.unfulfilled) || 1)) * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full"
+                      style={{ width: `${Math.round((data.fulfillmentSplit.fulfilled / ((data.fulfillmentSplit.fulfilled + data.fulfillmentSplit.unfulfilled) || 1)) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Orders trend */}
+            <div className="md:col-span-2 bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-pink-500/10 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-pink-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-zinc-900 dark:text-white">Pedidos Diarios</h3>
+                    <p className="text-[11px] text-zinc-400">Volumen de órdenes</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] text-zinc-400 uppercase tracking-wider font-bold">Total</p>
+                  <p className="text-[16px] font-black text-pink-600 dark:text-pink-400">
+                    {data.orders?.toLocaleString('es-AR') || '0'} pedidos
+                  </p>
+                </div>
+              </div>
+              <div className="h-[140px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data.daily || []} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="ordersGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={PINK} stopOpacity={0.25} />
+                        <stop offset="95%" stopColor={PINK} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v) => { const p = v.split('-'); return `${p[2]}/${p[1]}`; }}
+                      tick={{ fontSize: 9, fill: '#9ca3af' }}
+                      axisLine={false} tickLine={false}
+                      interval={Math.floor((data.daily?.length || 1) / 5)}
+                    />
+                    <YAxis tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={25} allowDecimals={false} />
+                    <Tooltip
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0];
+                        return (
+                          <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 shadow-xl">
+                            <p className="text-[10px] text-zinc-400 mb-1">{d.payload.date}</p>
+                            <p className="text-[13px] font-black text-pink-400">{d.value} pedidos</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Area type="monotone" dataKey="orders" stroke={PINK} strokeWidth={2.5} fill="url(#ordersGrad)" dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
@@ -342,16 +552,4 @@ export default function TiendaPage() {
   );
 }
 
-function StatCard({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) {
-  return (
-    <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-5 flex items-center gap-4 shadow-sm">
-      <div className="w-12 h-12 bg-pink-50 dark:bg-pink-500/10 rounded-full flex items-center justify-center text-pink-600 dark:text-pink-400">
-        <Icon className="w-6 h-6" />
-      </div>
-      <div>
-        <p className="text-[12px] font-medium text-zinc-500 mb-0.5">{label}</p>
-        <p className="text-xl font-bold text-zinc-900 dark:text-white">{value}</p>
-      </div>
-    </div>
-  );
-}
+

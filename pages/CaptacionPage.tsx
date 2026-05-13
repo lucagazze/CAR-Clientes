@@ -9,8 +9,9 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Download, RefreshCw, Calendar, ChevronDown,
-  Users, DollarSign, Target, BarChart2, Globe, Smartphone, User
+  Users, DollarSign, Target, BarChart2, Globe, Smartphone, User, Megaphone
 } from 'lucide-react';
+import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
 
 const BLUE = '#3b82f6';
 const GREEN = '#10b981';
@@ -40,30 +41,7 @@ const fmtVal = (v: number) => {
   return v.toFixed(v < 10 ? 2 : 0);
 };
 
-const KpiCard = ({ label, value, sub, trend, icon: Icon, color = BLUE, active, onClick, loading }: any) => (
-  <button 
-    onClick={onClick}
-    className={`bg-white dark:bg-zinc-900 rounded-2xl border transition-all text-left p-5 flex flex-col gap-3 group relative ${active ? 'ring-2 ring-blue-500 border-transparent shadow-lg' : 'border-black/[0.06] dark:border-white/[0.06] shadow-sm hover:shadow-md'}`}
-  >
-    <div className="flex items-center justify-between">
-      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">{label}</span>
-      <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${active ? 'bg-blue-500 text-white' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-400 group-hover:text-blue-500'}`}>
-        <Icon className="w-4 h-4" />
-      </div>
-    </div>
-    <div>
-      <div className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">{loading ? '...' : value}</div>
-      {sub !== undefined && !loading && (
-        <div className={`flex items-center gap-1 text-xs font-bold mt-1 ${trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-rose-500' : 'text-zinc-400'}`}>
-          {trend === 'up' && <TrendingUp className="w-3 h-3" />}
-          {trend === 'down' && <TrendingUp className="w-3 h-3 rotate-180" />}
-          <span>{sub}</span>
-        </div>
-      )}
-    </div>
-    {active && <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-500 rotate-45 rounded-sm" />}
-  </button>
-);
+
 
 const SectionTitle = ({ icon: Icon, title, subtitle }: any) => (
   <div className="flex items-center gap-3 mb-4">
@@ -294,18 +272,16 @@ export default function CaptacionPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <img 
-              src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} 
-              alt="Algoritmia" 
-              className="w-10 h-10 object-contain drop-shadow-sm"
-            />
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+              <Megaphone className="w-5 h-5 text-blue-500" />
+            </div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Captación (Meta Ads)</h1>
           </div>
           <p className="text-zinc-500 dark:text-zinc-400 text-[13px] font-medium">Análisis detallado por regiones, demografía y plataformas.</p>
         </div>
         
         <div className="flex items-center gap-3 print:hidden">
-          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative" ref={datePickerRef}>
+          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative z-20" ref={datePickerRef}>
             <button onClick={() => setShowDatePicker(!showDatePicker)} className="flex items-center gap-2 px-4 h-8 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group">
               <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
               <span className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">
@@ -314,7 +290,7 @@ export default function CaptacionPage() {
               <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
             </button>
             {showDatePicker && (
-              <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-[100] flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
+              <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-30 flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
                   <div className="w-full md:w-[160px] border-b md:border-b-0 md:border-r border-zinc-50 dark:border-zinc-800 p-2 md:p-3 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible scrollbar-hide">
                     {PRESETS.map(p => (
                       <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`flex-shrink-0 text-center md:text-left px-3 md:px-4 py-1.5 rounded-[10px] text-[11px] md:text-[12px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
@@ -340,135 +316,34 @@ export default function CaptacionPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard label="Inversión" value={fmt(summary?.spend || 0, true)} icon={DollarSign} color="#3b82f6" loading={loading} active={expandedMetric === 'spend'} onClick={() => setExpandedMetric('spend')} sub={pct(getChange(summary?.spend, prevSummary?.spend))} trend={getChange(summary?.spend, prevSummary?.spend) >= 0 ? 'up' : 'down'} />
-        <KpiCard label="Alcance" value={fmt(summary?.reach || 0)} icon={Users} color="#8b5cf6" loading={loading} active={expandedMetric === 'reach'} onClick={() => setExpandedMetric('reach')} sub={pct(getChange(summary?.reach, prevSummary?.reach))} trend={getChange(summary?.reach, prevSummary?.reach) >= 0 ? 'up' : 'down'} />
-        <KpiCard label="Conversiones" value={fmt(summary?.results || 0)} icon={Target} color="#10b981" loading={loading} active={expandedMetric === 'results'} onClick={() => setExpandedMetric('results')} sub={pct(getChange(summary?.results, prevSummary?.results))} trend={getChange(summary?.results, prevSummary?.results) >= 0 ? 'up' : 'down'} />
-        <KpiCard label="Retorno" value={fmt(summary?.purchase_value || 0, true)} icon={TrendingUp} color="#f59e0b" loading={loading} active={expandedMetric === 'revenue'} onClick={() => setExpandedMetric('revenue')} sub={pct(getChange(summary?.purchase_value, prevSummary?.purchase_value))} trend={getChange(summary?.purchase_value, prevSummary?.purchase_value) >= 0 ? 'up' : 'down'} />
-        <KpiCard label="ROAS" value={`${(summary?.roas || 0).toFixed(2)}x`} icon={BarChart2} color="#ef4444" loading={loading} active={expandedMetric === 'roas'} onClick={() => setExpandedMetric('roas')} sub={pct(getChange(summary?.roas, prevSummary?.roas))} trend={getChange(summary?.roas, prevSummary?.roas) >= 0 ? 'up' : 'down'} />
+      <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap overflow-x-auto scrollbar-hide">
+        <DashboardMetric icon={DollarSign} label="Inversión" value={fmt(summary?.spend || 0, true)} change={getChange(summary?.spend, prevSummary?.spend)} trend={getChange(summary?.spend, prevSummary?.spend) >= 0 ? 'up' : 'down'} data={daily?.map((d: any) => ({ val: d.spend, date: d.date }))} color={BLUE} loading={loading} active={expandedMetric === 'spend'} onClick={() => setExpandedMetric(expandedMetric === 'spend' ? null : 'spend')} />
+        <DashboardMetric icon={Users} label="Alcance" value={fmt(summary?.reach || 0)} change={getChange(summary?.reach, prevSummary?.reach)} trend={getChange(summary?.reach, prevSummary?.reach) >= 0 ? 'up' : 'down'} data={daily?.map((d: any) => ({ val: d.reach, date: d.date }))} color={BLUE} loading={loading} active={expandedMetric === 'reach'} onClick={() => setExpandedMetric(expandedMetric === 'reach' ? null : 'reach')} />
+        <DashboardMetric icon={Target} label="Conv." value={fmt(summary?.results || 0)} change={getChange(summary?.results, prevSummary?.results)} trend={getChange(summary?.results, prevSummary?.results) >= 0 ? 'up' : 'down'} data={daily?.map((d: any) => ({ val: d.results, date: d.date }))} color={BLUE} loading={loading} active={expandedMetric === 'results'} onClick={() => setExpandedMetric(expandedMetric === 'results' ? null : 'results')} />
+        <DashboardMetric icon={BarChart2} label="ROAS" value={`${(summary?.roas || 0).toFixed(2)}x`} change={getChange(summary?.roas, prevSummary?.roas)} trend={getChange(summary?.roas, prevSummary?.roas) >= 0 ? 'up' : 'down'} data={daily?.map((d: any) => ({ val: d.roas, date: d.date }))} color={BLUE} loading={loading} active={expandedMetric === 'roas'} onClick={() => setExpandedMetric(expandedMetric === 'roas' ? null : 'roas')} />
+        <DashboardMetric icon={DollarSign} label="Retorno" value={fmt(summary?.purchase_value || 0, true)} change={getChange(summary?.purchase_value, prevSummary?.purchase_value)} trend={getChange(summary?.purchase_value, prevSummary?.purchase_value) >= 0 ? 'up' : 'down'} data={daily?.map((d: any) => ({ val: d.purchase_value, date: d.date }))} color={BLUE} loading={loading} active={expandedMetric === 'revenue'} onClick={() => setExpandedMetric(expandedMetric === 'revenue' ? null : 'revenue')} />
       </div>
-
       {/* Expanded Chart - CLONED FROM DASHBOARD */}
-      <div className="bg-white dark:bg-zinc-900 rounded-[24px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <SectionTitle 
-            icon={BarChart2} 
-            title={`Evolución de ${expandedMetric === 'spend' ? 'Inversión' : expandedMetric === 'reach' ? 'Alcance' : expandedMetric === 'results' ? 'Conversiones' : expandedMetric === 'revenue' ? 'Retorno' : 'ROAS'}`} 
-            subtitle="Análisis detallado del periodo" 
-          />
-          <div className="flex items-center gap-5">
-            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: chartColor }} /><span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Actual</span></div>
-            
-            {avg > 0 && (
-              <div 
-                className={`flex items-center gap-2 cursor-pointer transition-all ${hoveredLine === 'curr' ? 'scale-110' : hoveredLine === 'prev' ? 'opacity-30' : ''}`}
-                onMouseEnter={() => setHoveredLine('curr')}
-                onMouseLeave={() => setHoveredLine(null)}
-              >
-                <div className="w-3 h-0.5 bg-amber-500" />
-                <span className="text-[13px] font-bold text-amber-600 dark:text-amber-500">Media Act: {fmtVal(avg)}</span>
-              </div>
-            )}
-            {prevAvg > 0 && (
-              <div 
-                className={`flex items-center gap-2 cursor-pointer transition-all ${hoveredLine === 'prev' ? 'scale-110' : hoveredLine === 'curr' ? 'opacity-30' : ''}`}
-                onMouseEnter={() => setHoveredLine('prev')}
-                onMouseLeave={() => setHoveredLine(null)}
-              >
-                <div className="w-3 h-0.5 bg-slate-400" />
-                <span className="text-[13px] font-bold text-slate-500">Media Ant: {fmtVal(prevAvg)}</span>
-              </div>
-            )}
-            {maxVal > 0 && <div className="flex items-center gap-2 pl-2 border-l border-zinc-100 dark:border-zinc-800"><span className="text-[13px] font-semibold text-zinc-400">Máx:</span><span className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">{fmtVal(maxVal)}</span></div>}
-          </div>
-        </div>
-        <div className="h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={currentValData} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
-              <defs>
-                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={chartColor} stopOpacity={0.15}/><stop offset="95%" stopColor={chartColor} stopOpacity={0}/></linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-zinc-100 dark:text-zinc-800/50" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} tickFormatter={d => d.split('-').slice(1).reverse().join('/')} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis 
-                domain={[0, maxVal > 0 ? maxVal * 1.2 : 'auto']} 
-                ticks={maxVal > 0 ? [0, Math.round(avg), Math.round(prevAvg), Math.round(maxVal)].filter(v => v >= 0).sort((a,b) => a-b) : undefined} 
-                tick={{ fontSize: 10, fill: '#9ca3af' }} 
-                axisLine={false} 
-                tickLine={false} 
-                tickFormatter={v => v === 0 ? '' : fmtVal(v)} 
-              />
-              <Tooltip content={({ active, payload }: any) => {
-                if (active && payload && payload.length) {
-                  const curr = payload.find((p: any) => p.dataKey === 'val');
-                  return (
-                    <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-3 rounded-xl shadow-xl min-w-[140px]">
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-2">{curr?.payload?.date}</p>
-                      {curr && (
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: chartColor }} />
-                            <span className="text-[11px] font-medium text-zinc-500">Valor</span>
-                          </div>
-                          <span className="text-[12px] font-bold text-zinc-900 dark:text-zinc-100">{fmtVal(curr.value)}</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-                return null;
-              }} />
-
-              {/* Averages */}
-              {avg > 0 && (
-                <ReferenceLine 
-                  y={avg} 
-                  stroke="#f59e0b" 
-                  strokeDasharray="4 4" 
-                  strokeOpacity={hoveredLine === 'curr' ? 1 : hoveredLine === 'prev' ? 0.1 : 0.8} 
-                  strokeWidth={hoveredLine === 'curr' ? 4 : 2} 
-                  className="transition-all duration-300"
-                />
-              )}
-              {prevAvg > 0 && (
-                <ReferenceLine 
-                  y={prevAvg} 
-                  stroke="#94a3b8" 
-                  strokeDasharray="4 4" 
-                  strokeOpacity={hoveredLine === 'prev' ? 1 : hoveredLine === 'curr' ? 0.1 : 0.6} 
-                  strokeWidth={hoveredLine === 'prev' ? 4 : 2} 
-                  className="transition-all duration-300"
-                />
-              )}
-              {maxVal > 0 && (
-                <ReferenceLine 
-                  y={maxVal} 
-                  stroke="#6366f1" 
-                  strokeOpacity={hoveredLine ? 0.2 : 0.5} 
-                  strokeWidth={2} 
-                  strokeDasharray="4 4"
-                  label={{ value: `MÁX: ${fmtVal(maxVal)}`, position: 'insideTopRight', fontSize: 10, fontWeight: '900', fill: '#6366f1', opacity: hoveredLine ? 0.2 : 1 }} 
-                />
-              )}
-
-              <Area 
-                type="monotone" 
-                dataKey="val" 
-                stroke={chartColor} 
-                strokeWidth={hoveredLine ? 1 : 3} 
-                strokeOpacity={hoveredLine ? 0.1 : 1}
-                fillOpacity={hoveredLine ? 0.02 : 1} 
-                fill={`url(#${gradientId})`} 
-                dot={{ r: 4, fill: chartColor, strokeWidth: 2, stroke: '#fff' }} 
-                activeDot={{ r: 6, strokeWidth: 0 }} 
-                isAnimationActive={true}
-                animationDuration={1500}
-                animationEasing="ease-in-out"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      {expandedMetric && (
+        <MetricDetailChart 
+          label={expandedMetric === 'spend' ? 'Inversión' : expandedMetric === 'reach' ? 'Alcance' : expandedMetric === 'results' ? 'Conversiones' : expandedMetric === 'revenue' ? 'Retorno' : 'ROAS'}
+          color={BLUE}
+          data={
+            expandedMetric === 'spend' ? daily?.map((d: any) => ({ val: d.spend, date: d.date })) :
+            expandedMetric === 'reach' ? daily?.map((d: any) => ({ val: d.reach, date: d.date })) :
+            expandedMetric === 'results' ? daily?.map((d: any) => ({ val: d.results, date: d.date })) :
+            expandedMetric === 'revenue' ? daily?.map((d: any) => ({ val: d.purchase_value, date: d.date })) :
+            daily?.map((d: any) => ({ val: d.roas, date: d.date }))
+          }
+          prevData={
+            expandedMetric === 'spend' ? prevDaily?.map((d: any) => ({ val: d.spend, date: d.date })) :
+            expandedMetric === 'reach' ? prevDaily?.map((d: any) => ({ val: d.reach, date: d.date })) :
+            expandedMetric === 'results' ? prevDaily?.map((d: any) => ({ val: d.results, date: d.date })) :
+            expandedMetric === 'revenue' ? prevDaily?.map((d: any) => ({ val: d.purchase_value, date: d.date })) :
+            prevDaily?.map((d: any) => ({ val: d.roas, date: d.date }))
+          }
+        />
+      )}
 
       {/* Breakdowns grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

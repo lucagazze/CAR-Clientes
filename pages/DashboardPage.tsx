@@ -37,6 +37,11 @@ import {
   ChevronRight,
   MessageSquare,
   Zap,
+  Target,
+  Receipt,
+  Tag,
+  MailOpen,
+  MousePointerClick
 } from "lucide-react";
 import {
   AreaChart,
@@ -48,12 +53,14 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import KlaviyoLoader from "../components/ui/KlaviyoLoader";
 
 const BLUE = "#3b82f6";
 const GREEN = "#10b981";
 const RED = "#ef4444";
+const PINK = "#ec4899";
 
-const MAIN_COLOR = "#3b82f6"; // Back to Blue as requested // Back to Blue as requested
+const MAIN_COLOR = "#3b82f6"; // Default Blue for Captación
 
 const ensureMetaToken = async (): Promise<void> => {
   if (localStorage.getItem("meta_ads_token")) return;
@@ -79,26 +86,39 @@ const ShopifyMetric = ({
   loading,
   active,
   onClick,
-}: any) => (
-  <button
-    onClick={onClick}
-    className={`flex flex-col flex-1 min-w-0 px-4 py-4 sm:px-6 sm:py-5
-      border-b border-r border-zinc-100 dark:border-zinc-800
-      [&:nth-child(odd)]:border-r [&:nth-child(even)]:border-r-0
-      sm:[&:nth-child(odd)]:border-r sm:[&:nth-child(even)]:border-r
-      sm:[&:nth-child(3n)]:border-r-0
-      xl:border-b-0 xl:border-r xl:last:border-r-0
-      transition-all text-left group relative
-      ${active ? "bg-blue-50/30 dark:bg-blue-500/5" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"}`}
-  >
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-widest">
-        {label}
-      </span>
-      {active && (
-        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-      )}
-    </div>
+  icon: Icon,
+}: any) => {
+  const isGreen = color === GREEN || color === '#10b981';
+  const isPink = color === PINK || color === '#ec4899';
+  
+  let activeBgClass = "bg-blue-50/30 dark:bg-blue-500/5";
+  let pulseClass = "bg-blue-500";
+  if (isGreen) { activeBgClass = "bg-emerald-50/30 dark:bg-emerald-500/5"; pulseClass = "bg-emerald-500"; }
+  if (isPink) { activeBgClass = "bg-pink-50/30 dark:bg-pink-500/5"; pulseClass = "bg-pink-500"; }
+
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col flex-1 min-w-0 px-4 py-4 sm:px-6 sm:py-5
+        border-b border-r border-zinc-100 dark:border-zinc-800
+        [&:nth-child(odd)]:border-r [&:nth-child(even)]:border-r-0
+        sm:[&:nth-child(odd)]:border-r sm:[&:nth-child(even)]:border-r
+        sm:[&:nth-child(3n)]:border-r-0
+        xl:border-b-0 xl:border-r xl:last:border-r-0
+        transition-all text-left group relative
+        ${active ? activeBgClass : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"}`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {Icon && <Icon className="w-4 h-4" style={{ color }} />}
+          <span className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-widest">
+            {label}
+          </span>
+        </div>
+        {active && (
+          <div className={`w-1.5 h-1.5 rounded-full ${pulseClass} animate-pulse`} />
+        )}
+      </div>
     <div className="flex items-end justify-between gap-2">
       <div className="flex flex-col">
         <span className="text-[17px] sm:text-[20px] font-bold text-zinc-900 dark:text-white leading-none mb-2">
@@ -134,7 +154,8 @@ const ShopifyMetric = ({
       </div>
     </div>
   </button>
-);
+  );
+};
 
 const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
   const [hoveredLine, setHoveredLine] = useState<"curr" | "prev" | null>(null);
@@ -162,7 +183,7 @@ const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
   const maxVal = Math.max(...data.map((d: any) => d.val), 0);
 
   const trend = prevAvg > 0 ? ((avg - prevAvg) / prevAvg) * 100 : 0;
-  const chartColor = trend > 5 ? GREEN : trend < -5 ? RED : BLUE;
+  const chartColor = color || (trend > 5 ? GREEN : trend < -5 ? RED : BLUE);
   const gradientId = `grad-${label.replace(/\s+/g, "-")}`;
 
   const isPercentLabel = label.toLowerCase().includes("tasa");
@@ -655,11 +676,8 @@ export default function DashboardPage() {
         }
       };
 
-      // Disparamos Shopify y Meta primero, en paralelo para máxima velocidad.
-      await Promise.all([fetchShopify(), fetchMeta()]);
-
-      // Una vez que Shopify y Meta terminaron de cargar, disparamos Klaviyo.
-      await fetchKlaviyo();
+      // Ejecutar todas las peticiones en paralelo para máxima velocidad.
+      await Promise.all([fetchShopify(), fetchMeta(), fetchKlaviyo()]);
     } catch (globalErr: any) {
       if (globalErr.name !== "AbortError")
         console.error("Global Fetch Error:", globalErr);
@@ -995,7 +1013,7 @@ export default function DashboardPage() {
           </h1>
         </div>
         <div
-          className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative"
+          className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative z-20"
           ref={datePickerRef}
         >
           <div className="relative">
@@ -1029,7 +1047,7 @@ export default function DashboardPage() {
             </button>
 
             {showDatePicker && (
-              <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-[100] flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
+              <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-30 flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
                 <div className="w-full md:w-[160px] border-b md:border-b-0 md:border-r border-zinc-50 dark:border-zinc-800 p-2 md:p-3 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible scrollbar-hide">
                   {[
                     { id: "today", label: "Hoy" },
@@ -1177,6 +1195,7 @@ export default function DashboardPage() {
               <>
                 <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
+                    icon={Receipt}
                     label="Ticket Promedio"
                     value={`$ ${currentStore.aov?.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`}
                     change={getKlaviyoChange(currentStore?.aov, prevStore?.aov)}
@@ -1189,7 +1208,7 @@ export default function DashboardPage() {
                       val: d.aov,
                       date: d.date,
                     }))}
-                    color={MAIN_COLOR}
+                    color={PINK}
                     loading={fetchingStore}
                     active={expandedMetric === "s-aov"}
                     onClick={() =>
@@ -1199,6 +1218,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={Package}
                     label="Pedidos"
                     value={currentStore.orders?.toLocaleString("es-AR")}
                     change={getKlaviyoChange(
@@ -1214,7 +1234,7 @@ export default function DashboardPage() {
                       val: d.orders,
                       date: d.date,
                     }))}
-                    color={MAIN_COLOR}
+                    color={PINK}
                     loading={fetchingStore}
                     active={expandedMetric === "s-orders"}
                     onClick={() =>
@@ -1224,6 +1244,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={DollarSign}
                     label="Ingresos"
                     value={`$ ${currentStore.revenue?.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`}
                     change={getKlaviyoChange(
@@ -1239,7 +1260,7 @@ export default function DashboardPage() {
                       val: d.revenue,
                       date: d.date,
                     }))}
-                    color={MAIN_COLOR}
+                    color={PINK}
                     loading={fetchingStore}
                     active={expandedMetric === "s-revenue"}
                     onClick={() =>
@@ -1262,7 +1283,7 @@ export default function DashboardPage() {
                               ? "Sesiones"
                               : "Tasa de Conversión"
                     }
-                    color={MAIN_COLOR}
+                    color={PINK}
                     data={
                       expandedMetric === "s-revenue"
                         ? currentStore?.daily?.map((d: any) => ({
@@ -1337,6 +1358,7 @@ export default function DashboardPage() {
               <>
                 <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 lg:flex overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
+                    icon={DollarSign}
                     label="Inversión"
                     value={`$ ${currentMeta.spend?.toLocaleString("es-AR", { maximumFractionDigits: 0 }) || 0}`}
                     change={getMetaChange(currentMeta?.spend, prevMeta?.spend)}
@@ -1361,6 +1383,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={Users}
                     label="Alcance"
                     value={currentMeta.reach?.toLocaleString("es-AR") || 0}
                     change={getMetaChange(currentMeta?.reach, prevMeta?.reach)}
@@ -1385,6 +1408,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={Target}
                     label="Conv."
                     value={currentMeta.results || 0}
                     change={getMetaChange(
@@ -1410,6 +1434,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={BarChart2}
                     label="ROAS"
                     value={`${currentMeta.roas?.toFixed(2) || 0}x`}
                     change={getMetaChange(currentMeta?.roas, prevMeta?.roas)}
@@ -1432,6 +1457,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={DollarSign}
                     label="Retorno"
                     value={`$ ${currentMeta.purchase_value?.toLocaleString("es-AR", { maximumFractionDigits: 0 }) || 0}`}
                     change={getMetaChange(
@@ -1541,11 +1567,12 @@ export default function DashboardPage() {
               </h2>
             </div>
             {fetchingKlaviyo && !currentKlaviyo ? (
-              <div className="animate-pulse bg-zinc-100 dark:bg-zinc-800/50 rounded-[12px] h-[88px] w-full" />
+              <KlaviyoLoader loading={fetchingKlaviyo} color={GREEN} />
             ) : currentKlaviyo ? (
               <>
                 <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
+                    icon={Package}
                     label="Entregas"
                     value={currentKlaviyo.sent?.toLocaleString("es-AR") || "0"}
                     change={getKlaviyoChange(
@@ -1558,7 +1585,7 @@ export default function DashboardPage() {
                         : "down"
                     }
                     data={currentKlaviyo?.dailySent || []}
-                    color={MAIN_COLOR}
+                    color={GREEN}
                     loading={fetchingKlaviyo}
                     active={expandedMetric === "k-sent"}
                     onClick={() =>
@@ -1568,6 +1595,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={MailOpen}
                     label="Tasa de Apertura"
                     value={`${((currentKlaviyo.opens / (currentKlaviyo.sent || 1)) * 100).toFixed(1)}%`}
                     change={getKlaviyoChange(
@@ -1590,7 +1618,7 @@ export default function DashboardPage() {
                         date: d.date,
                       })) || []
                     }
-                    color={MAIN_COLOR}
+                    color={GREEN}
                     loading={fetchingKlaviyo}
                     active={expandedMetric === "k-open-rate"}
                     onClick={() =>
@@ -1600,6 +1628,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={MousePointerClick}
                     label="Tasa de Clics"
                     value={`${((currentKlaviyo.clicks / (currentKlaviyo.sent || 1)) * 100).toFixed(1)}%`}
                     change={getKlaviyoChange(
@@ -1622,7 +1651,7 @@ export default function DashboardPage() {
                         date: d.date,
                       })) || []
                     }
-                    color={MAIN_COLOR}
+                    color={GREEN}
                     loading={fetchingKlaviyo}
                     active={expandedMetric === "k-click-rate"}
                     onClick={() =>
@@ -1634,6 +1663,7 @@ export default function DashboardPage() {
                     }
                   />
                   <ShopifyMetric
+                    icon={DollarSign}
                     label="Ingresos Klaviyo"
                     value={`$ ${currentKlaviyo.attributed?.toLocaleString("es-AR", { maximumFractionDigits: 0 }) || 0}`}
                     change={getKlaviyoChange(
@@ -1647,7 +1677,7 @@ export default function DashboardPage() {
                         : "down"
                     }
                     data={currentKlaviyo?.dailyAttributed || []}
-                    color={MAIN_COLOR}
+                    color={GREEN}
                     loading={fetchingKlaviyo}
                     active={expandedMetric === "k-attr"}
                     onClick={() =>
@@ -1670,7 +1700,7 @@ export default function DashboardPage() {
                               ? "Tasa de Clics"
                               : "Tasa de Apertura"
                     }
-                    color={MAIN_COLOR}
+                    color={GREEN}
                     data={
                       expandedMetric === "k-revenue"
                         ? currentKlaviyo?.dailyRevenue || []
@@ -1765,12 +1795,12 @@ export default function DashboardPage() {
                     <linearGradient id="colorRev90" x1="0" y1="0" x2="0" y2="1">
                       <stop
                         offset="5%"
-                        stopColor={MAIN_COLOR}
+                        stopColor={PINK}
                         stopOpacity={0.2}
                       />
                       <stop
                         offset="95%"
-                        stopColor={MAIN_COLOR}
+                        stopColor={PINK}
                         stopOpacity={0}
                       />
                     </linearGradient>
@@ -1817,7 +1847,7 @@ export default function DashboardPage() {
                   <Area
                     type="monotone"
                     dataKey="revenue"
-                    stroke={MAIN_COLOR}
+                    stroke={PINK}
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorRev90)"

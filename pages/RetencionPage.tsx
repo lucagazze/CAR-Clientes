@@ -5,10 +5,12 @@ import { DatePreset, presetToRange, getPrevPeriod, today, daysAgo } from '../ser
 import { klaviyo } from '../services/klaviyo';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
-  Calendar, ChevronDown, TrendingUp, Mail, Zap
+  Calendar, ChevronDown, TrendingUp, Mail, Zap, Package, MousePointerClick, DollarSign, MailOpen
 } from 'lucide-react';
+import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
+import KlaviyoLoader from '../components/ui/KlaviyoLoader';
 
-const MAIN_COLOR = '#3b82f6'; // Blue to match dashboard
+const MAIN_COLOR = '#10b981'; // Green (Emerald) for Retention
 
 const PRESETS: { id: DatePreset | 'custom'; label: string }[] = [
   { id: 'today', label: 'Hoy' },
@@ -38,96 +40,7 @@ const getKlaviyoChange = (curr?: number, prev?: number) => {
   return ((curr - prev) / prev) * 100;
 };
 
-const MetricDetailChart = ({ data, color, label }: any) => {
-  return (
-    <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] p-6 shadow-sm mt-4 animate-in slide-in-from-top-2 fade-in duration-300">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-        </div>
-        <h3 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">Evolución de {label}</h3>
-      </div>
-      <div className="h-[200px] w-full mt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`color-${label}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.2} />
-                <stop offset="95%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#52525b" opacity={0.1} />
-            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#71717a' }} dy={10} tickFormatter={(d) => d.includes('-') ? d.split('-').slice(1).reverse().join('/') : d} />
-            <YAxis hide domain={['dataMin', 'auto']} width={35} />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#18181b', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px', fontWeight: '600', padding: '12px 16px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-              itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '700' }}
-              cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: '4 4' }}
-              formatter={(value: any) => [`${typeof value === 'number' && value % 1 !== 0 ? value.toFixed(1) + '%' : value}`, label]}
-              labelFormatter={(l) => {
-                const match = data.find((d:any) => d.date === l);
-                return match?.date || l;
-              }}
-            />
-            <Area type="monotone" dataKey="val" stroke={color} strokeWidth={3} fillOpacity={1} fill={`url(#color-${label})`} activeDot={{ r: 6, fill: color, stroke: '#fff', strokeWidth: 2 }} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-};
 
-const MetricCard = ({ label, value, change, trend, data, color, loading, active, onClick }: any) => (
-  <button 
-    onClick={onClick}
-    className={`bg-white dark:bg-zinc-900 rounded-2xl border transition-all text-left flex flex-col w-full min-w-0 px-4 py-4 sm:px-5 sm:py-5 group relative
-      ${active ? 'ring-2 ring-blue-500 border-transparent shadow-lg bg-blue-50/30 dark:bg-blue-500/5' : 'border-black/[0.06] dark:border-white/[0.06] shadow-sm hover:shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-800/50'}`}
-  >
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-[10px] sm:text-[11px] font-bold text-zinc-400 uppercase tracking-widest">{label}</span>
-      {active && <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />}
-    </div>
-    
-    <div className="flex items-end justify-between gap-4">
-      <div>
-        <div className="flex items-baseline gap-2">
-          {loading ? (
-            <div className="h-6 w-16 sm:h-8 sm:w-20 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse" />
-          ) : (
-            <span className="text-[20px] sm:text-[26px] font-bold tracking-tight text-zinc-900 dark:text-white leading-none">
-              {value}
-            </span>
-          )}
-        </div>
-        
-        {!loading && change !== undefined && (
-          <div className="flex items-center gap-1 mt-2">
-            <TrendingUp className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${trend === 'up' ? 'text-blue-500' : 'text-red-500 rotate-180'}`} />
-            <span className={`text-[11px] sm:text-[12px] font-bold ${trend === 'up' ? 'text-blue-500' : 'text-red-500'}`}>
-              {Math.abs(change).toFixed(1)}%
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="h-[30px] sm:h-[40px] w-[60px] sm:w-[80px] opacity-40 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        {!loading && data && data.length > 0 && (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
-              <defs>
-                <linearGradient id={`mini-${label}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="val" stroke={color} strokeWidth={2} fillOpacity={1} fill={`url(#mini-${label})`} isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
-  </button>
-);
 
 export default function RetencionPage() {
   const { darkMode } = useTheme();
@@ -244,7 +157,7 @@ export default function RetencionPage() {
             const isInRange = since && until && d > since && d < until;
             const isHovering = since && !until && hovering && ((d > since && d <= hovering) || (d < since && d >= hovering));
             return (
-              <button key={d} onMouseEnter={() => !isFuture && onHover(d)} onClick={() => !isFuture && onDay(d)} disabled={isFuture} className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center ${isSelected ? 'bg-blue-600 text-white rounded-full z-10' : (isInRange || isHovering) ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600' : isFuture ? 'text-zinc-200 dark:text-zinc-800' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full'} ${isToday && !isSelected ? 'text-blue-600 ring-1 ring-blue-100' : ''}`}>{d.split('-')[2]}</button>
+              <button key={d} onMouseEnter={() => !isFuture && onHover(d)} onClick={() => !isFuture && onDay(d)} disabled={isFuture} className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center ${isSelected ? 'bg-emerald-600 text-white rounded-full z-10' : (isInRange || isHovering) ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600' : isFuture ? 'text-zinc-200 dark:text-zinc-800' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full'} ${isToday && !isSelected ? 'text-emerald-600 ring-1 ring-emerald-100' : ''}`}>{d.split('-')[2]}</button>
             );
           })}
         </div>
@@ -258,8 +171,8 @@ export default function RetencionPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-              <Mail className="w-5 h-5 text-blue-500" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+              <Mail className="w-5 h-5 text-emerald-500" />
             </div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Retención (Klaviyo)</h1>
           </div>
@@ -269,7 +182,7 @@ export default function RetencionPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1.5 py-1 shadow-sm h-11 relative" ref={datePickerRef}>
             <button onClick={() => setShowDatePicker(!showDatePicker)} className="flex items-center gap-2 px-4 h-8 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group">
-              <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
+              <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-emerald-500 transition-colors" />
               <span className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">
                 {activePreset === 'custom' ? `${fmtDateRange(activeSince)} - ${fmtDateRange(activeUntil)}` : PRESETS.find(p => p.id === activePreset)?.label || activePreset}
               </span>
@@ -277,10 +190,10 @@ export default function RetencionPage() {
             </button>
             
             {showDatePicker && (
-              <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-[100] flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
+              <div className="absolute left-0 md:left-auto md:right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-30 flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-left md:origin-top-right">
                 <div className="w-full md:w-[160px] border-b md:border-b-0 md:border-r border-zinc-50 dark:border-zinc-800 p-2 md:p-3 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible scrollbar-hide">
                   {PRESETS.map(p => (
-                    <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`flex-shrink-0 text-center md:text-left px-3 md:px-4 py-1.5 rounded-[10px] text-[11px] md:text-[12px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
+                    <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`flex-shrink-0 text-center md:text-left px-3 md:px-4 py-1.5 rounded-[10px] text-[11px] md:text-[12px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
                   ))}
                 </div>
                 <div className="p-4 md:p-5 flex flex-col items-center md:items-stretch">
@@ -292,7 +205,7 @@ export default function RetencionPage() {
                   </div>
                   <div className="w-full flex justify-end gap-2 mt-4 pt-4 border-t border-zinc-50 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                     <button onClick={() => setShowDatePicker(false)} className="px-4 py-1.5 rounded-lg text-[12px] font-bold text-zinc-500">Cancelar</button>
-                    <button onClick={handleApply} className="px-5 py-1.5 rounded-lg bg-blue-600 text-white text-[12px] font-bold shadow-md shadow-blue-200 dark:shadow-none hover:bg-blue-700 transition-colors">Aplicar</button>
+                    <button onClick={handleApply} className="px-5 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-bold shadow-md shadow-emerald-200 dark:shadow-none hover:bg-emerald-700 transition-colors">Aplicar</button>
                   </div>
                 </div>
               </div>
@@ -302,15 +215,21 @@ export default function RetencionPage() {
       </div>
 
       {/* Main Metrics */}
-      {profile?.klaviyo_api_key && (currentKlaviyo || fetchingKlaviyo) && (
+      {profile?.klaviyo_api_key && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
-            <MetricCard label="Entregas" value={currentKlaviyo ? currentKlaviyo.sent?.toLocaleString('es-AR') : '...'} change={getKlaviyoChange(currentKlaviyo?.sent, prevKlaviyo?.sent)} trend={(currentKlaviyo?.sent || 0) >= (prevKlaviyo?.sent || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailySent || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-sent'} onClick={() => setExpandedMetric(expandedMetric === 'k-sent' ? null : 'k-sent')} />
-            <MetricCard label="Tasa de Apertura" value={currentKlaviyo ? `${((currentKlaviyo.opens / (currentKlaviyo.sent || 1)) * 100).toFixed(1)}%` : '...'} change={getKlaviyoChange((currentKlaviyo?.opens / (currentKlaviyo?.sent || 1)), (prevKlaviyo?.opens / (prevKlaviyo?.sent || 1)))} trend={((currentKlaviyo?.opens / (currentKlaviyo?.sent || 1)) || 0) >= ((prevKlaviyo?.opens / (prevKlaviyo?.sent || 1)) || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyOpens?.map((d: any, i: number) => ({ val: ((d.val / (currentKlaviyo.dailySent[i]?.val || 1)) * 100), date: d.date })) || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-open-rate'} onClick={() => setExpandedMetric(expandedMetric === 'k-open-rate' ? null : 'k-open-rate')} />
-            <MetricCard label="Tasa de Clics" value={currentKlaviyo ? `${((currentKlaviyo.clicks / (currentKlaviyo.sent || 1)) * 100).toFixed(1)}%` : '...'} change={getKlaviyoChange((currentKlaviyo?.clicks / (currentKlaviyo?.sent || 1)), (prevKlaviyo?.clicks / (prevKlaviyo?.sent || 1)))} trend={((currentKlaviyo?.clicks / (currentKlaviyo?.sent || 1)) || 0) >= ((prevKlaviyo?.clicks / (prevKlaviyo?.sent || 1)) || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyClicks?.map((d: any, i: number) => ({ val: ((d.val / (currentKlaviyo.dailySent[i]?.val || 1)) * 100), date: d.date })) || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-click-rate'} onClick={() => setExpandedMetric(expandedMetric === 'k-click-rate' ? null : 'k-click-rate')} />
-            <MetricCard label="Ingresos Klaviyo" value={currentKlaviyo ? `$ ${currentKlaviyo.attributed?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : '...'} change={getKlaviyoChange(currentKlaviyo?.attributed, prevKlaviyo?.attributed)} trend={(currentKlaviyo?.attributed || 0) >= (prevKlaviyo?.attributed || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyAttributed || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-attr'} onClick={() => setExpandedMetric(expandedMetric === 'k-attr' ? null : 'k-attr')} />
+          {fetchingKlaviyo && !currentKlaviyo ? (
+            <KlaviyoLoader loading={fetchingKlaviyo} color={MAIN_COLOR} />
+          ) : currentKlaviyo ? (
+          <div className="space-y-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap overflow-x-auto scrollbar-hide">
+            <DashboardMetric icon={Package} label="Entregas" value={currentKlaviyo ? currentKlaviyo.sent?.toLocaleString('es-AR') : '...'} change={getKlaviyoChange(currentKlaviyo?.sent, prevKlaviyo?.sent)} trend={(currentKlaviyo?.sent || 0) >= (prevKlaviyo?.sent || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailySent || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-sent'} onClick={() => setExpandedMetric(expandedMetric === 'k-sent' ? null : 'k-sent')} />
+            <DashboardMetric icon={MailOpen} label="Tasa de Apertura" value={currentKlaviyo ? `${((currentKlaviyo.opens / (currentKlaviyo.sent || 1)) * 100).toFixed(1)}%` : '...'} change={getKlaviyoChange((currentKlaviyo?.opens / (currentKlaviyo?.sent || 1)), (prevKlaviyo?.opens / (prevKlaviyo?.sent || 1)))} trend={((currentKlaviyo?.opens / (currentKlaviyo?.sent || 1)) || 0) >= ((prevKlaviyo?.opens / (prevKlaviyo?.sent || 1)) || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyOpens?.map((d: any, i: number) => ({ val: ((d.val / (currentKlaviyo.dailySent[i]?.val || 1)) * 100), date: d.date })) || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-open-rate'} onClick={() => setExpandedMetric(expandedMetric === 'k-open-rate' ? null : 'k-open-rate')} />
+            <DashboardMetric icon={MousePointerClick} label="Tasa de Clics" value={currentKlaviyo ? `${((currentKlaviyo.clicks / (currentKlaviyo.sent || 1)) * 100).toFixed(1)}%` : '...'} change={getKlaviyoChange((currentKlaviyo?.clicks / (currentKlaviyo?.sent || 1)), (prevKlaviyo?.clicks / (prevKlaviyo?.sent || 1)))} trend={((currentKlaviyo?.clicks / (currentKlaviyo?.sent || 1)) || 0) >= ((prevKlaviyo?.clicks / (prevKlaviyo?.sent || 1)) || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyClicks?.map((d: any, i: number) => ({ val: ((d.val / (currentKlaviyo.dailySent[i]?.val || 1)) * 100), date: d.date })) || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-click-rate'} onClick={() => setExpandedMetric(expandedMetric === 'k-click-rate' ? null : 'k-click-rate')} />
+            <DashboardMetric icon={DollarSign} label="Ingresos Klaviyo" value={currentKlaviyo ? `$ ${currentKlaviyo.attributed?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : '...'} change={getKlaviyoChange(currentKlaviyo?.attributed, prevKlaviyo?.attributed)} trend={(currentKlaviyo?.attributed || 0) >= (prevKlaviyo?.attributed || 0) ? 'up' : 'down'} data={currentKlaviyo?.dailyAttributed || []} color={MAIN_COLOR} loading={fetchingKlaviyo} active={expandedMetric === 'k-attr'} onClick={() => setExpandedMetric(expandedMetric === 'k-attr' ? null : 'k-attr')} />
           </div>
           {expandedMetric?.startsWith('k-') && (<MetricDetailChart label={expandedMetric === 'k-revenue' ? 'Ingresos Tienda Online' : expandedMetric === 'k-attr' ? 'Ingresos Klaviyo' : expandedMetric === 'k-sent' ? 'Entregas' : expandedMetric === 'k-click-rate' ? 'Tasa de Clics' : 'Tasa de Apertura'} color={MAIN_COLOR} data={expandedMetric === 'k-revenue' ? (currentKlaviyo?.dailyRevenue || []) : expandedMetric === 'k-attr' ? (currentKlaviyo?.dailyAttributed || []) : expandedMetric === 'k-sent' ? (currentKlaviyo?.dailySent || []) : expandedMetric === 'k-click-rate' ? (currentKlaviyo?.dailyClicks?.map((d: any, i: number) => ({ val: ((d.val / (currentKlaviyo.dailySent[i]?.val || 1)) * 100), date: d.date })) || []) : (currentKlaviyo?.dailyOpens?.map((d: any, i: number) => ({ val: ((d.val / (currentKlaviyo.dailySent[i]?.val || 1)) * 100), date: d.date })) || [])} />)}
+          </div>
+          ) : null}
         </div>
       )}
 
@@ -320,8 +239,8 @@ export default function RetencionPage() {
         <div className="bg-white dark:bg-zinc-900 rounded-[16px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-blue-500" />
+              <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <Zap className="w-4 h-4 text-emerald-500" />
               </div>
               <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white">Flujos de Trabajo</h2>
             </div>
@@ -366,10 +285,10 @@ export default function RetencionPage() {
                   </button>
                   
                   {expandedMetric === `flow-${flow.id}` && (
-                    <div className="pl-4 border-l-2 border-blue-500/20 ml-2 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
+                    <div className="pl-4 border-l-2 border-emerald-500/20 ml-2 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
                       {!flow.messages ? (
                         <div className="flex items-center gap-2 p-2 text-[11px] text-zinc-400 italic">
-                          <div className="w-3 h-3 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                          <div className="w-3 h-3 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
                           Cargando mensajes...
                         </div>
                       ) : flow.messages.length > 0 ? (
@@ -396,8 +315,8 @@ export default function RetencionPage() {
         <div className="bg-white dark:bg-zinc-900 rounded-[16px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Mail className="w-4 h-4 text-blue-500" />
+              <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <Mail className="w-4 h-4 text-emerald-500" />
               </div>
               <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white">Campañas Recientes</h2>
             </div>
@@ -442,10 +361,10 @@ export default function RetencionPage() {
                   </button>
 
                   {expandedMetric === `camp-${camp.id}` && (
-                    <div className="pl-4 border-l-2 border-blue-500/20 ml-2 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
+                    <div className="pl-4 border-l-2 border-emerald-500/20 ml-2 space-y-2 animate-in slide-in-from-top-1 fade-in duration-200">
                       {!camp.messages ? (
                         <div className="flex items-center gap-2 p-2 text-[11px] text-zinc-400 italic">
-                          <div className="w-3 h-3 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                          <div className="w-3 h-3 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
                           Cargando mensajes...
                         </div>
                       ) : camp.messages.length > 0 ? (

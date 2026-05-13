@@ -4,88 +4,128 @@ const BASE = '/api/klaviyo';
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Rate limit: Klaviyo metric-aggregates allows burst requests, but we hit 429 if too aggressive.
-// We use an 800ms gap to balance speed and stability.
-let lastRequestTime = 0;
-// We execute a queue Promise to prevent race conditions on lastRequestTime
-let queue = Promise.resolve();
+// ─── In-memory result cache (survives re-renders, cleared on page refresh) ───
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+const resultCache: Record<string, CacheEntry> = {};
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-const rateLimitedFetch = async (url: string, options: RequestInit, retryCount = 0): Promise<Response> => {
-  return new Promise((resolve) => {
-    queue = queue.then(async () => {
-      const MIN_GAP_MS = 800;
-      const now = Date.now();
-      const elapsed = now - lastRequestTime;
-      if (elapsed < MIN_GAP_MS) {
-        await wait(MIN_GAP_MS - elapsed);
-      }
-      lastRequestTime = Date.now();
+function getCached(key: string): any | null {
+  const entry = resultCache[key];
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    delete resultCache[key];
+    return null;
+  }
+  return entry.data;
+}
 
-      const res = await fetch(url, options);
+function setCache(key: string, data: any) {
+  resultCache[key] = { data, timestamp: Date.now() };
+}
 
-      if (res.status === 429) {
-        if (retryCount >= 6) {
-          console.error('[Klaviyo] Max retries reached on 429');
-          resolve(res);
-          return;
-        }
-        const retryAfter = res.headers.get('Retry-After');
-        const waitSeconds = retryAfter ? parseInt(retryAfter, 10) : (retryCount * 2 + 2);
-        console.warn(`[Klaviyo] 429 — waiting ${waitSeconds}s (retry ${retryCount + 1}/6)...`);
-        await wait(waitSeconds * 1000);
-        // Call it again and bypass queue for the retry
-        const retryRes = await rateLimitedFetch(url, options, retryCount + 1);
-        resolve(retryRes);
-        return;
-      }
-      resolve(res);
-    });
-  });
+// ─── Parallel-safe fetch with automatic 429 retry (no artificial delays) ───
+const apiFetch = async (url: string, options: RequestInit, retryCount = 0): Promise<Response> => {
+  const res = await fetch(url, options);
+  if (res.status === 429) {
+    if (retryCount >= 5) return res;
+    const retryAfter = res.headers.get('Retry-After');
+    const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : (retryCount + 1) * 1500;
+    console.warn(`[Klaviyo] 429 — retrying in ${waitMs}ms`);
+    await wait(waitMs);
+    return apiFetch(url, options, retryCount + 1);
+  }
+  return res;
 };
+
+const buildHeaders = (apiKey: string): HeadersInit => ({
+  'Authorization': `Klaviyo-API-Key ${apiKey}`,
+  'Revision': REVISION,
+  'Accept': 'application/vnd.api+json',
+  'Content-Type': 'application/vnd.api+json',
+});
 
 const apiPost = async (apiKey: string, endpoint: string, body: any): Promise<any> => {
   try {
-    const res = await rateLimitedFetch(`${BASE}/${endpoint}`, {
+    const res = await apiFetch(`${BASE}/${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Klaviyo-API-Key ${apiKey}`,
-        'Revision': REVISION,
-        'Accept': 'application/vnd.api+json',
-        'Content-Type': 'application/vnd.api+json',
-      },
+      headers: buildHeaders(apiKey),
       body: JSON.stringify(body),
     });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      console.error(`[Klaviyo] POST Error (${res.status}) on ${endpoint}:`, txt);
-      return null;
-    }
+    if (!res.ok) { console.error(`[Klaviyo] POST ${res.status} on ${endpoint}`); return null; }
     return await res.json();
-  } catch (e) {
-    console.error('[Klaviyo] POST Failure:', e);
-    return null;
-  }
+  } catch (e) { console.error('[Klaviyo] POST Failure:', e); return null; }
 };
 
 const apiGet = async (apiKey: string, endpoint: string): Promise<any> => {
   try {
-    const res = await rateLimitedFetch(`${BASE}/${endpoint}`, {
-      headers: {
-        'Authorization': `Klaviyo-API-Key ${apiKey}`,
-        'Revision': REVISION,
-        'Accept': 'application/vnd.api+json',
-      },
-    });
+    const res = await apiFetch(`${BASE}/${endpoint}`, { headers: buildHeaders(apiKey) });
     if (!res.ok) return null;
     return await res.json();
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 };
 
-// Cache metric IDs per account to avoid refetching
+// ─── Per-account metric ID cache (persists for entire session) ───
 const metricIdCache: Record<string, any> = {};
+
+// ─── Build metric-aggregate POST body ───
+const buildAggBody = (
+  metricId: string,
+  since: string,
+  until: string,
+  measurements: string[],
+  by: string[] = []
+) => ({
+  data: {
+    type: 'metric-aggregate',
+    attributes: {
+      metric_id: metricId,
+      measurements,
+      ...(by.length > 0 && { by }),
+      filter: [
+        `greater-or-equal(datetime,${since}T00:00:00Z)`,
+        `less-than(datetime,${until}T23:59:59Z)`,
+      ],
+      interval: 'day',
+      timezone: 'UTC',
+    },
+  },
+});
+
+// ─── Parsers ───
+const sumMeasure = (res: any, key: 'sum_value' | 'count'): number => {
+  const values = res?.data?.attributes?.data?.[0]?.measurements?.[key];
+  return Array.isArray(values) ? values.reduce((a: number, b: number) => a + b, 0) : 0;
+};
+
+const dailyMeasure = (res: any, key: 'sum_value' | 'count'): { date: string; val: number }[] => {
+  const values = res?.data?.attributes?.data?.[0]?.measurements?.[key] || [];
+  const dates = res?.data?.attributes?.dates || [];
+  return values.map((val: number, i: number) => ({
+    val,
+    date: dates[i] ? dates[i].split('T')[0] : `Día ${i + 1}`,
+  }));
+};
+
+const sumAttributed = (res: any): number => {
+  if (!res?.data?.attributes?.data) return 0;
+  return res.data.attributes.data.reduce((total: number, d: any) => {
+    if (!d.dimensions[0]) return total;
+    return total + d.measurements.sum_value.reduce((a: number, b: number) => a + b, 0);
+  }, 0);
+};
+
+const dailyAttributed = (res: any): { date: string; val: number }[] => {
+  if (!res?.data?.attributes?.data) return [];
+  const dates = res.data.attributes.dates || [];
+  const totals = new Array(dates.length).fill(0);
+  res.data.attributes.data.forEach((d: any) => {
+    if (d.dimensions[0]) d.measurements.sum_value.forEach((v: number, i: number) => { totals[i] += v; });
+  });
+  return totals.map((val, i) => ({ val, date: dates[i] ? dates[i].split('T')[0] : `Día ${i + 1}` }));
+};
 
 export const klaviyo = {
   getMetrics: async (apiKey: string) => {
@@ -102,219 +142,153 @@ export const klaviyo = {
     until: string,
     measurements: string[] = ['sum_value'],
     by: string[] = []
-  ) => {
-    return apiPost(apiKey, 'metric-aggregates', {
-      data: {
-        type: 'metric-aggregate',
-        attributes: {
-          metric_id: metricId,
-          measurements: measurements,
-          ...(by.length > 0 && { by }),
-          filter: [
-            `greater-or-equal(datetime,${since}T00:00:00Z)`,
-            `less-than(datetime,${until}T23:59:59Z)`
-          ],
-          interval: 'day',
-          timezone: 'UTC'
-        }
-      }
-    });
-  },
+  ) => apiPost(apiKey, 'metric-aggregates', buildAggBody(metricId, since, until, measurements, by)),
 
   getDashboardData: async (apiKey: string, since: string, until: string) => {
+    // ─── Cache check: skip all API calls if fresh data exists ───
+    const cacheKey = `dashboard:${apiKey}:${since}:${until}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      console.log('[Klaviyo] ✅ Cache hit for', cacheKey);
+      return cached;
+    }
+
     try {
+      // 1. Get metric IDs (also cached per session)
       const metricsRes = await klaviyo.getMetrics(apiKey);
       if (!metricsRes?.data) return null;
 
       const metrics = metricsRes.data;
+
+      // Log all available metric names for debugging
+      console.log('[Klaviyo] Available metrics:', metrics.map((m: any) => `${m.id}: ${m.attributes.name}`));
+
       const findId = (names: string[]) => {
-        // Try exact match first
+        // 1. Exact match (case-insensitive)
         let found = metrics.find((m: any) =>
-          names.some(n => m.attributes.name.toLowerCase() === n.toLowerCase())
+          names.some((n: string) => m.attributes.name.toLowerCase() === n.toLowerCase())
         );
-        // Fallback to includes
+        // 2. Partial match
         if (!found) {
           found = metrics.find((m: any) =>
-            names.some(n => m.attributes.name.toLowerCase().includes(n.toLowerCase()))
+            names.some((n: string) => m.attributes.name.toLowerCase().includes(n.toLowerCase()))
           );
         }
         return found?.id;
       };
 
       const mIds = {
-        revenue: findId(['Placed Order', 'Pedido Realizado']),
-        opens:   findId(['Opened Email', 'Email Abierto']),
-        clicks:  findId(['Clicked Email', 'Email Clicado']),
-        sent:    findId(['Received Email', 'Email Recibido']),
+        revenue: findId(['Placed Order', 'Pedido Realizado', 'Order Placed', 'Completed Order']),
+        opens:   findId(['Opened Email', 'Email Abierto', 'Email Open', 'Open Email']),
+        clicks:  findId(['Clicked Email', 'Email Clicado', 'Email Click', 'Click Email', 'Clicked Link in Email']),
+        // "Received Email" is the key one — Klaviyo also calls it "Email Delivered" in some accounts
+        sent:    findId(['Received Email', 'Email Recibido', 'Email Delivered', 'Delivered Email', 'Sent Email', 'Email Sent']),
       };
 
-      console.log('[Klaviyo] Metric IDs found:', mIds);
+      console.log('[Klaviyo] Resolved metric IDs:', mIds);
 
-      // measurements is an OBJECT with named keys, e.g. { sum_value: [...daily values] }
-      const sumMeasure = (res: any, key: 'sum_value' | 'count'): number => {
-        const values = res?.data?.attributes?.data?.[0]?.measurements?.[key];
-        if (!Array.isArray(values)) return 0;
-        return values.reduce((a: number, b: number) => a + b, 0);
+      // 2. Fire ALL 5 requests simultaneously
+      const [revenueRes, attributedRes, sentRes, opensRes, clicksRes] = await Promise.all([
+        mIds.revenue ? apiPost(apiKey, 'metric-aggregates', buildAggBody(mIds.revenue, since, until, ['sum_value', 'count'])) : null,
+        mIds.revenue ? apiPost(apiKey, 'metric-aggregates', buildAggBody(mIds.revenue, since, until, ['sum_value'], ['$attributed_message'])) : null,
+        mIds.sent    ? apiPost(apiKey, 'metric-aggregates', buildAggBody(mIds.sent,    since, until, ['count'])) : null,
+        mIds.opens   ? apiPost(apiKey, 'metric-aggregates', buildAggBody(mIds.opens,   since, until, ['count'])) : null,
+        mIds.clicks  ? apiPost(apiKey, 'metric-aggregates', buildAggBody(mIds.clicks,  since, until, ['count'])) : null,
+      ]);
+
+      const result = {
+        revenue:          sumMeasure(revenueRes, 'sum_value'),
+        attributed:       sumAttributed(attributedRes),
+        opens:            sumMeasure(opensRes,   'count'),
+        clicks:           sumMeasure(clicksRes,  'count'),
+        sent:             sumMeasure(sentRes,    'count'),
+        conversions:      sumMeasure(revenueRes, 'count'),
+        dailyRevenue:     dailyMeasure(revenueRes, 'sum_value'),
+        dailyAttributed:  dailyAttributed(attributedRes),
+        dailyOpens:       dailyMeasure(opensRes,   'count'),
+        dailyClicks:      dailyMeasure(clicksRes,  'count'),
+        dailySent:        dailyMeasure(sentRes,    'count'),
+        dailyConversions: dailyMeasure(revenueRes, 'count'),
       };
 
-      const dailyMeasure = (res: any, key: 'sum_value' | 'count'): { date: string, val: number }[] => {
-        const values = res?.data?.attributes?.data?.[0]?.measurements?.[key] || [];
-        const dates = res?.data?.attributes?.dates || [];
-        return values.map((val: number, i: number) => ({
-          val,
-          date: dates[i] ? dates[i].split('T')[0] : `Día ${i+1}`
-        }));
-      };
-
-      const sumAttributed = (res: any): number => {
-        if (!res?.data?.attributes?.data) return 0;
-        let total = 0;
-        res.data.attributes.data.forEach((d: any) => {
-          if (d.dimensions[0]) { // has an attributed message
-             total += d.measurements.sum_value.reduce((a:number,b:number)=>a+b,0);
-          }
-        });
-        return total;
-      };
-
-      const dailyAttributed = (res: any): { date: string, val: number }[] => {
-        if (!res?.data?.attributes?.data) return [];
-        const dates = res.data.attributes.dates || [];
-        const dailyTotals = new Array(dates.length).fill(0);
-        res.data.attributes.data.forEach((d: any) => {
-          if (d.dimensions[0]) {
-             d.measurements.sum_value.forEach((v:number, i:number) => {
-                dailyTotals[i] += v;
-             });
-          }
-        });
-        return dailyTotals.map((val: number, i: number) => ({
-          val,
-          date: dates[i] ? dates[i].split('T')[0] : `Día ${i+1}`
-        }));
-      };
-
-      // Fetch current period metrics sequentially
-      const results: any = {};
-      if (mIds.revenue) {
-        results.revenue = await klaviyo.getMetricAggregate(apiKey, mIds.revenue, since, until, ['sum_value', 'count']);
-        results.attributed = await klaviyo.getMetricAggregate(apiKey, mIds.revenue, since, until, ['sum_value'], ['$attributed_message']);
+      // Integrity check: if sent=0 but opens or clicks>0, the "sent" metric ID wasn't found.
+      // Don't cache bad data — clear the metric ID cache so it re-fetches fresh next time.
+      const dataLooksCorrupt = result.sent === 0 && (result.opens > 0 || result.clicks > 0);
+      if (dataLooksCorrupt) {
+        console.warn('[Klaviyo] ⚠️ Data integrity issue: sent=0 but opens/clicks>0. Metric ID for sent not found. Clearing metric cache.');
+        delete metricIdCache[apiKey];
+        // Still return the result so the UI shows something, but don't cache it
+        return result;
       }
-      if (mIds.sent)    results.sent    = await klaviyo.getMetricAggregate(apiKey, mIds.sent,    since, until, ['count']);
-      if (mIds.opens)   results.opens   = await klaviyo.getMetricAggregate(apiKey, mIds.opens,   since, until, ['count']);
-      if (mIds.clicks)  results.clicks  = await klaviyo.getMetricAggregate(apiKey, mIds.clicks,  since, until, ['count']);
 
-      const out = {
-        revenue:          sumMeasure(results.revenue, 'sum_value'),
-        attributed:       sumAttributed(results.attributed),
-        opens:            sumMeasure(results.opens,   'count'),
-        clicks:           sumMeasure(results.clicks,  'count'),
-        sent:             sumMeasure(results.sent,    'count'),
-        conversions:      sumMeasure(results.revenue, 'count'),
-        dailyRevenue:     dailyMeasure(results.revenue, 'sum_value'),
-        dailyAttributed:  dailyAttributed(results.attributed),
-        dailyOpens:       dailyMeasure(results.opens,   'count'),
-        dailyClicks:      dailyMeasure(results.clicks,  'count'),
-        dailySent:        dailyMeasure(results.sent,    'count'),
-        dailyConversions: dailyMeasure(results.revenue, 'count'),
-      };
-
-      console.log('[Klaviyo] Dashboard data:', out);
-      return out;
+      // Cache the result for 5 minutes only if data looks valid
+      setCache(cacheKey, result);
+      return result;
     } catch (err) {
       console.error('[Klaviyo] getDashboardData error:', err);
       return null;
     }
   },
+
   getFlows: async (apiKey: string) => {
+    const cacheKey = `flows:${apiKey}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
     try {
-      const res = await rateLimitedFetch(`${BASE}/flows`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Klaviyo-API-Key ${apiKey}`,
-          'Revision': REVISION,
-          'Accept': 'application/vnd.api+json'
-        }
-      });
+      const res = await apiFetch(`${BASE}/flows`, { headers: buildHeaders(apiKey) });
       if (!res.ok) return [];
       const json = await res.json();
-      return json.data || [];
-    } catch (e) {
-      console.error('[Klaviyo] getFlows Error:', e);
-      return [];
-    }
+      const data = json.data || [];
+      setCache(cacheKey, data);
+      return data;
+    } catch (e) { return []; }
   },
+
   getCampaigns: async (apiKey: string) => {
+    const cacheKey = `campaigns:${apiKey}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
     try {
-      const res = await rateLimitedFetch(`${BASE}/campaigns?filter=equals(messages.channel,'email')`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Klaviyo-API-Key ${apiKey}`,
-          'Revision': REVISION,
-          'Accept': 'application/vnd.api+json'
-        }
+      const res = await apiFetch(`${BASE}/campaigns?filter=equals(messages.channel,'email')`, {
+        headers: buildHeaders(apiKey),
       });
       if (!res.ok) return [];
       const json = await res.json();
-      return json.data || [];
-    } catch (e) {
-      console.error('[Klaviyo] getCampaigns Error:', e);
-      return [];
-    }
+      const data = json.data || [];
+      setCache(cacheKey, data);
+      return data;
+    } catch (e) { return []; }
   },
+
   getFlowMessages: async (apiKey: string, flowId: string) => {
     try {
-      // First get actions for the flow
-      const actRes = await rateLimitedFetch(`${BASE}/flows/${flowId}/flow-actions`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Klaviyo-API-Key ${apiKey}`,
-          'Revision': REVISION,
-          'Accept': 'application/vnd.api+json'
-        }
+      const actRes = await apiFetch(`${BASE}/flows/${flowId}/flow-actions`, {
+        headers: buildHeaders(apiKey),
       });
       if (!actRes.ok) return [];
       const actions = await actRes.json();
-      
-      const allMessages: any[] = [];
-      for (const action of (actions.data || [])) {
-        if (action.type === 'flow-action') {
-          const msgRes = await rateLimitedFetch(`${BASE}/flow-actions/${action.id}/flow-messages`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Klaviyo-API-Key ${apiKey}`,
-              'Revision': REVISION,
-              'Accept': 'application/vnd.api+json'
-            }
-          });
-          if (msgRes.ok) {
-            const msgs = await msgRes.json();
-            allMessages.push(...(msgs.data || []));
-          }
-        }
-      }
-      return allMessages;
-    } catch (e) {
-      console.error('[Klaviyo] getFlowMessages Error:', e);
-      return [];
-    }
+
+      const msgPromises = (actions.data || [])
+        .filter((a: any) => a.type === 'flow-action')
+        .map((action: any) =>
+          apiFetch(`${BASE}/flow-actions/${action.id}/flow-messages`, {
+            headers: buildHeaders(apiKey),
+          }).then(r => r.ok ? r.json() : { data: [] })
+        );
+
+      const results = await Promise.all(msgPromises);
+      return results.flatMap(r => r.data || []);
+    } catch (e) { return []; }
   },
+
   getCampaignMessages: async (apiKey: string, campaignId: string) => {
     try {
-      const res = await rateLimitedFetch(`${BASE}/campaigns/${campaignId}/campaign-messages`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Klaviyo-API-Key ${apiKey}`,
-          'Revision': REVISION,
-          'Accept': 'application/vnd.api+json'
-        }
+      const res = await apiFetch(`${BASE}/campaigns/${campaignId}/campaign-messages`, {
+        headers: buildHeaders(apiKey),
       });
       if (!res.ok) return [];
       const json = await res.json();
       return json.data || [];
-    } catch (e) {
-      console.error('[Klaviyo] getCampaignMessages Error:', e);
-      return [];
-    }
-  }
+    } catch (e) { return []; }
+  },
 };
