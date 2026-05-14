@@ -37,7 +37,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
-      fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+      if (Buffer.isBuffer(req.body)) {
+        fetchOptions.body = req.body;
+      } else if (typeof req.body === 'string') {
+        fetchOptions.body = req.body;
+      } else {
+        fetchOptions.body = JSON.stringify(req.body);
+      }
     }
 
     const klaviyoRes = await fetch(targetUrl, fetchOptions);
