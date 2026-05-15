@@ -7,12 +7,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const klaviyoPath = Array.isArray(pathParam) ? pathParam.join('/') : (pathParam || '');
 
   // Build query string from req.query (already decoded by Vercel), stripping routing params.
-  // URLSearchParams re-encodes special chars — Klaviyo accepts percent-encoded equivalents.
-  // This avoids the bug where req.url includes Vercel's internal catch-all params (e.g. path[0]=metrics).
-  const queryParts: Record<string, string | string[]> = { ...req.query };
-  delete queryParts['...path'];
-  delete queryParts['path'];
-  const qs = new URLSearchParams(queryParts as any).toString();
+  // Vercel's qs parser converts bracket notation (e.g. page[size]=50) into nested objects.
+  // We flatten them back (page[size] → 50) so URLSearchParams serializes them correctly.
+  const rawQuery: Record<string, any> = { ...req.query };
+  delete rawQuery['...path'];
+  delete rawQuery['path'];
+
+  const flat: Record<string, string> = {};
+  const flatten = (obj: any, prefix = '') => {
+    for (const [k, v] of Object.entries(obj)) {
+      const key = prefix ? `${prefix}[${k}]` : k;
+      if (v !== null && v !== undefined && typeof v === 'object' && !Array.isArray(v)) {
+        flatten(v, key);
+      } else if (Array.isArray(v)) {
+        (v as any[]).forEach((item, i) => { flat[`${key}[${i}]`] = String(item ?? ''); });
+      } else {
+        flat[key] = String(v ?? '');
+      }
+    }
+  };
+  flatten(rawQuery);
+  const qs = new URLSearchParams(flat).toString();
   const targetUrl = `https://a.klaviyo.com/api/${klaviyoPath}${qs ? `?${qs}` : ''}`;
 
   res.setHeader('Access-Control-Allow-Origin', '*');

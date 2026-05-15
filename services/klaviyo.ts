@@ -437,25 +437,38 @@ export const klaviyo = {
 
   getFlowMessages: async (apiKey: string, flowId: string) => {
     try {
-      // Use filter endpoint instead of nested /flows/{id}/flow-actions
-      // to avoid 404 in Vercel production (deep nested paths unreliable with catch-all routing)
+      // page%5Bsize%5D avoids Vercel qs parsing page[size] as nested object { page: { size } }
+      // which would cause URLSearchParams to produce page=[object Object] → Klaviyo 400
       const actRes = await apiFetch(
-        `${BASE}/flow-actions?filter=equals(flow.id,"${flowId}")&page[size]=50`,
+        `${BASE}/flow-actions?filter=equals(flow.id,"${flowId}")&page%5Bsize%5D=50`,
         { headers: buildHeaders(apiKey) }
       );
-      if (!actRes.ok) return [];
+      if (!actRes.ok) {
+        console.error('[Klaviyo] flow-actions filter failed:', actRes.status, await actRes.text().catch(() => ''));
+        return [];
+      }
       const actions = await actRes.json();
+      console.log('[Klaviyo] flow-actions found:', actions.data?.length, 'total, flowId:', flowId);
       const emailActions = (actions.data || []).filter(
         (a: any) => a.attributes?.action_type === 'SEND_EMAIL'
       );
+      console.log('[Klaviyo] email actions:', emailActions.length);
       const msgPromises = emailActions.map((action: any) =>
         apiFetch(`${BASE}/flow-actions/${action.id}/flow-messages`, {
           headers: buildHeaders(apiKey),
-        }).then(r => r.ok ? r.json() : { data: [] })
+        }).then(async r => {
+          if (!r.ok) {
+            console.error('[Klaviyo] flow-messages failed for action', action.id, r.status);
+            return { data: [] };
+          }
+          return r.json();
+        })
       );
       const results = await Promise.all(msgPromises);
-      return results.flatMap(r => r.data || []);
-    } catch (e) { return []; }
+      const msgs = results.flatMap(r => r.data || []);
+      console.log('[Klaviyo] total flow messages:', msgs.length);
+      return msgs;
+    } catch (e) { console.error('[Klaviyo] getFlowMessages error:', e); return []; }
   },
 
   getCampaignMessages: async (apiKey: string, campaignId: string) => {
