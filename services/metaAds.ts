@@ -45,8 +45,9 @@ export const today = (): string => new Date().toISOString().split('T')[0];
 
 // Get the previous equivalent period for trend comparison
 export const getPrevPeriod = (since: string, until: string): TimeRange => {
-  const s = new Date(since + 'T12:00:00Z');
-  const u = new Date(until + 'T12:00:00Z');
+  const s = new Date((since || today()) + 'T12:00:00Z');
+  const u = new Date((until || since || today()) + 'T12:00:00Z');
+  if (isNaN(s.getTime()) || isNaN(u.getTime())) return { since: daysAgo(28), until: daysAgo(15) };
   const ms = u.getTime() - s.getTime();
   const prevUntil = new Date(s.getTime() - 86_400_000);
   const prevSince = new Date(prevUntil.getTime() - ms);

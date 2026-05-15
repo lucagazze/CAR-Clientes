@@ -141,7 +141,7 @@ export default function RetencionPage() {
     document.addEventListener('mousedown', click); return () => document.removeEventListener('mousedown', click);
   }, []);
 
-  const handleApply = () => { setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil); setShowDatePicker(false); };
+  const handleApply = () => { setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil || pendingSince); setShowDatePicker(false); };
 
   const handleExportPDF = () => {
     const html = document.documentElement;

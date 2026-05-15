@@ -73,7 +73,7 @@ export default function TiendaPage() {
   }, [profile, activePreset, activeSince, activeUntil, refreshKey]);
 
   const handleApply = () => {
-    setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil); setRefreshKey(prev => prev + 1); setShowDatePicker(false);
+    setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil || pendingSince); setRefreshKey(prev => prev + 1); setShowDatePicker(false);
   };
 
   const handleExportPDF = () => {

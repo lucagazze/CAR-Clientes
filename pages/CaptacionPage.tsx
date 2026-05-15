@@ -290,7 +290,7 @@ export default function CaptacionPage() {
     document.addEventListener('mousedown', click); return () => document.removeEventListener('mousedown', click);
   }, []);
 
-  const handleApply = () => { setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil); setShowDatePicker(false); };
+  const handleApply = () => { setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil || pendingSince); setShowDatePicker(false); };
   const handleExportPDF = () => {
     const html = document.documentElement;
     const wasDark = html.classList.contains('dark');
@@ -304,7 +304,9 @@ export default function CaptacionPage() {
   };
 
   const fmtDateRange = (d: string) => {
+    if (!d) return '';
     const parts = d.split('-');
+    if (parts.length < 3) return d;
     const month = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(parts[1])-1];
     return `${parts[2]} ${month}`;
   };
