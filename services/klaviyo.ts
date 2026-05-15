@@ -437,24 +437,24 @@ export const klaviyo = {
 
   getFlowMessages: async (apiKey: string, flowId: string) => {
     try {
-      // page%5Bsize%5D avoids Vercel qs parsing page[size] as nested object { page: { size } }
-      // which would cause URLSearchParams to produce page=[object Object] → Klaviyo 400
+      // Nested path works now that proxy correctly routes multi-segment paths.
+      // page%5Bsize%5D: proxy flattener converts nested qs object back to page[size]=100.
       const actRes = await apiFetch(
-        `${BASE}/flow-actions?filter=equals(flow.id,"${flowId}")&page%5Bsize%5D=50`,
+        `${BASE}/flows/${flowId}/flow-actions?page%5Bsize%5D=100`,
         { headers: buildHeaders(apiKey) }
       );
       if (!actRes.ok) {
-        console.error('[Klaviyo] flow-actions filter failed:', actRes.status, await actRes.text().catch(() => ''));
+        console.error('[Klaviyo] flow-actions failed:', actRes.status, await actRes.text().catch(() => ''));
         return [];
       }
       const actions = await actRes.json();
-      console.log('[Klaviyo] flow-actions found:', actions.data?.length, 'total, flowId:', flowId);
+      console.log('[Klaviyo] flow-actions found:', actions.data?.length, 'flowId:', flowId);
       const emailActions = (actions.data || []).filter(
         (a: any) => a.attributes?.action_type === 'SEND_EMAIL'
       );
       console.log('[Klaviyo] email actions:', emailActions.length);
       const msgPromises = emailActions.map((action: any) =>
-        apiFetch(`${BASE}/flow-actions/${action.id}/flow-messages`, {
+        apiFetch(`${BASE}/flow-actions/${action.id}/flow-messages?page%5Bsize%5D=50`, {
           headers: buildHeaders(apiKey),
         }).then(async r => {
           if (!r.ok) {
