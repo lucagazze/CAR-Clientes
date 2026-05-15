@@ -70,7 +70,9 @@ body {
   This fixes the blank-chart issue that @media print alone can't solve.
 */
 html.is-printing,
-html.is-printing body {
+html.is-printing body,
+html.is-printing body > div,
+html.is-printing body > div > div {
   background: white !important;
   color: #18181b !important;
 }
@@ -101,7 +103,7 @@ html.is-printing .recharts-surface {
 
 /* ─── Print ─────────────────────────────────────────────────────────────── */
 @media print {
-  html, body {
+  html, body, body > div, body > div > div {
     background: white !important;
     color: #18181b !important;
     overflow: visible !important;
