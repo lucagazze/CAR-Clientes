@@ -3,22 +3,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const KLAVIYO_REVISION = '2024-10-15';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Dual-source URL construction:
-  // - Path: req.query.path (Vercel sets this reliably for [...]path] catch-all routes)
-  //   Fallback to stripping /api/klaviyo/ prefix from req.url if path param is empty.
-  // - Query string: always from raw req.url to preserve %5B/%5D encoding and avoid
-  //   Vercel's qs parser mangling bracket params (page%5Bsize%5D → nested object).
-  const pathParam = req.query.path;
-  const pathFromQuery = Array.isArray(pathParam) ? pathParam.join('/') : (pathParam as string || '');
+  const pathParam = req.query['...path'] || req.query.path;
+  const klaviyoPath = Array.isArray(pathParam) ? pathParam.join('/') : (pathParam || '');
 
-  const rawUrl = req.url || '';
-  const qIdx = rawUrl.indexOf('?');
-  const urlPathOnly = qIdx >= 0 ? rawUrl.slice(0, qIdx) : rawUrl;
-  const queryPart = qIdx >= 0 ? rawUrl.slice(qIdx) : '';
-  const pathFromUrl = urlPathOnly.replace(/^\/api\/klaviyo\/?/, '');
-
-  const klaviyoPath = pathFromQuery || pathFromUrl;
-  const targetUrl = `https://a.klaviyo.com/api/${klaviyoPath}${queryPart}`;
+  // Build query string from req.query (already decoded by Vercel), stripping routing params.
+  // URLSearchParams re-encodes special chars — Klaviyo accepts percent-encoded equivalents.
+  // This avoids the bug where req.url includes Vercel's internal catch-all params (e.g. path[0]=metrics).
+  const queryParts: Record<string, string | string[]> = { ...req.query };
+  delete queryParts['...path'];
+  delete queryParts['path'];
+  const qs = new URLSearchParams(queryParts as any).toString();
+  const targetUrl = `https://a.klaviyo.com/api/${klaviyoPath}${qs ? `?${qs}` : ''}`;
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -28,16 +23,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(204).end();
   }
 
-  if (req.headers['x-debug-proxy'] === '1') {
-    return res.status(200).json({ rawUrl, pathFromQuery, pathFromUrl, klaviyoPath, queryPart, targetUrl });
-  }
-
   const auth = req.headers['authorization'];
   const forwardHeaders: Record<string, string> = {
     'Revision': KLAVIYO_REVISION,
     'Accept': 'application/vnd.api+json',
   };
   if (auth) forwardHeaders['Authorization'] = auth as string;
+  // Only set Content-Type for requests that have a body
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     forwardHeaders['Content-Type'] = 'application/vnd.api+json';
   }
@@ -74,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.send(errText);
     }
 
-    if (contentType.includes('json')) {
+    if (contentType.includes('application/json')) {
       const data = await klaviyoRes.json();
       return res.json(data);
     } else {

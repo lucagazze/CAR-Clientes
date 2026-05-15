@@ -26,8 +26,8 @@ function setCache(key: string, data: any) {
   resultCache[key] = { data, timestamp: Date.now() };
 }
 
-// ─── Concurrency limiter — 1 slot to prevent cascading 429s ───
-const MAX_CONCURRENT = 1;
+// ─── Concurrency limiter — max 2 simultaneous metric-aggregate calls ───
+const MAX_CONCURRENT = 2;
 let _inFlight = 0;
 const _waiters: (() => void)[] = [];
 
@@ -37,42 +37,18 @@ const acquire = (): Promise<void> => {
 };
 const release = () => { _inFlight--; _waiters.shift()?.(); };
 
-// Slot is released immediately after the HTTP call completes.
-// 429 retry happens OUTSIDE the lock so queued requests can proceed during the wait.
-const postAgg = async (apiKey: string, body: any, retryCount = 0): Promise<any> => {
-  let res: Response;
-  try {
-    res = await new Promise<Response>(async (resolve, reject) => {
-      await acquire();
-      try {
-        const r = await fetch(`${BASE}/metric-aggregates`, {
-          method: 'POST',
-          headers: buildHeaders(apiKey),
-          body: JSON.stringify(body),
-        });
-        resolve(r);
-      } catch (e) { reject(e); }
-      finally { release(); }
-    });
-  } catch (e) { console.error('[Klaviyo] metric-aggregates fetch error:', e); return null; }
-
-  if (res.status === 429) {
-    if (retryCount >= 3) { console.warn('[Klaviyo] metric-aggregates: rate limit exceeded, skipping'); return null; }
-    const retryAfter = res.headers.get('Retry-After');
-    const ms = retryAfter ? parseInt(retryAfter, 10) * 1000 : (retryCount + 1) * 2000;
-    await wait(ms);
-    return postAgg(apiKey, body, retryCount + 1);
-  }
-  if (!res.ok) { console.error(`[Klaviyo] metric-aggregates ${res.status}`); return null; }
-  return res.json();
+const enqueue = async <T>(fn: () => Promise<T>): Promise<T> => {
+  await acquire();
+  try { return await fn(); } finally { release(); }
 };
 
 const apiFetch = async (url: string, options: RequestInit, retryCount = 0): Promise<Response> => {
   const res = await fetch(url, options);
   if (res.status === 429) {
-    if (retryCount >= 3) return res;
+    if (retryCount >= 5) return res;
     const retryAfter = res.headers.get('Retry-After');
-    await wait(retryAfter ? parseInt(retryAfter, 10) * 1000 : (retryCount + 1) * 1500);
+    const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, retryCount) * 1500;
+    await wait(waitMs);
     return apiFetch(url, options, retryCount + 1);
   }
   return res;
@@ -184,7 +160,7 @@ export const klaviyo = {
     until: string,
     measurements: string[] = ['sum_value'],
     by: string[] = []
-  ) => postAgg(apiKey, buildAggBody(metricId, since, until, measurements, by)),
+  ) => enqueue(() => apiPost(apiKey, 'metric-aggregates', buildAggBody(metricId, since, until, measurements, by))),
 
   getDashboardData: async (apiKey: string, since: string, until: string) => {
     const cacheKey = `dashboard:${apiKey}:${since}:${until}`;
@@ -216,7 +192,7 @@ export const klaviyo = {
       };
 
       const post = (id: string | undefined, measurements: string[], by: string[] = []) =>
-        id ? postAgg(apiKey, buildAggBody(id, since, until, measurements, by)) : Promise.resolve(null);
+        id ? enqueue(() => apiPost(apiKey, 'metric-aggregates', buildAggBody(id, since, until, measurements, by))) : Promise.resolve(null);
 
       const [revenueRes, attributedRes, sentRes, opensRes, clicksRes] = await Promise.all([
         post(mIds.revenue, ['sum_value', 'count']),
@@ -291,7 +267,7 @@ export const klaviyo = {
       });
 
       const postByName = (id: string | undefined) =>
-        id ? postAgg(apiKey, makeBody(id)) : Promise.resolve(null);
+        id ? enqueue(() => apiPost(apiKey, 'metric-aggregates', makeBody(id))) : Promise.resolve(null);
 
       const [sentRes, opensRes, clicksRes] = await Promise.all([
         postByName(sentId),
@@ -323,29 +299,10 @@ export const klaviyo = {
     const cached = getCached(cacheKey);
     if (cached) return cached;
     try {
-      // include=flow-actions (direct relationship, no compound dot notation — Klaviyo rejects that)
-      // No fields restriction so we get full action attributes including settings (which may have name/subject)
-      const res = await apiFetch(
-        `${BASE}/flows?page%5Bsize%5D=50&include=flow-actions`,
-        { headers: buildHeaders(apiKey) }
-      );
+      // Fetch all flows (including draft) so we can show everything
+      const res = await apiFetch(`${BASE}/flows?page%5Bsize%5D=50`, { headers: buildHeaders(apiKey) });
       if (!res.ok) return [];
       const json = await res.json();
-      const included: any[] = json.included || [];
-      const byId: Record<string, any> = Object.fromEntries(included.map((x: any) => [x.id, x]));
-
-      // Build map: flowId -> [emailActionIds] — for lazy message fetching
-      const actionMap: Record<string, string[]> = {};
-      (json.data || []).forEach((flow: any) => {
-        const actionRefs = flow.relationships?.['flow-actions']?.data || [];
-        const emailIds = actionRefs
-          .map((r: any) => byId[r.id])
-          .filter((a: any) => a?.attributes?.action_type === 'SEND_EMAIL')
-          .map((a: any) => a.id);
-        actionMap[flow.id] = emailIds;
-      });
-      setCache(`flow-action-ids:${apiKey}`, actionMap);
-
       const data = json.data || [];
       setCache(cacheKey, data);
       return data;
@@ -417,7 +374,7 @@ export const klaviyo = {
     });
 
     const p = (id: string | undefined, by: string, m: string[]) =>
-      id ? postAgg(apiKey, makeBody(id, by, m)) : Promise.resolve(null);
+      id ? enqueue(() => apiPost(apiKey, 'metric-aggregates', makeBody(id, by, m))) : Promise.resolve(null);
 
     const [cSent, cOpens, cClicks, msgRev, flowRev, mSent, mOpens, mClicks] = await Promise.all([
       p(mIds.sent,    'Campaign Name',       ['count']),
@@ -480,31 +437,24 @@ export const klaviyo = {
 
   getFlowMessages: async (apiKey: string, flowId: string) => {
     try {
-      // Get email action IDs from cache (built by getFlows)
-      let actionMap: Record<string, string[]> = getCached(`flow-action-ids:${apiKey}`) || {};
-      if (!Object.keys(actionMap).length) {
-        await klaviyo.getFlows(apiKey);
-        actionMap = getCached(`flow-action-ids:${apiKey}`) || {};
-      }
-      const actionIds = actionMap[flowId] || [];
-      if (!actionIds.length) return [];
-
-      // Fetch messages for each SEND_EMAIL action via sub-resource path
-      // 2-segment paths work in production because vercel.json only rewrites non-api paths,
-      // and the qs flatten fix handles bracket params correctly
-      const results = await Promise.all(
-        actionIds.map((actionId: string) =>
-          apiFetch(
-            `${BASE}/flow-actions/${actionId}/flow-messages?fields%5Bflow-message%5D=name`,
-            { headers: buildHeaders(apiKey) }
-          ).then(async r => {
-            if (!r.ok) return [];
-            const j = await r.json();
-            return j.data || [];
-          }).catch(() => [])
-        )
+      // Use filter endpoint instead of nested /flows/{id}/flow-actions
+      // to avoid 404 in Vercel production (deep nested paths unreliable with catch-all routing)
+      const actRes = await apiFetch(
+        `${BASE}/flow-actions?filter=equals(flow.id,"${flowId}")&page[size]=50`,
+        { headers: buildHeaders(apiKey) }
       );
-      return results.flat();
+      if (!actRes.ok) return [];
+      const actions = await actRes.json();
+      const emailActions = (actions.data || []).filter(
+        (a: any) => a.attributes?.action_type === 'SEND_EMAIL'
+      );
+      const msgPromises = emailActions.map((action: any) =>
+        apiFetch(`${BASE}/flow-actions/${action.id}/flow-messages`, {
+          headers: buildHeaders(apiKey),
+        }).then(r => r.ok ? r.json() : { data: [] })
+      );
+      const results = await Promise.all(msgPromises);
+      return results.flatMap(r => r.data || []);
     } catch (e) { return []; }
   },
 
