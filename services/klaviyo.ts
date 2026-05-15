@@ -323,31 +323,32 @@ export const klaviyo = {
     const cached = getCached(cacheKey);
     if (cached) return cached;
     try {
-      // Compound include: flow-actions + their flow-messages — all in 1 segment, no sub-resource paths
+      // include=flow-actions (direct relationship, no compound dot notation — Klaviyo rejects that)
+      // No fields restriction so we get full action attributes including settings (which may have name/subject)
       const res = await apiFetch(
-        `${BASE}/flows?page%5Bsize%5D=50&include=flow-actions.flow-messages&fields%5Bflow-action%5D=action_type&fields%5Bflow-message%5D=name`,
+        `${BASE}/flows?page%5Bsize%5D=50&include=flow-actions`,
         { headers: buildHeaders(apiKey) }
       );
       if (!res.ok) return [];
       const json = await res.json();
       const included: any[] = json.included || [];
-
-      // Index included objects by id
       const byId: Record<string, any> = Object.fromEntries(included.map((x: any) => [x.id, x]));
 
-      // Build map: flowId -> [{id, attributes: {name}}] (email messages only)
+      // Build map: flowId -> synthetic message objects from SEND_EMAIL actions
       const flowMsgsMap: Record<string, any[]> = {};
       (json.data || []).forEach((flow: any) => {
         const actionRefs = flow.relationships?.['flow-actions']?.data || [];
         const msgs: any[] = [];
-        actionRefs.forEach((aRef: any) => {
+        actionRefs.forEach((aRef: any, idx: number) => {
           const action = byId[aRef.id];
-          if (action?.attributes?.action_type !== 'SEND_EMAIL') return;
+          if (!action || action.attributes?.action_type !== 'SEND_EMAIL') return;
+          // Extract message IDs from action's relationship (available even without fetching sub-resource)
           const msgRefs = action.relationships?.['flow-messages']?.data || [];
-          msgRefs.forEach((mRef: any) => {
-            const msg = byId[mRef.id];
-            if (msg) msgs.push(msg);
-          });
+          const msgId = msgRefs[0]?.id || action.id;
+          // Derive a display name from action settings or fall back to step number
+          const settings = action.attributes?.settings || {};
+          const name = settings.name || settings.title || settings.subject || `Email paso ${idx + 1}`;
+          msgs.push({ id: msgId, attributes: { name } });
         });
         flowMsgsMap[flow.id] = msgs;
       });
