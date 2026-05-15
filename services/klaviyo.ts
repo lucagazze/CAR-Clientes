@@ -334,29 +334,17 @@ export const klaviyo = {
       const included: any[] = json.included || [];
       const byId: Record<string, any> = Object.fromEntries(included.map((x: any) => [x.id, x]));
 
-      // DEBUG — log first action to understand Klaviyo's response structure
-      const firstAction = included.find((x: any) => x.type === 'flow-action');
-      console.log('[Klaviyo DEBUG] flow-action sample:', JSON.stringify(firstAction, null, 2));
-
-      // Build map: flowId -> synthetic message objects from SEND_EMAIL actions
-      const flowMsgsMap: Record<string, any[]> = {};
+      // Build map: flowId -> [emailActionIds] — for lazy message fetching
+      const actionMap: Record<string, string[]> = {};
       (json.data || []).forEach((flow: any) => {
         const actionRefs = flow.relationships?.['flow-actions']?.data || [];
-        const msgs: any[] = [];
-        actionRefs.forEach((aRef: any, idx: number) => {
-          const action = byId[aRef.id];
-          if (!action || action.attributes?.action_type !== 'SEND_EMAIL') return;
-          // Extract message IDs from action's relationship (available even without fetching sub-resource)
-          const msgRefs = action.relationships?.['flow-messages']?.data || [];
-          const msgId = msgRefs[0]?.id || action.id;
-          // Derive a display name from action settings or fall back to step number
-          const settings = action.attributes?.settings || {};
-          const name = settings.name || settings.title || settings.subject || `Email paso ${idx + 1}`;
-          msgs.push({ id: msgId, attributes: { name } });
-        });
-        flowMsgsMap[flow.id] = msgs;
+        const emailIds = actionRefs
+          .map((r: any) => byId[r.id])
+          .filter((a: any) => a?.attributes?.action_type === 'SEND_EMAIL')
+          .map((a: any) => a.id);
+        actionMap[flow.id] = emailIds;
       });
-      setCache(`flow-msgs:${apiKey}`, flowMsgsMap);
+      setCache(`flow-action-ids:${apiKey}`, actionMap);
 
       const data = json.data || [];
       setCache(cacheKey, data);
@@ -491,13 +479,33 @@ export const klaviyo = {
   },
 
   getFlowMessages: async (apiKey: string, flowId: string) => {
-    // Messages pre-fetched by getFlows via compound include — no additional API calls
-    let flowMsgsMap: Record<string, any[]> | null = getCached(`flow-msgs:${apiKey}`);
-    if (!flowMsgsMap) {
-      await klaviyo.getFlows(apiKey);
-      flowMsgsMap = getCached(`flow-msgs:${apiKey}`) || {};
-    }
-    return flowMsgsMap[flowId] || [];
+    try {
+      // Get email action IDs from cache (built by getFlows)
+      let actionMap: Record<string, string[]> = getCached(`flow-action-ids:${apiKey}`) || {};
+      if (!Object.keys(actionMap).length) {
+        await klaviyo.getFlows(apiKey);
+        actionMap = getCached(`flow-action-ids:${apiKey}`) || {};
+      }
+      const actionIds = actionMap[flowId] || [];
+      if (!actionIds.length) return [];
+
+      // Fetch messages for each SEND_EMAIL action via sub-resource path
+      // 2-segment paths work in production because vercel.json only rewrites non-api paths,
+      // and the qs flatten fix handles bracket params correctly
+      const results = await Promise.all(
+        actionIds.map((actionId: string) =>
+          apiFetch(
+            `${BASE}/flow-actions/${actionId}/flow-messages?fields%5Bflow-message%5D=name`,
+            { headers: buildHeaders(apiKey) }
+          ).then(async r => {
+            if (!r.ok) return [];
+            const j = await r.json();
+            return j.data || [];
+          }).catch(() => [])
+        )
+      );
+      return results.flat();
+    } catch (e) { return []; }
   },
 
   getCampaignMessages: async (apiKey: string, campaignId: string) => {
