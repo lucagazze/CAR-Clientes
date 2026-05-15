@@ -787,6 +787,7 @@ export default function DashboardPage() {
   const activePrevRange = getPrevPeriod(activeRange.since, activeRange.until);
 
   const fmtDateRange = (d: string, showYearForce?: boolean) => {
+    if (!d) return '';
     const parts = d.split("-");
     const year = parts[0];
     const month = [

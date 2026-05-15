@@ -670,7 +670,7 @@ export default function CaptacionPage() {
                           <td className="py-4 px-4">{fmt(c.reach)}</td>
                           
                           {category === 'Ventas' && <td className="py-4 px-4 text-emerald-600 dark:text-emerald-500 font-bold">{fmt(c.purchases)}</td>}
-                          {category === 'Ventas' && <td className="py-4 px-4">{c.roas.toFixed(2)}x</td>}
+                          {category === 'Ventas' && <td className="py-4 px-4">{(c.roas || 0).toFixed(2)}x</td>}
                           {category === 'Ventas' && <td className="py-4 px-4">{fmt(c.cpa, true)}</td>}
                           
                           {category === 'Leads' && <td className="py-4 px-4 text-emerald-600 dark:text-emerald-500 font-bold">{fmt(c.leads)}</td>}

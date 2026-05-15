@@ -70,7 +70,7 @@ export default function TiendaPage() {
     };
     
     fetchData();
-  }, [profile, activePreset, activeSince, activeUntil, refreshKey]);
+  }, [profile?.id, activePreset, activeSince, activeUntil, refreshKey]);
 
   const handleApply = () => {
     setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil || pendingSince); setRefreshKey(prev => prev + 1); setShowDatePicker(false);
@@ -142,7 +142,7 @@ export default function TiendaPage() {
           </div>
         </div>
         <div className="grid grid-cols-7 gap-y-1">
-          {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => <div key={d} className="text-[10px] font-bold text-zinc-300 text-center pb-2 uppercase tracking-tighter">{d}</div>)}
+          {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <div key={i} className="text-[10px] font-bold text-zinc-300 text-center pb-2 uppercase tracking-tighter">{d}</div>)}
           {days.map((d, i) => {
             if (!d) return <div key={`empty-${i}`} />;
             const isToday = d === todayStr;
@@ -350,7 +350,7 @@ export default function TiendaPage() {
                             <p className="text-[12px] font-bold text-zinc-900 dark:text-white truncate" title={p.title}>{p.title}</p>
                           </div>
                           <div className="text-right shrink-0 ml-3">
-                            <p className="text-[12px] font-black text-pink-600 dark:text-pink-400">${p.revenue.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p>
+                            <p className="text-[12px] font-black text-pink-600 dark:text-pink-400">${(p.revenue ?? 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p>
                             <p className="text-[10px] text-zinc-400">{p.quantity} unid.</p>
                           </div>
                         </div>

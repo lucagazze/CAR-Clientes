@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { DatePreset, presetToRange, getPrevPeriod, today, daysAgo } from '../services/metaAds';
@@ -42,7 +41,6 @@ const getKlaviyoChange = (curr?: number, prev?: number): number | undefined => {
 
 
 export default function RetencionPage() {
-  const { darkMode } = useTheme();
   const { profile: authProfile } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
@@ -188,7 +186,7 @@ export default function RetencionPage() {
           <div className="w-8 flex justify-end">{onNext && <button onClick={onNext} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors"><ChevronDown className="w-4 h-4 -rotate-90 text-zinc-400" /></button>}</div>
         </div>
         <div key={`${year}-${month}`} className={`grid grid-cols-7 gap-y-1 ${animClass}`}>
-          {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => <div key={d} className="text-[10px] font-bold text-zinc-300 text-center pb-2 uppercase">{d}</div>)}
+          {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <div key={i} className="text-[10px] font-bold text-zinc-300 text-center pb-2 uppercase">{d}</div>)}
           {days.map((d, i) => {
             if (!d) return <div key={`empty-${i}`} />;
             const isToday = d === todayStr; const isFuture = d > todayStr; const isSelected = d === since || d === until;
