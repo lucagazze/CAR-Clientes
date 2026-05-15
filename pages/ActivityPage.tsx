@@ -10,7 +10,13 @@ import {
   Clock,
   Shield,
   Layout,
-  MousePointer2
+  MousePointer2,
+  ChevronDown,
+  ChevronUp,
+  Globe,
+  Building2,
+  RefreshCw,
+  MonitorPlay
 } from 'lucide-react';
 import { usePresence } from '../contexts/PresenceContext';
 import {
@@ -33,6 +39,7 @@ export default function ActivityPage() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState(30);
   const [search, setSearch] = useState('');
+  const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
 
   const load = async (days: number) => {
     try {
@@ -300,59 +307,117 @@ export default function ActivityPage() {
                       const presences = onlineUsers[c.id] || [];
                       const isEmailOnline = presences.some((p: any) => (p.user_email || p.email) === email);
                       
+                      const isExpanded = expandedEmail === `${c.id}-${email}`;
+
                       return (
-                        <tr key={email} className="hover:bg-zinc-50 dark:hover:bg-white/[0.01] transition-colors group">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`p-1.5 rounded-lg transition-colors ${isEmailOnline ? 'bg-emerald-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 group-hover:text-emerald-500'}`}>
-                                <Shield className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
-                                  {email}
-                                </span>
-                                {isEmailOnline && (
-                                  <span className="text-[10px] font-bold text-emerald-500 animate-pulse uppercase tracking-wider">
-                                    En línea ahora
+                        <React.Fragment key={email}>
+                          <tr 
+                            onClick={() => setExpandedEmail(isExpanded ? null : `${c.id}-${email}`)}
+                            className="hover:bg-zinc-50 dark:hover:bg-white/[0.01] transition-colors group cursor-pointer"
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-1.5 rounded-lg transition-colors ${isEmailOnline ? 'bg-emerald-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 group-hover:text-emerald-500'}`}>
+                                  <Shield className="w-3.5 h-3.5" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[13px] font-medium text-zinc-700 dark:text-zinc-200 flex items-center gap-2">
+                                    {email}
+                                    {isExpanded ? <ChevronUp className="w-3 h-3 text-zinc-400" /> : <ChevronDown className="w-3 h-3 text-zinc-400" />}
                                   </span>
-                                )}
+                                  {isEmailOnline && (
+                                    <span className="text-[10px] font-bold text-emerald-500 animate-pulse uppercase tracking-wider">
+                                      En línea ahora
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {userLastLog ? (
-                              <div className="flex flex-col items-center">
-                                <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-[11px] font-bold text-blue-600">
-                                  {totalLogins} {totalLogins === 1 ? 'entrada' : 'entradas'}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              {userLastLog ? (
+                                <div className="flex flex-col items-center">
+                                  <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-[11px] font-bold text-blue-600">
+                                    {totalLogins} {totalLogins === 1 ? 'entrada' : 'entradas'}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[11px] font-bold text-zinc-400 italic">
+                                  Sin actividad
                                 </span>
-                              </div>
-                            ) : (
-                              <span className="px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[11px] font-bold text-zinc-400 italic">
-                                Sin actividad
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {userLastLog ? (
-                              <div className="flex flex-col">
-                                <span className="text-[12px] text-zinc-600 dark:text-zinc-400 font-medium">
-                                  {userLastLog.location?.city ? `${userLastLog.location.city}, ${userLastLog.location.country}` : 'Ubicación desconocida'}
-                                </span>
-                                <span className="text-[10px] text-zinc-400 font-mono">{userLastLog.ip || 'Sin IP'}</span>
-                              </div>
-                            ) : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            {userLastLog ? (
-                              <div className="flex items-center justify-end gap-2 text-zinc-500">
-                                <Clock className="w-3 h-3" />
-                                <span className="text-[12px]">
-                                  {new Date(userLastLog.created_at).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </div>
-                            ) : '-'}
-                          </td>
-                        </tr>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {userLastLog ? (
+                                <div className="flex flex-col">
+                                  <span className="text-[12px] text-zinc-600 dark:text-zinc-400 font-medium">
+                                    {userLastLog.location?.city ? `${userLastLog.location.city}, ${userLastLog.location.country}` : ''}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400 font-mono">{userLastLog.ip || 'Sin IP'}</span>
+                                </div>
+                              ) : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {userLastLog ? (
+                                <div className="flex items-center justify-end gap-2 text-zinc-500">
+                                  <Clock className="w-3 h-3" />
+                                  <span className="text-[12px]">
+                                    {new Date(userLastLog.created_at).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              ) : '-'}
+                            </td>
+                          </tr>
+
+                          {isExpanded && userLogs.length > 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-6 py-6 bg-zinc-50/50 dark:bg-white/[0.01] border-l-4 border-emerald-500">
+                                <div className="space-y-4 max-w-4xl">
+                                  <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    Últimas 20 Conexiones
+                                  </h5>
+                                  <div className="space-y-2">
+                                    {userLogs.slice(0, 20).map((log, idx) => (
+                                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 shadow-sm gap-3 group/item hover:border-emerald-500/30 transition-colors">
+                                        <div className="flex items-center gap-4">
+                                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${log.action === 'session_start' ? 'bg-blue-50 text-blue-500 dark:bg-blue-500/10' : 'bg-zinc-50 text-zinc-400 dark:bg-zinc-800'}`}>
+                                            <Globe className="w-4 h-4" />
+                                          </div>
+                                          <div className="flex flex-col">
+                                            <span className="text-[12px] font-bold text-zinc-700 dark:text-zinc-200">
+                                              {log.ip || 'IP Privada/Desconocida'}
+                                            </span>
+                                            {log.location?.city && (
+                                              <span className="text-[10px] text-zinc-500">
+                                                {log.location.city}, {log.location.country}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-6">
+                                          {log.metadata?.refreshes > 1 && (
+                                            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                              {log.metadata.refreshes} acciones
+                                            </span>
+                                          )}
+                                          <div className="flex flex-col items-end">
+                                            <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                                              {new Date(log.created_at).toLocaleString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                            <span className="text-[9px] text-zinc-400 uppercase tracking-tighter">
+                                              {log.action === 'session_start' ? 'Inicio de Sesión' : 'Actividad'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
