@@ -3,14 +3,22 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const KLAVIYO_REVISION = '2024-10-15';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Extract path and query directly from req.url — same approach as the Shopify proxy.
-  // This bypasses Vercel's qs parser entirely, which was mangling bracket params
-  // (page%5Bsize%5D → nested object) and causing 404s for multi-segment paths.
+  // Dual-source URL construction:
+  // - Path: req.query.path (Vercel sets this reliably for [...]path] catch-all routes)
+  //   Fallback to stripping /api/klaviyo/ prefix from req.url if path param is empty.
+  // - Query string: always from raw req.url to preserve %5B/%5D encoding and avoid
+  //   Vercel's qs parser mangling bracket params (page%5Bsize%5D → nested object).
+  const pathParam = req.query.path;
+  const pathFromQuery = Array.isArray(pathParam) ? pathParam.join('/') : (pathParam as string || '');
+
   const rawUrl = req.url || '';
-  const urlMatch = rawUrl.match(/^\/api\/klaviyo\/?([^?]*)(.*)?$/);
-  const klaviyoPath = urlMatch?.[1] || '';
-  const queryPart  = urlMatch?.[2] || '';
-  const targetUrl  = `https://a.klaviyo.com/api/${klaviyoPath}${queryPart}`;
+  const qIdx = rawUrl.indexOf('?');
+  const urlPathOnly = qIdx >= 0 ? rawUrl.slice(0, qIdx) : rawUrl;
+  const queryPart = qIdx >= 0 ? rawUrl.slice(qIdx) : '';
+  const pathFromUrl = urlPathOnly.replace(/^\/api\/klaviyo\/?/, '');
+
+  const klaviyoPath = pathFromQuery || pathFromUrl;
+  const targetUrl = `https://a.klaviyo.com/api/${klaviyoPath}${queryPart}`;
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -21,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.headers['x-debug-proxy'] === '1') {
-    return res.status(200).json({ rawUrl, klaviyoPath, queryPart, targetUrl });
+    return res.status(200).json({ rawUrl, pathFromQuery, pathFromUrl, klaviyoPath, queryPart, targetUrl });
   }
 
   const auth = req.headers['authorization'];
