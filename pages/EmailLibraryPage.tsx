@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   Monitor, Smartphone, X, Mail, GripVertical,
   Copy, Check, Share2, Trash2, CheckSquare, Square,
-  Code2, ExternalLink,
+  Code2, ExternalLink, Camera,
 } from 'lucide-react';
 
 interface EmailEntry {
@@ -482,6 +482,18 @@ export default function EmailLibraryPage() {
               <p className="text-[13px] font-bold text-white truncate">{preview.subject || `${preview.angle} ${preview.desc}`}</p>
               <p className="text-[10px] text-zinc-500 truncate">{preview.client} · {preview.angle} {preview.desc}</p>
             </div>
+            {/* Screenshot — opens full email in new tab for easy screenshotting */}
+            <a
+              href={`/email-library/${preview.file}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              title="Abrir en nueva pestaña para hacer screenshot"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Screenshot
+            </a>
             <button onClick={() => copyShareLink(preview)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
                 copiedLink === preview.file
