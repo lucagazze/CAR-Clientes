@@ -432,6 +432,41 @@ function BulkAssignModal({ files, clients, allAssignments, onClose, onDone }: {
   );
 }
 
+// ── Live scaled thumbnail (used when static WebP screenshot doesn't exist) ────
+function LiveThumbnail({ file }: { file: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.25);
+
+  useEffect(() => {
+    if (!wrapRef.current) return;
+    const obs = new ResizeObserver(entries => {
+      const w = entries[0].contentRect.width;
+      if (w > 0) setScale(w / 600);
+    });
+    obs.observe(wrapRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <div ref={wrapRef} className="absolute inset-0 overflow-hidden bg-white pointer-events-none">
+      <iframe
+        src={`/email-library/${file}`}
+        scrolling="no"
+        tabIndex={-1}
+        style={{
+          border: 'none',
+          display: 'block',
+          width: '600px',
+          height: '4000px',
+          transformOrigin: 'top left',
+          transform: `scale(${scale})`,
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function EmailLibraryPage() {
   const { profile } = useAuth();
@@ -607,13 +642,16 @@ export default function EmailLibraryPage() {
     } catch {}
   }, []);
 
-  // ESC to close preview
+  // ESC to close preview OR cancel select mode
   useEffect(() => {
-    if (!preview) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreview(null); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (preview) { setPreview(null); return; }
+      if (selectMode) { setSelected(new Set()); setSelectMode(false); }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [preview]);
+  }, [preview, selectMode]);
 
   const deleteEmails = (files: Set<string> | string[]) => {
     const set = files instanceof Set ? files : new Set(files);
@@ -849,9 +887,7 @@ export default function EmailLibraryPage() {
                   {/* Thumbnail */}
                   <div className="relative overflow-hidden w-full" style={{ aspectRatio: '3/4' }}>
                     {useIframe ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800">
-                        <Mail className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
-                      </div>
+                      <LiveThumbnail file={email.file} />
                     ) : (
                       <img
                         src={`/email-library/screenshots/${email.file.replace('.html', '.webp')}`}
