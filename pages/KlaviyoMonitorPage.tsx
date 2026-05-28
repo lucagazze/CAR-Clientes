@@ -420,7 +420,7 @@ function CampaignCard({
   const st = CAMP_STATUS[c.status] ?? { label: c.status, cls: 'bg-zinc-100 dark:bg-white/10 text-zinc-500' };
   const dateLabel = c.status === 'Sent' ? `Enviado el: ${fmtDate(c.send_time)}` :
     c.status === 'Sending' ? `Enviando (iniciado el ${fmtDate(c.send_time)})` :
-    c.status === 'Scheduled' ? `Programado para: ${fmtDate(c.scheduled_at)}` :
+    c.status === 'Scheduled' ? `Programado para: ${fmtDate(c.send_time ?? c.scheduled_at)}` :
     `Creado el: ${fmtDate(c.created_at)}`;
   const dateIcon = (c.status === 'Sent' || c.status === 'Sending') ? <Send className="w-3 h-3" /> :
     c.status === 'Scheduled' ? <CalendarClock className="w-3 h-3" /> : <Clock className="w-3 h-3" />;
@@ -823,7 +823,7 @@ function CalendarView({
   const getCampaignsForDate = (date: Date) => {
     const dStr = date.toLocaleDateString('sv-SE');
     return campaigns.filter(c => {
-      const dateVal = c.status === 'Scheduled' ? c.scheduled_at : c.send_time;
+      const dateVal = c.send_time ?? c.scheduled_at;
       if (!dateVal) return false;
       return new Date(dateVal).toLocaleDateString('sv-SE') === dStr;
     });
@@ -833,7 +833,7 @@ function CalendarView({
 
   const selectedDateCampaigns = selectedDateStr 
     ? campaigns.filter(c => {
-        const dateVal = c.status === 'Scheduled' ? c.scheduled_at : c.send_time;
+        const dateVal = c.send_time ?? c.scheduled_at;
         if (!dateVal) return false;
         return new Date(dateVal).toLocaleDateString('sv-SE') === selectedDateStr;
       })
@@ -842,8 +842,8 @@ function CalendarView({
   const scheduledCampaigns = campaigns
     .filter(c => c.status === 'Scheduled')
     .sort((a, b) => {
-      const aTime = new Date(a.scheduled_at || '').getTime();
-      const bTime = new Date(b.scheduled_at || '').getTime();
+      const aTime = new Date(a.send_time ?? a.scheduled_at ?? '').getTime();
+      const bTime = new Date(b.send_time ?? b.scheduled_at ?? '').getTime();
       return aTime - bTime;
     });
 
@@ -879,9 +879,9 @@ function CalendarView({
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-y-2 text-center">
+        <div className="grid grid-cols-7 gap-1 text-center">
           {days.map((day, idx) => {
-            if (!day) return <div key={`empty-${idx}`} />;
+            if (!day) return <div key={`empty-${idx}`} className="min-h-[85px] md:min-h-[105px] border border-dashed border-zinc-100 dark:border-white/[0.03] rounded-2xl opacity-20" />;
             const dayCamp = getCampaignsForDate(day);
             const isToday = day.toLocaleDateString('sv-SE') === todayStr;
             const isSelected = day.toLocaleDateString('sv-SE') === selectedDateStr;
@@ -890,33 +890,37 @@ function CalendarView({
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDateStr(day.toLocaleDateString('sv-SE'))}
-                className={`relative py-3 rounded-2xl flex flex-col items-center justify-between min-h-[55px] transition-all hover:bg-zinc-50 dark:hover:bg-white/5 border ${
+                className={`relative rounded-2xl flex flex-col items-stretch justify-start min-h-[85px] md:min-h-[105px] p-2 transition-all hover:bg-zinc-50 dark:hover:bg-white/5 border ${
                   isSelected 
                     ? 'bg-violet-600/10 border-violet-500/30 dark:border-violet-500/20' 
-                    : 'border-transparent'
+                    : 'border-zinc-100 dark:border-white/5'
                 }`}
               >
-                <span className={`text-[12px] font-bold ${
-                  isToday 
-                    ? 'w-5 h-5 flex items-center justify-center bg-violet-600 text-white rounded-full' 
-                    : 'text-zinc-800 dark:text-zinc-200'
-                }`}>
-                  {day.getDate()}
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className={`text-[12px] font-bold ${
+                    isToday 
+                      ? 'w-5 h-5 flex items-center justify-center bg-violet-600 text-white rounded-full text-[10px]' 
+                      : 'text-zinc-500 dark:text-zinc-400'
+                  }`}>
+                    {day.getDate()}
+                  </span>
+                </div>
                 
-                <div className="flex gap-0.5 justify-center mt-1">
+                {/* Campaign labels inside calendar day cell */}
+                <div className="mt-1.5 space-y-1 w-full overflow-hidden text-left">
                   {dayCamp.map(c => {
-                    const color = c.status === 'Scheduled' 
-                      ? 'bg-violet-500' 
-                      : c.status === 'Sent' 
-                        ? 'bg-emerald-500' 
-                        : 'bg-zinc-400';
+                    const isSch = c.status === 'Scheduled';
+                    const colorCls = isSch
+                      ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400 border border-violet-500/20'
+                      : 'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400 border border-emerald-500/20';
                     return (
-                      <span
+                      <div
                         key={c.id}
-                        className={`w-1.5 h-1.5 rounded-full ${color}`}
-                        title={`${c.name} (${c.status})`}
-                      />
+                        className={`text-[9px] font-bold truncate rounded px-1 py-0.5 ${colorCls}`}
+                        title={c.name}
+                      >
+                        {c.name}
+                      </div>
                     );
                   })}
                 </div>
@@ -976,7 +980,7 @@ function CalendarView({
         ) : (
           <div className="space-y-3 overflow-y-auto max-h-[400px] pr-1">
             {scheduledCampaigns.map(c => {
-              const diffMs = new Date(c.scheduled_at || '').getTime() - Date.now();
+              const diffMs = new Date(c.send_time ?? c.scheduled_at ?? '').getTime() - Date.now();
               const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
               const countdownLabel = diffDays === 1 ? 'Mañana' :
                 diffDays === 0 ? 'Hoy' :
@@ -1002,7 +1006,7 @@ function CalendarView({
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                     <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                    <span>{fmtDate(c.scheduled_at)}</span>
+                    <span>{fmtDate(c.send_time ?? c.scheduled_at)}</span>
                   </div>
                 </div>
               );
@@ -1125,7 +1129,7 @@ export default function KlaviyoMonitorPage() {
   const campaignStatuses = ['All', ...Array.from(new Set(campaigns.map(c => c.status)))];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className={`${tab === 'calendar' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300`}>
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
