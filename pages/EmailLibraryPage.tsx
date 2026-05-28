@@ -285,8 +285,11 @@ export default function EmailLibraryPage() {
             onClick={e => e.stopPropagation()}
           >
             <div
-              className="bg-white shadow-2xl rounded-sm transition-all duration-300"
-              style={{ width: previewMode === 'desktop' ? 600 : 375 }}
+              className="shadow-2xl rounded-sm transition-all duration-300 overflow-hidden"
+              style={{
+                width: previewMode === 'desktop' ? 760 : 375,
+                background: previewMode === 'desktop' ? '#f0f0f0' : '#ffffff',
+              }}
             >
               <iframe
                 src={`/email-library/${preview.file}`}
