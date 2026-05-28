@@ -252,8 +252,9 @@ function AssignModal({ email, allAssignments, clients, onClose, onRefresh }: {
                     value={a.status}
                     onChange={e => handleChangeStatus(a, e.target.value as any)}
                     className="text-[10px] font-bold bg-zinc-100 dark:bg-white/5 border-0 rounded-lg px-2 py-1 text-zinc-600 dark:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
+                    style={{ colorScheme: 'light' }}
                   >
-                    {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value} style={{ color: '#111', background: '#fff' }}>{s.label}</option>)}
                   </select>
 
                   {/* Approved toggle */}
@@ -286,9 +287,10 @@ function AssignModal({ email, allAssignments, clients, onClose, onRefresh }: {
                 value={newClient}
                 onChange={e => setNewClient(e.target.value)}
                 className="w-full text-[12px] font-semibold bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                style={{ colorScheme: 'light' }}
               >
-                <option value="">Seleccionar cliente…</option>
-                {available.map(c => <option key={c.id} value={c.id}>{c.business_name}</option>)}
+                <option value="" style={{ color: '#111', background: '#fff' }}>Seleccionar cliente…</option>
+                {available.map(c => <option key={c.id} value={c.id} style={{ color: '#111', background: '#fff' }}>{c.business_name}</option>)}
               </select>
 
               <div className="flex gap-2">
