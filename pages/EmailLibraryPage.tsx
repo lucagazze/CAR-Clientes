@@ -505,25 +505,40 @@ export default function EmailLibraryPage() {
   const rbDragging     = useRef(false);
   const rbCurrent      = useRef<{x1:number;y1:number;x2:number;y2:number}|null>(null);
   const wasDragging    = useRef(false);
+  const gridRef        = useRef<HTMLDivElement>(null);
 
   // Admin guard
   useEffect(() => {
     if (profile && !profile.is_admin) navigate('/', { replace: true });
   }, [profile, navigate]);
 
-  // Rubber band selection (global mouse listeners)
+  // Rubber band selection — capture-phase mousedown fires before React synthetic events,
+  // ensuring e.preventDefault() stops text-selection before the browser acts on it.
   useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const grid = gridRef.current;
+      if (!grid || !grid.contains(e.target as Node)) return;
+      const target = e.target as HTMLElement;
+      if (target.closest('button, input, a, select, [data-drag-handle]')) return;
+      e.preventDefault();
+      rbOrigin.current = { x: e.clientX, y: e.clientY };
+    };
     const onMove = (e: MouseEvent) => {
       if (!rbOrigin.current) return;
       const dx = e.clientX - rbOrigin.current.x, dy = e.clientY - rbOrigin.current.y;
       if (!rbDragging.current && Math.hypot(dx, dy) < 6) return;
-      rbDragging.current = true;
+      if (!rbDragging.current) {
+        rbDragging.current = true;
+        document.body.style.userSelect = 'none';
+      }
       const r = { x1: rbOrigin.current.x, y1: rbOrigin.current.y, x2: e.clientX, y2: e.clientY };
       rbCurrent.current = r;
       setRubberRect({ ...r });
       setSelectMode(true);
     };
     const onUp = () => {
+      document.body.style.userSelect = '';
       if (rbDragging.current && rbCurrent.current) {
         const { x1, y1, x2, y2 } = rbCurrent.current;
         const L = Math.min(x1, x2), T = Math.min(y1, y2), R = Math.max(x1, x2), B = Math.max(y1, y2);
@@ -539,9 +554,15 @@ export default function EmailLibraryPage() {
       rbOrigin.current = null; rbDragging.current = false; rbCurrent.current = null;
       setRubberRect(null);
     };
+    window.addEventListener('mousedown', onDown, { capture: true });
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    return () => {
+      window.removeEventListener('mousedown', onDown, { capture: true });
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+    };
   }, []);
 
   // Load assignments + clients
@@ -787,15 +808,9 @@ export default function EmailLibraryPage() {
           </div>
         ) : (
           <div
+            ref={gridRef}
             className="grid gap-3"
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}
-            onMouseDown={e => {
-              if (e.button !== 0) return;
-              const target = e.target as HTMLElement;
-              if (target.closest('button, input, a, select, [data-drag-handle]')) return;
-              e.preventDefault(); // block native text-selection / image-drag
-              rbOrigin.current = { x: e.clientX, y: e.clientY };
-            }}
           >
             {filtered.map((email, idx) => {
               const isSelected   = selected.has(email.file);
