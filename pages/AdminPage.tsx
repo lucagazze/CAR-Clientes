@@ -562,7 +562,11 @@ export default function AdminPage() {
 
       if (error) throw error;
 
+      const isValidUuid = (v?: string) => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
       if (editForm.new_password && supabaseAdmin) {
+        if (!isValidUuid(editingClient.user_id)) {
+          throw new Error('Este cliente no tiene un usuario de auth asociado. No se puede cambiar la contraseña.');
+        }
         const { error: pwdErr } = await supabaseAdmin.auth.admin.updateUserById(
           editingClient.user_id,
           { password: editForm.new_password },
