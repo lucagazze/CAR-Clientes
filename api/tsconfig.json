@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
+    "target": "ES2022",
+    "module": "esnext",
     "moduleResolution": "node",
-    "lib": ["ES2020"],
+    "lib": ["ES2022"],
     "strict": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
