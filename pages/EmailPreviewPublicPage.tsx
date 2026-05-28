@@ -93,8 +93,10 @@ export default function EmailPreviewPublicPage() {
         </div>
       </div>
 
-      {/* ── EMAIL CHROME ── */}
-      <div style={{ flexShrink: 0, maxWidth: mode === 'desktop' ? 660 : 430, width: '100%', margin: '20px auto 0', padding: '0 12px' }}>
+      {/* ── CHROME + EMAIL — mismo contenedor, mismo ancho ── */}
+      <div style={{ flex: 1, maxWidth: mode === 'desktop' ? 660 : 430, width: '100%', margin: '20px auto 0', padding: '0 12px 40px' }}>
+
+        {/* Chrome card */}
         <div style={{
           background: '#fff',
           borderRadius: mode === 'desktop' ? '10px 10px 0 0' : 12,
@@ -140,33 +142,21 @@ export default function EmailPreviewPublicPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ── EMAIL BODY ── */}
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 12px 40px' }}>
-        {mode === 'desktop' ? (
-          <div style={{ width: '100%', maxWidth: 660, background: '#fff', border: '1px solid #d0d0d0', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-            <iframe
-              key="desktop"
-              ref={iframeRef}
-              src={`/email-library/${file}`}
-              onLoad={injectAndExtract}
-              scrolling="no"
-              style={{ width: '100%', height: iframeHeight, border: 'none', display: 'block' }}
-            />
-          </div>
-        ) : (
-          <div style={{ width: '100%', maxWidth: 430, background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #d0d0d0', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-            <iframe
-              key="mobile"
-              ref={iframeRef}
-              src={`/email-library/${file}`}
-              onLoad={injectAndExtract}
-              scrolling="no"
-              style={{ width: '100%', height: iframeHeight, border: 'none', display: 'block' }}
-            />
-          </div>
-        )}
+        {/* Email body */}
+        <div style={mode === 'desktop'
+          ? { background: '#fff', border: '1px solid #d0d0d0', borderRadius: '0 0 8px 8px', overflow: 'hidden' }
+          : { background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #d0d0d0', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }
+        }>
+          <iframe
+            key={mode}
+            ref={iframeRef}
+            src={`/email-library/${file}`}
+            onLoad={injectAndExtract}
+            scrolling="no"
+            style={{ width: '100%', height: iframeHeight, border: 'none', display: 'block' }}
+          />
+        </div>
       </div>
 
       {/* Footer */}
