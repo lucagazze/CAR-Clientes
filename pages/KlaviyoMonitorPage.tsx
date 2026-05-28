@@ -516,7 +516,7 @@ export default function KlaviyoMonitorPage() {
   if (!profile?.is_admin) return null;
 
   const filteredCampaigns = statusFilter === 'All'
-    ? campaigns
+    ? campaigns.filter(c => c.status !== 'Cancelled')
     : campaigns.filter(c => c.status === statusFilter);
 
   const campaignStatuses = ['All', ...Array.from(new Set(campaigns.map(c => c.status)))];
