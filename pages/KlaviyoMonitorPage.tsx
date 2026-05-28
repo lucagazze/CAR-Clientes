@@ -104,29 +104,45 @@ const fetchFlows = async (apiKey: string): Promise<KvFlow[]> => {
 };
 
 const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEmail[]> => {
-  const data = await kFetch(
-    `flow-actions?filter=equals(flow.id,%22${flowId}%22),equals(action_type,%22SEND_EMAIL%22)&include=flow-messages`,
+  const actionsData = await kFetch(
+    `flows/${flowId}/flow-actions?filter=equals(action_type,%22SEND_EMAIL%22)`,
     apiKey,
   );
-  const msgMap = new Map<string, any>();
-  for (const item of data.included ?? []) {
-    if (item.type === 'flow-message') {
-      msgMap.set(item.id, {
-        id: item.id,
-        name: item.attributes.name,
-        subject: item.attributes.subject,
-        template_id: item.relationships?.template?.data?.id,
-      });
-    }
-  }
-  return (data.data ?? []).map((a: any) => {
-    const msgIds: string[] = a.relationships?.['flow-messages']?.data?.map((d: any) => d.id) ?? [];
-    return {
-      id: a.id,
-      status: a.attributes.status,
-      message: msgIds[0] ? msgMap.get(msgIds[0]) : undefined,
-    };
-  });
+  
+  const emailActions = actionsData.data ?? [];
+  
+  const results = await Promise.all(
+    emailActions.map(async (action: any) => {
+      try {
+        const messagesData = await kFetch(`flow-actions/${action.id}/flow-messages`, apiKey);
+        const msg = messagesData.data?.[0];
+        if (!msg) {
+          return {
+            id: action.id,
+            status: action.attributes.status,
+          };
+        }
+        return {
+          id: action.id,
+          status: action.attributes.status,
+          message: {
+            id: msg.id,
+            name: msg.attributes.name,
+            subject: msg.attributes.subject,
+            template_id: msg.relationships?.template?.data?.id,
+          },
+        };
+      } catch (err) {
+        console.error(`Failed to fetch messages for flow action ${action.id}:`, err);
+        return {
+          id: action.id,
+          status: action.attributes.status,
+        };
+      }
+    })
+  );
+  
+  return results;
 };
 
 const fetchTemplateHtml = async (templateId: string, apiKey: string): Promise<string> => {
