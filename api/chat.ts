@@ -200,6 +200,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'get_ecommerce_data',
+        description: 'Get this month\'s ecommerce data (total revenue, total orders count, average order value (AOV)) from Shopify or Tiendanube for a client.',
+        parameters: {
+          type: 'object',
+          properties: {
+            clientId: { type: 'string', description: 'The UUID of the client' },
+          },
+          required: ['clientId'],
+        },
+      },
+    },
   ];
 
   // Helper security filter
@@ -215,29 +229,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const systemMessage = `Sos el asistente de marketing digital inteligente de Algoritmia.
 Tu nombre es "Algo". Respondés en español argentino, de manera amigable y profesional.
 
-Tienes acceso a herramientas para buscar información real de todos los clientes (campañas de Klaviyo, métricas de Meta Ads, métricas de Email, asignaciones de mails, creativos de anuncios e Instagram posts).
-Cuando el usuario te pregunte sobre algún cliente, campaña, métricas, creativos o mails:
+Tienes acceso a herramientas para buscar información real de todos los clientes (campañas de Klaviyo, métricas de Meta Ads, métricas de Email, facturación de e-commerce de Shopify o Tiendanube, asignaciones de mails, creativos de anuncios e Instagram posts).
+
+Cuando el usuario te pregunte sobre algún cliente, campaña, métricas, facturación, creativos o mails:
 1. Si no conoces el clientId del cliente mencionado, usa 'list_clients' para buscarlo.
 2. Si te preguntan sobre un cliente específico y ya tienes el clientId (o lo acabas de buscar), llama a la herramienta adecuada.
 3. Responde siempre basándote en los datos reales que te devuelven las herramientas. Sé específico con nombres, asuntos y fechas reales.
 4. Si el usuario te pregunta sin especificar un cliente, asume que se refiere al negocio activo actual en pantalla.
    ${activeClientText}
-5. Si no hay datos disponibles o la llamada falla, explícalo de manera sencilla.
+5. Si no hay datos disponibles o la llamada a las APIs falla, responde indicando de forma sencilla que no tenés una respuesta para esa pregunta en este momento.
 
-REGLAS DE FORMATO Y CONTENIDO (MUY IMPORTANTES):
+REGLAS DE TONO, CONTENIDO Y FORMATO (MUY IMPORTANTES):
+- Da respuestas súper naturales, claras, resumidas y fáciles de entender para alguien que no entiende nada de marketing o tecnología.
 - Si te piden ver los anuncios, creativos o posts de Instagram, SIEMPRE utiliza formato de imagen markdown para incrustarlas directamente en el chat, por ejemplo: ![Nombre del anuncio](url_de_imagen).
 - Si te preguntan por el calendario o mails programados, presentalos usando una tabla Markdown limpia (columnas: Campaña / Asunto, Estado, Fecha Programada/Envío).
-- Si te piden links para navegar en la plataforma, utiliza los siguientes links internos relativos:
-  * Dashboard General: [Dashboard](/#/)
-  * Email Marketing (Calendario y Campañas): [Email Marketing](/#/email-marketing)
-  * Meta Ads (Métricas de Anuncios): [Meta Ads](/#/admin/meta)
-  * Klaviyo Monitor: [Monitor de Klaviyo](/#/admin/klaviyo)
-  * Biblioteca de Correos: [Biblioteca de Emails](/#/admin/emails)
-  * Reportes Mensuales: [Reportes](/#/reportes)
-  * Enlaces del Cliente: [Links](/#/links)
-  Ejemplo: "Podés ver todo el calendario completo en la sección de [Email Marketing](/#/email-marketing)."
+- Si presentas datos de facturación de e-commerce, Meta Ads o creativos, invita siempre al usuario a seguir profundizando agregando un link de botón al final de tu respuesta (poniendo el markdown del link SOLO en su propia línea). Esto renderizará un botón de llamada a la acción premium en la interfaz del chat.
+  Usa exactamente estos links según el tema:
+  * Si hablás de anuncios/creativos o captación de Meta Ads:
+    ` + "`" + `[Ver Creativos en Captación](/#/captacion)` + "`" + `
+  * Si hablás de facturación/ventas de Shopify o Tiendanube:
+    ` + "`" + `[Ver Rendimiento en Tienda](/#/tienda)` + "`" + `
+  * Si hablás de mails programados o campañas de Klaviyo:
+    ` + "`" + `[Ver Email Marketing](/#/email-marketing)` + "`" + `
+  * Para métricas generales o reportes:
+    ` + "`" + `[Ver Reportes Mensuales](/#/reportes)` + "`" + `
 - Sé amigable e inteligente. Usa modismos de Argentina (por ejemplo, "tenés", "mirá", "querés", "che", "chequeá").
-- Máximo 4 párrafos por respuesta. Usá listas y tablas si ayuda a la claridad.`;
+- Sé conciso y al grano. Evita explicaciones técnicas largas.`;
 
   try {
     let apiMessages = [
@@ -371,7 +388,6 @@ REGLAS DE FORMATO Y CONTENIDO (MUY IMPORTANTES):
             if (!clientId || !isAuthorizedForClient(clientId)) {
               toolResult = { error: 'Access denied or missing clientId' };
             } else {
-              // 1. Get adAccountId
               const { data: clientData } = await supabase
                 .from('car_clients')
                 .select('meta_account_id')
@@ -416,6 +432,100 @@ REGLAS DE FORMATO Y CONTENIDO (MUY IMPORTANTES):
                   toolResult = json.data || [];
                 } catch (e: any) {
                   toolResult = { error: e.message };
+                }
+              }
+            }
+          } else if (name === 'get_ecommerce_data') {
+            const { clientId } = args as { clientId: string };
+            if (!clientId || !isAuthorizedForClient(clientId)) {
+              toolResult = { error: 'Access denied or missing clientId' };
+            } else {
+              const { data: client } = await supabase
+                .from('car_clients')
+                .select('ecommerce_platform, shopify_domain, shopify_access_token, tiendanube_store_id, tiendanube_access_token')
+                .eq('id', clientId)
+                .maybeSingle();
+
+              if (!client) {
+                toolResult = { error: 'Client profile not found' };
+              } else {
+                const platform = client.ecommerce_platform;
+                const now = new Date();
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                const sinceIso = startOfMonth.toISOString();
+                const untilIso = endOfMonth.toISOString();
+
+                if (platform === 'shopify') {
+                  const domain = client.shopify_domain;
+                  const token = client.shopify_access_token;
+                  if (!domain || !token) {
+                    toolResult = { error: 'Shopify credentials not fully configured for this client' };
+                  } else {
+                    try {
+                      const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                      const targetUrl = `https://${cleanDomain}/admin/api/2024-01/orders.json?status=any&created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=250`;
+                      
+                      const res = await fetch(targetUrl, {
+                        headers: {
+                          'X-Shopify-Access-Token': token,
+                          'Content-Type': 'application/json',
+                        }
+                      });
+
+                      if (!res.ok) throw new Error(`Shopify status ${res.status}`);
+                      const data = await res.json();
+                      const orders = data.orders || [];
+                      const validOrders = orders.filter((o: any) => !o.cancelled_at && o.financial_status !== 'voided');
+                      const totalRevenue = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_price || 0), 0);
+                      const totalDiscounts = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_discounts || 0), 0);
+                      
+                      toolResult = {
+                        platform: 'Shopify',
+                        revenue: totalRevenue,
+                        ordersCount: validOrders.length,
+                        totalDiscounts,
+                        aov: validOrders.length > 0 ? totalRevenue / validOrders.length : 0,
+                        period: `${startOfMonth.toLocaleDateString('es-AR')} a ${now.toLocaleDateString('es-AR')}`
+                      };
+                    } catch (e: any) {
+                      toolResult = { error: `Shopify fetch error: ${e.message}` };
+                    }
+                  }
+                } else if (platform === 'tiendanube') {
+                  const storeId = client.tiendanube_store_id;
+                  const token = client.tiendanube_access_token;
+                  if (!storeId || !token) {
+                    toolResult = { error: 'Tiendanube credentials not fully configured for this client' };
+                  } else {
+                    try {
+                      const targetUrl = `https://api.tiendanube.com/v1/${storeId}/orders?created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=200`;
+                      const res = await fetch(targetUrl, {
+                        headers: {
+                          'Authentication': `bearer ${token}`,
+                          'User-Agent': 'Algoritmia (lucagazze@gmail.com)',
+                          'Content-Type': 'application/json',
+                        }
+                      });
+
+                      if (!res.ok) throw new Error(`Tiendanube status ${res.status}`);
+                      const orders = await res.json();
+                      const validOrders = Array.isArray(orders) ? orders.filter((o: any) => o.status !== 'cancelled') : [];
+                      const totalRevenue = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total || 0), 0);
+                      
+                      toolResult = {
+                        platform: 'Tiendanube',
+                        revenue: totalRevenue,
+                        ordersCount: validOrders.length,
+                        aov: validOrders.length > 0 ? totalRevenue / validOrders.length : 0,
+                        period: `${startOfMonth.toLocaleDateString('es-AR')} a ${now.toLocaleDateString('es-AR')}`
+                      };
+                    } catch (e: any) {
+                      toolResult = { error: `Tiendanube fetch error: ${e.message}` };
+                    }
+                  }
+                } else {
+                  toolResult = { error: `Ecommerce platform ${platform || 'not configured'} not supported or missing` };
                 }
               }
             }

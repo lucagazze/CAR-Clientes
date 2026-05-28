@@ -41,18 +41,17 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
           const index = part.indexOf(fullMatch);
           if (index > 0) nextParts.push(part.substring(0, index));
           nextParts.push(
-            <div key={url + index} className="my-2 max-w-[280px] rounded-xl overflow-hidden border border-zinc-200/80 shadow-md bg-white">
+            <div key={url + index} className="my-2.5 max-w-[320px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-md bg-white dark:bg-zinc-900">
               <img 
                 src={url} 
                 alt={alt} 
-                className="max-h-40 object-cover w-full hover:scale-105 transition-transform duration-300"
+                className="max-h-48 object-cover w-full hover:scale-105 transition-transform duration-300"
                 onError={(e) => {
-                  // Fallback if image fails to load
                   (e.target as HTMLImageElement).src = '/assets/logoSinFondo.png';
                 }}
               />
               {alt && (
-                <div className="text-[10px] text-zinc-500 font-bold p-2 bg-zinc-50 border-t border-zinc-100 text-center truncate">
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-bold p-2.5 bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 text-center truncate">
                   {alt}
                 </div>
               )}
@@ -94,7 +93,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
               href={targetUrl}
               target={isInternal ? '_self' : '_blank'}
               rel="noopener noreferrer"
-              className="text-violet-600 hover:text-violet-800 underline font-semibold inline-flex items-center gap-0.5"
+              className="text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 underline font-bold inline-flex items-center gap-0.5"
             >
               {linkText}
             </a>
@@ -125,7 +124,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
           const [fullMatch, boldText] = match;
           const index = part.indexOf(fullMatch);
           if (index > 0) nextParts.push(part.substring(0, index));
-          nextParts.push(<strong key={boldText + index} className="font-bold text-zinc-900">{boldText}</strong>);
+          nextParts.push(<strong key={boldText + index} className="font-bold text-zinc-900 dark:text-zinc-100">{boldText}</strong>);
           if (index + fullMatch.length < part.length) nextParts.push(part.substring(index + fullMatch.length));
           break;
         } else {
@@ -144,22 +143,22 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
     const headers = rows[0];
     const dataRows = rows.slice(2);
     return (
-      <div key={key} className="my-3 overflow-x-auto border border-zinc-200/80 rounded-2xl shadow-sm">
-        <table className="min-w-full divide-y divide-zinc-200 text-[11px] md:text-[12px]">
-          <thead className="bg-zinc-50">
+      <div key={key} className="my-3.5 overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm">
+        <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 text-[12px] md:text-[13px]">
+          <thead className="bg-zinc-50 dark:bg-zinc-900/50">
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className="px-3 py-2 text-left font-bold text-zinc-600 uppercase tracking-wider">
+                <th key={i} className="px-3.5 py-2.5 text-left font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                   {h.trim()}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-zinc-100">
+          <tbody className="bg-white dark:bg-zinc-950 divide-y divide-zinc-100 dark:divide-zinc-900">
             {dataRows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="hover:bg-zinc-50/50">
+              <tr key={rowIndex} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="px-3 py-1.5 text-zinc-700 whitespace-nowrap">
+                  <td key={cellIndex} className="px-3.5 py-2 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
                     {parseInline(cell ? cell.trim() : '')}
                   </td>
                 ))}
@@ -173,6 +172,29 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // Detect if line is ONLY a markdown link -> render as beautiful CTA Button
+    if (line.trim().startsWith('[') && line.trim().endsWith(')')) {
+      const match = /^\s*\[(.*?)\]\((.*?)\)\s*$/.exec(line);
+      if (match) {
+        const [_, linkText, url] = match;
+        const isInternal = url.startsWith('/#') || url.startsWith('#') || url.startsWith('/');
+        const targetUrl = url.startsWith('/') && !url.startsWith('/#') ? `/#${url}` : url;
+        elements.push(
+          <div key={i} className="my-3">
+            <a
+              href={targetUrl}
+              target={isInternal ? '_self' : '_blank'}
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-violet-600 dark:bg-violet-500 hover:bg-violet-700 dark:hover:bg-violet-600 text-white font-bold text-[13px] md:text-[14px] shadow-lg shadow-violet-500/20 hover:scale-[1.02] hover:shadow-violet-500/30 active:scale-[0.98] transition-all w-full sm:w-auto text-center"
+            >
+              {linkText}
+            </a>
+          </div>
+        );
+        continue;
+      }
+    }
 
     if (line.trim().startsWith('|')) {
       const cols = line.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
@@ -192,7 +214,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
     if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
       const contentStr = line.trim().substring(2);
       currentList.push(
-        <li key={currentList.length} className="ml-4 list-disc text-zinc-700 my-0.5">
+        <li key={currentList.length} className="ml-4 list-disc text-zinc-700 dark:text-zinc-300 my-0.5">
           {parseInline(contentStr)}
         </li>
       );
@@ -204,7 +226,7 @@ const MarkdownRenderer = ({ content }: { content: string }) => {
 
       if (line.trim()) {
         elements.push(
-          <p key={i} className="my-1 text-zinc-700 leading-relaxed">
+          <p key={i} className="my-1.5 text-zinc-700 dark:text-zinc-300 leading-relaxed">
             {parseInline(line)}
           </p>
         );
@@ -367,31 +389,33 @@ export const AIChatFloat = () => {
 
   const quickPrompts = [
     '¿Qué mails están programados?',
-    '¿Cuántas campañas enviamos este mes?',
-    '¿Cómo están los flows activos?',
+    '¿Cómo me fue este mes en facturación?',
+    '¿Qué creativos están activos?',
+    '¿Cómo viene el ROAS y gasto en Meta Ads?',
+    '¿Cuáles son los flows activos?',
   ];
 
   return (
     <div
       ref={containerRef}
-      className="fixed left-1/2 -translate-x-1/2 z-50 transition-all duration-500 w-[95%] md:w-[720px] bottom-6 print:hidden"
+      className="fixed left-1/2 -translate-x-1/2 z-50 transition-all duration-500 w-[95%] md:w-[840px] bottom-6 print:hidden"
     >
       {/* ── Chat panel ── */}
-      <div className={`absolute bottom-full mb-3 w-full bg-white/97 backdrop-blur-2xl border border-zinc-200/60 shadow-2xl rounded-3xl overflow-hidden transition-all duration-300 origin-bottom flex flex-col ${
-        isOpen ? 'opacity-100 scale-100 h-[72vh] md:h-[500px]' : 'opacity-0 scale-95 h-0 pointer-events-none'
+      <div className={`absolute bottom-full mb-3 w-full bg-white/95 dark:bg-zinc-950/95 backdrop-blur-2xl border border-zinc-200/80 dark:border-zinc-800/80 shadow-[0_15px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_15px_40px_rgba(0,0,0,0.5)] rounded-3xl overflow-hidden transition-all duration-300 origin-bottom flex flex-col ${
+        isOpen ? 'opacity-100 scale-100 h-[80vh] md:h-[580px]' : 'opacity-0 scale-95 h-0 pointer-events-none'
       }`}>
 
         {/* Header */}
-        <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-100 bg-gradient-to-r from-zinc-50 to-white flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-white border border-zinc-200 flex items-center justify-center shadow-md overflow-hidden">
-              <img src="/assets/logoSinFondo.png" alt="Algoritmia" className="w-6 h-6 object-contain" />
+        <div className="flex justify-between items-center px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800/80 bg-gradient-to-r from-zinc-50 to-white dark:from-zinc-900/50 dark:to-zinc-950/50 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-center shadow-md overflow-hidden">
+              <img src="/assets/logoSinFondo.png" alt="Algoritmia" className="w-7 h-7 object-contain" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-zinc-800 leading-none">Algo IA</p>
-              <p className="text-[10px] text-zinc-400 mt-0.5 flex items-center gap-1">
-                <Database className="w-2.5 h-2.5 text-emerald-500" /> 
-                <span className="text-emerald-600 font-medium">
+              <p className="text-[14.5px] font-black text-zinc-800 dark:text-zinc-200 leading-none">Algo IA</p>
+              <p className="text-[11.5px] text-zinc-400 dark:text-zinc-500 mt-1 flex items-center gap-1.5">
+                <Database className="w-3 h-3 text-emerald-500" /> 
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
                   {activeBusinessName ? `Conectado a ${activeBusinessName}` : 'Asistente de Algoritmia'}
                 </span>
               </p>
@@ -399,39 +423,28 @@ export const AIChatFloat = () => {
           </div>
           <div className="flex items-center gap-1">
             {messages.length > 0 && (
-              <button onClick={clearChat} className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-zinc-600 transition-colors" title="Limpiar chat">
-                <RotateCcw className="w-3.5 h-3.5" />
+              <button onClick={clearChat} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-xl text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" title="Limpiar chat">
+                <RotateCcw className="w-4 h-4" />
               </button>
             )}
-            <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-zinc-600 transition-colors">
-              <X className="w-3.5 h-3.5" />
+            <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-xl text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Messages */}
-        <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-zinc-50/20">
+        <div ref={chatRef} className="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-50/10 dark:bg-zinc-950/20">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full gap-3 pb-4">
-              <div className="w-14 h-14 rounded-2xl bg-white border border-zinc-200 shadow-sm flex items-center justify-center">
-                <img src="/assets/logoSinFondo.png" alt="Algoritmia" className="w-10 h-10 object-contain" />
+            <div className="flex flex-col items-center justify-center h-full gap-4 pb-4">
+              <div className="w-16 h-16 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 shadow-md flex items-center justify-center">
+                <img src="/assets/logoSinFondo.png" alt="Algoritmia" className="w-11 h-11 object-contain" />
               </div>
               <div className="text-center">
-                <p className="text-[13px] font-bold text-zinc-700">Hola 👋 Soy Algo</p>
-                <p className="text-[11px] text-zinc-400 mt-0.5 max-w-[260px] px-4">
-                  Preguntame lo que quieras sobre campañas de Klaviyo, métricas de Meta Ads o el rendimiento de las cuentas.
+                <p className="text-[15px] font-black text-zinc-700 dark:text-zinc-200">Hola 👋 Soy Algo</p>
+                <p className="text-[12.5px] text-zinc-400 dark:text-zinc-500 mt-1 max-w-[320px] px-4 leading-relaxed">
+                  Tengo acceso a tus campañas, creativos de Meta Ads, correos programados en Klaviyo y ventas de e-commerce.
                 </p>
-              </div>
-              <div className="flex flex-col gap-2 w-full max-w-[340px] px-4">
-                {quickPrompts.map((q, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSend(q)}
-                    className="text-left text-[12px] font-medium text-zinc-600 bg-white border border-zinc-200 hover:border-violet-300 hover:text-violet-700 hover:bg-violet-50/50 px-3.5 py-2.5 rounded-xl transition-all shadow-sm"
-                  >
-                    {q}
-                  </button>
-                ))}
               </div>
             </div>
           )}
@@ -439,14 +452,14 @@ export const AIChatFloat = () => {
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
-                <div className="w-6 h-6 rounded-full bg-white border border-zinc-200 flex items-center justify-center flex-shrink-0 mr-2 mt-0.5 shadow-sm overflow-hidden">
-                  <img src="/assets/logoSinFondo.png" alt="" className="w-4 h-4 object-contain" />
+                <div className="w-7 h-7 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 shadow-sm overflow-hidden">
+                  <img src="/assets/logoSinFondo.png" alt="" className="w-5 h-5 object-contain" />
                 </div>
               )}
-              <div className={`max-w-[82%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
+              <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-[14px] md:text-[15px] leading-relaxed shadow-sm ${
                 msg.role === 'user'
-                  ? 'bg-black text-white rounded-br-sm whitespace-pre-wrap'
-                  : 'bg-white border border-zinc-100 text-zinc-800 rounded-bl-sm'
+                  ? 'bg-black dark:bg-zinc-100 text-white dark:text-zinc-950 rounded-br-sm whitespace-pre-wrap font-bold'
+                  : 'bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 text-zinc-800 dark:text-zinc-200 rounded-bl-sm'
               }`}>
                 {msg.role === 'user' ? (
                   msg.content
@@ -459,39 +472,55 @@ export const AIChatFloat = () => {
 
           {isThinking && (
             <div className="flex justify-start">
-              <div className="w-6 h-6 rounded-full bg-white border border-zinc-200 flex items-center justify-center flex-shrink-0 mr-2 mt-0.5 overflow-hidden">
-                <img src="/assets/logoSinFondo.png" alt="" className="w-4 h-4 object-contain" />
+              <div className="w-7 h-7 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 overflow-hidden">
+                <img src="/assets/logoSinFondo.png" alt="" className="w-5 h-5 object-contain" />
               </div>
-              <div className="bg-white border border-zinc-100 px-3.5 py-2.5 rounded-2xl rounded-bl-sm flex items-center gap-1.5 shadow-sm">
-                <div className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5 shadow-sm">
+                <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           )}
 
           {isRecording && (
             <div className="flex justify-end">
-              <div className="bg-red-50 border border-red-100 px-3 py-2 rounded-2xl rounded-br-sm flex items-center gap-2 animate-pulse text-[12px] text-red-600 font-bold">
+              <div className="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 px-3.5 py-2.5 rounded-2xl rounded-br-sm flex items-center gap-2 animate-pulse text-[12.5px] text-red-600 dark:text-red-400 font-black">
                 <div className="w-2 h-2 rounded-full bg-red-500" /> Escuchando...
               </div>
             </div>
           )}
           {isTranscribing && (
             <div className="flex justify-end">
-              <div className="bg-blue-50 border border-blue-100 px-3 py-2 rounded-2xl rounded-br-sm flex items-center gap-2 text-[12px] text-blue-600 font-bold">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transcribiendo...
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 px-3.5 py-2.5 rounded-2xl rounded-br-sm flex items-center gap-2 text-[12.5px] text-blue-600 dark:text-blue-400 font-black">
+                <Loader2 className="w-4 h-4 animate-spin" /> Transcribiendo...
               </div>
             </div>
           )}
+        </div>
+
+        {/* ── Always-visible Quick Prompts Bar ── */}
+        <div 
+          className="flex items-center gap-2 px-5 py-2.5 border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/30 overflow-x-auto flex-shrink-0"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {quickPrompts.map((q, i) => (
+            <button
+              key={i}
+              onClick={() => handleSend(q)}
+              className="flex-shrink-0 text-[12px] font-black text-zinc-600 dark:text-zinc-400 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-violet-300 dark:hover:border-violet-800 hover:text-violet-700 dark:hover:text-violet-400 hover:bg-violet-50/30 dark:hover:bg-violet-950/25 px-4 py-2 rounded-full transition-all shadow-sm active:scale-95"
+            >
+              {q}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* ── Pill input bar ── */}
       <div
         onClick={() => { setIsOpen(true); setTimeout(() => inputRef.current?.focus(), 100); }}
-        className={`relative group bg-white/80 backdrop-blur-xl border border-white/60 shadow-2xl shadow-indigo-500/20 rounded-full transition-all duration-300 cursor-text flex items-center px-2 py-2 md:px-3 ${
-          isOpen ? 'ring-2 ring-violet-500/20' : 'hover:scale-105 hover:bg-white'
+        className={`relative group bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-2xl shadow-indigo-500/10 dark:shadow-black/30 rounded-full transition-all duration-300 cursor-text flex items-center px-2 py-2 md:px-3 ${
+          isOpen ? 'ring-2 ring-violet-500/20' : 'hover:scale-105 hover:bg-white dark:hover:bg-zinc-900'
         }`}
       >
         <div
@@ -502,8 +531,8 @@ export const AIChatFloat = () => {
               : isRecording
               ? 'bg-red-500 scale-110 shadow-red-500/50'
               : input.trim()
-              ? 'bg-violet-600 hover:bg-violet-700'
-              : 'bg-black hover:bg-zinc-800'
+              ? 'bg-violet-600 hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600'
+              : 'bg-black hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700'
           }`}
         >
           {isThinking || isTranscribing
@@ -529,20 +558,20 @@ export const AIChatFloat = () => {
             : '¿En qué te ayudo hoy?'
           }
           disabled={isRecording || isTranscribing || isThinking}
-          className="flex-1 bg-transparent border-none outline-none text-sm md:text-base text-zinc-800 placeholder:text-zinc-500 font-medium px-2 md:px-4 h-full min-w-0"
+          className="flex-1 bg-transparent border-none outline-none text-[14px] md:text-[15.5px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 font-bold px-2.5 md:px-4 h-full min-w-0"
           autoComplete="off"
         />
 
         <div className="flex items-center gap-2 pr-2 flex-shrink-0">
-          <div className="hidden md:flex items-center gap-1 text-[10px] text-emerald-500 font-bold">
-            <Database className="w-3 h-3 animate-pulse" />
-            <span>IA Conectada</span>
+          <div className="hidden md:flex items-center gap-1.5 text-[10.5px] text-emerald-500 dark:text-emerald-400 font-black">
+            <Database className="w-3.5 h-3.5 animate-pulse" />
+            <span>IA CONECTADA</span>
           </div>
           <button
             onClick={e => { e.stopPropagation(); setIsOpen(o => !o); }}
-            className="hidden md:flex text-zinc-300 hover:text-zinc-500 transition-colors"
+            className="hidden md:flex text-zinc-350 hover:text-zinc-500 dark:text-zinc-500 dark:hover:text-zinc-400 transition-colors"
           >
-            <ChevronUp className={`w-5 h-5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+            <ChevronUp className={`w-5.5 h-5.5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </div>
