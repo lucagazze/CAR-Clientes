@@ -77,30 +77,34 @@ const fetchCampaigns = async (apiKey: string): Promise<KvCampaign[]> => {
       });
     }
   }
-  return (data.data ?? []).map((c: any) => {
-    const msgIds: string[] = c.relationships?.['campaign-messages']?.data?.map((d: any) => d.id) ?? [];
-    return {
-      id: c.id,
-      name: c.attributes.name,
-      status: c.attributes.status,
-      send_time: c.attributes.send_time,
-      scheduled_at: c.attributes.scheduled_at,
-      created_at: c.attributes.created_at,
-      message: msgIds[0] ? msgMap.get(msgIds[0]) : undefined,
-    };
-  });
+  return (data.data ?? [])
+    .map((c: any) => {
+      const msgIds: string[] = c.relationships?.['campaign-messages']?.data?.map((d: any) => d.id) ?? [];
+      return {
+        id: c.id,
+        name: c.attributes.name,
+        status: c.attributes.status,
+        send_time: c.attributes.send_time,
+        scheduled_at: c.attributes.scheduled_at,
+        created_at: c.attributes.created_at,
+        message: msgIds[0] ? msgMap.get(msgIds[0]) : undefined,
+      };
+    })
+    .filter((c: any) => c.status !== 'Draft' && c.status !== 'Cancelled');
 };
 
 const fetchFlows = async (apiKey: string): Promise<KvFlow[]> => {
   const data = await kFetch(`flows?sort=-updated`, apiKey);
-  return (data.data ?? []).map((f: any) => ({
-    id: f.id,
-    name: f.attributes.name,
-    status: f.attributes.status,
-    trigger_type: f.attributes.trigger_type,
-    created: f.attributes.created,
-    updated: f.attributes.updated,
-  }));
+  return (data.data ?? [])
+    .map((f: any) => ({
+      id: f.id,
+      name: f.attributes.name,
+      status: f.attributes.status,
+      trigger_type: f.attributes.trigger_type,
+      created: f.attributes.created,
+      updated: f.attributes.updated,
+    }))
+    .filter((f: any) => f.status !== 'draft' && f.status !== 'archived');
 };
 
 const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEmail[]> => {
@@ -142,7 +146,7 @@ const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEm
     })
   );
   
-  return results;
+  return results.filter((a: KvFlowEmail) => a.status !== 'draft' && a.status !== 'archived');
 };
 
 const fetchTemplateHtml = async (templateId: string, apiKey: string): Promise<string> => {
@@ -541,7 +545,7 @@ export default function KlaviyoMonitorPage() {
   if (!profile?.is_admin) return null;
 
   const filteredCampaigns = statusFilter === 'All'
-    ? campaigns.filter(c => c.status !== 'Cancelled')
+    ? campaigns
     : campaigns.filter(c => c.status === statusFilter);
 
   const campaignStatuses = ['All', ...Array.from(new Set(campaigns.map(c => c.status)))];
