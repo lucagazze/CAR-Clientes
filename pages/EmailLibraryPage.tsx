@@ -220,7 +220,7 @@ export default function EmailLibraryPage() {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   const renderSubject = (subject: string, name: string) =>
-    name.trim() ? subject.replace(/\{\{\s*first_name\s*\}\}/g, name.trim()) : subject;
+    subject.replace(/\{\{\s*first_name\s*\}\}/g, name.trim() || '(Nombre)');
 
   const markAsSent = useCallback((email: EmailEntry) => {
     const record: SentRecord = { date: new Date().toISOString(), client: email.client };
@@ -625,7 +625,7 @@ export default function EmailLibraryPage() {
                     <div>
                       <span style={{ fontWeight: 700, color: '#444', display: 'inline-block', width: 72 }}>Asunto:</span>
                       <span style={{ color: '#111', fontWeight: previewMode === 'mobile' ? 600 : 400 }}>
-                        {renderSubject(preview.subject || `${preview.client} — ${preview.angle}`, previewName)}
+                        {renderSubject(preview.klaviyo_subject || preview.subject || `${preview.client} — ${preview.angle}`, previewName)}
                       </span>
                     </div>
                     <div><span style={{ fontWeight: 700, color: '#444', display: 'inline-block', width: 72 }}>Vista Previa:</span><span style={{ color: '#888', fontStyle: previewPreheader ? 'normal' : 'italic' }}>{previewPreheader || 'Cargando…'}</span></div>
