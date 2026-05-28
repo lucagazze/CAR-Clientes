@@ -492,6 +492,13 @@ export default function DashboardPage() {
   const { setViewAsProfile } = useViewAs();
   const [selectedMetaGoal, setSelectedMetaGoal] = useState<'purchases' | 'leads' | 'messages'>('purchases');
 
+  const hasTag = (tag: string) => {
+    const tags = (profile as any)?.client_tags;
+    if (!tags || tags.length === 0) return tag === 'tienda_online';
+    return tags.includes(tag);
+  };
+  const isEcommerce = !!(profile as any)?.ecommerce_platform || hasTag('tienda_online');
+
   useEffect(() => {
     const primaryTag = profile?.client_tags?.[0];
     if (primaryTag === 'whatsapp') setSelectedMetaGoal('messages');
@@ -1679,7 +1686,7 @@ export default function DashboardPage() {
                       )
                     }
                   />
-                  <ShopifyMetric
+                  {isEcommerce && <ShopifyMetric
                     icon={DollarSign}
                     label="Ingresos Klaviyo"
                     value={`$ ${currentKlaviyo.attributed?.toLocaleString("es-AR", { maximumFractionDigits: 0 }) || 0}`}
@@ -1702,7 +1709,7 @@ export default function DashboardPage() {
                         expandedMetric === "k-attr" ? null : "k-attr",
                       )
                     }
-                  />
+                  />}
                 </div>
                 {expandedMetric?.startsWith("k-") && (
                   <MetricDetailChart
@@ -1798,90 +1805,61 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-12">
-        <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm">
-          <h2 className="text-[13px] font-bold text-zinc-900 dark:text-zinc-50 mb-8 tracking-tight">
-            Evolución de Ingresos (Últimos 90 días)
-          </h2>
-          {fetching90d ? (
-            <div className="h-[300px] flex items-center justify-center animate-pulse bg-zinc-50 dark:bg-zinc-800/50 rounded-xl" />
-          ) : historical90d.length > 0 ? (
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={historical90d} margin={{ left: -30, right: 0, top: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRev90" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor={PINK}
-                        stopOpacity={0.2}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor={PINK}
-                        stopOpacity={0}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#3f3f46"
-                    opacity={0.1}
-                  />
-                  <XAxis
-                    dataKey="date"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "#71717a" }}
-                    minTickGap={30}
-                    tickFormatter={(val) => {
-                      const d = new Date(val);
-                      return `${d.getDate()}/${d.getMonth() + 1}`;
-                    }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "#71717a" }}
-                    tickFormatter={(val) =>
-                      `$${val >= 1000 ? (val / 1000).toFixed(0) + "k" : val}`
-                    }
-                    width={35}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#18181b",
-                      border: "1px solid #27272a",
-                      borderRadius: "8px",
-                    }}
-                    itemStyle={{ color: "#fff", fontSize: "12px" }}
-                    labelStyle={{ color: "#a1a1aa", fontSize: "10px" }}
-                    formatter={(v: any) => [
-                      `$ ${Number(v).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`,
-                      "Ingresos",
-                    ]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke={PINK}
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorRev90)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-[300px] flex flex-col items-center justify-center text-zinc-400 gap-4">
-              <BarChart2 className="w-10 h-10 opacity-20" />
-              <p className="text-[13px] font-medium opacity-60">
-                Sin datos históricos
-              </p>
-            </div>
-          )}
-        </div>
-        <div className="bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm">
+        {isEcommerce && (
+          <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm">
+            <h2 className="text-[13px] font-bold text-zinc-900 dark:text-zinc-50 mb-8 tracking-tight">
+              Evolución de Ingresos (Últimos 90 días)
+            </h2>
+            {fetching90d ? (
+              <div className="h-[300px] flex items-center justify-center animate-pulse bg-zinc-50 dark:bg-zinc-800/50 rounded-xl" />
+            ) : historical90d.length > 0 ? (
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={historical90d} margin={{ left: -30, right: 0, top: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRev90" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={PINK} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={PINK} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={0.1} />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "#71717a" }}
+                      minTickGap={30}
+                      tickFormatter={(val) => {
+                        const d = new Date(val);
+                        return `${d.getDate()}/${d.getMonth() + 1}`;
+                      }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "#71717a" }}
+                      tickFormatter={(val) => `$${val >= 1000 ? (val / 1000).toFixed(0) + "k" : val}`}
+                      width={35}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px" }}
+                      itemStyle={{ color: "#fff", fontSize: "12px" }}
+                      labelStyle={{ color: "#a1a1aa", fontSize: "10px" }}
+                      formatter={(v: any) => [`$ ${Number(v).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, "Ingresos"]}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke={PINK} strokeWidth={2} fillOpacity={1} fill="url(#colorRev90)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[300px] flex flex-col items-center justify-center text-zinc-400 gap-4">
+                <BarChart2 className="w-10 h-10 opacity-20" />
+                <p className="text-[13px] font-medium opacity-60">Sin datos históricos</p>
+              </div>
+            )}
+          </div>
+        )}
+        <div className={`${isEcommerce ? '' : 'lg:col-span-3'} bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm`}>
           <h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-8">
             Accesos Directos
           </h2>
