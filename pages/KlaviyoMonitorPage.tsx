@@ -90,7 +90,7 @@ const fetchCampaigns = async (apiKey: string): Promise<KvCampaign[]> => {
         message: msgIds[0] ? msgMap.get(msgIds[0]) : undefined,
       };
     })
-    .filter((c: any) => c.status !== 'Draft' && c.status !== 'Cancelled');
+    .filter((c: any) => c.status !== 'Cancelled');
 };
 
 const fetchFlows = async (apiKey: string): Promise<KvFlow[]> => {
@@ -104,7 +104,7 @@ const fetchFlows = async (apiKey: string): Promise<KvFlow[]> => {
       created: f.attributes.created,
       updated: f.attributes.updated,
     }))
-    .filter((f: any) => f.status !== 'draft' && f.status !== 'archived');
+    .filter((f: any) => f.status !== 'archived');
 };
 
 const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEmail[]> => {
@@ -146,7 +146,7 @@ const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEm
     })
   );
   
-  return results.filter((a: KvFlowEmail) => a.status !== 'draft' && a.status !== 'archived');
+  return results.filter((a: KvFlowEmail) => a.status !== 'archived');
 };
 
 const fetchTemplateHtml = async (templateId: string, apiKey: string): Promise<string> => {
@@ -194,13 +194,14 @@ const sanitizeHtmlTemplates = (rawHtml: string): string => {
   sanitized = sanitized.replace(/(src|href|background|poster|srcset)=["']([^"']*(?:\{%|\{\{)[^"']*)["']/gi, (match, attr, value) => {
     const lowerAttr = attr.toLowerCase();
     if (lowerAttr === 'src' || lowerAttr === 'srcset') {
-      return `${attr}="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/>"`;
+      // Use a clean and professional image placeholder SVG instead of a 1x1 transparent image
+      return `${attr}="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100%' height='100%' fill='%23f4f4f5'/><g fill='%23d4d4d8'><path d='M15 80 L40 45 L65 70 L80 55 L95 80 Z'/><circle cx='30' cy='30' r='6'/></g></svg>"`;
     }
     return `${attr}=""`;
   });
 
   // 2. Replace CSS url(...) containing {% or {{
-  sanitized = sanitized.replace(/url\([^)]*(?:\{%|\{\{)[^)]*\)/gi, "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\"/>')");
+  sanitized = sanitized.replace(/url\([^)]*(?:\{%|\{\{)[^)]*\)/gi, "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><rect width=\"100%\" height=\"100%\" fill=\"%23f4f4f5\"/><g fill=\"%23d4d4d8\"><path d=\"M15 80 L40 45 L65 70 L80 55 L95 80 Z\"/><circle cx=\"30\" cy=\"30\" r=\"6\"/></g></svg>')");
 
   return sanitized;
 };
@@ -497,7 +498,10 @@ export default function KlaviyoMonitorPage() {
 
   // Load clients
   useEffect(() => {
-    db.clients.getAllWithIntegrations().then(setClients);
+    db.clients.getAllWithIntegrations().then(allClients => {
+      const connected = allClients.filter(c => c.klaviyo_api_key && c.klaviyo_api_key.trim());
+      setClients(connected);
+    });
   }, []);
 
   const selectedClient = clients.find(c => c.id === selectedId);
