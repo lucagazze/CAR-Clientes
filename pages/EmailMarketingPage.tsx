@@ -715,7 +715,7 @@ function CalendarView({
 
         <div className="grid grid-cols-7 gap-1 text-center">
           {days.map((day, idx) => {
-            if (!day) return <div key={`empty-${idx}`} className="min-h-[85px] md:min-h-[105px] border border-dashed border-zinc-100 dark:border-white/[0.03] rounded-2xl opacity-20" />;
+            if (!day) return <div key={`empty-${idx}`} className="min-h-[110px] md:min-h-[130px] border border-dashed border-zinc-100 dark:border-white/[0.03] rounded-2xl opacity-20" />;
             const dayCamp = getCampaignsForDate(day);
             const isToday = day.toLocaleDateString('sv-SE') === todayStr;
             const isSelected = day.toLocaleDateString('sv-SE') === selectedDateStr;
@@ -724,7 +724,7 @@ function CalendarView({
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDateStr(day.toLocaleDateString('sv-SE'))}
-                className={`relative rounded-2xl flex flex-col items-stretch justify-start min-h-[85px] md:min-h-[105px] p-2 transition-all hover:bg-zinc-50 dark:hover:bg-white/5 border ${
+                className={`relative rounded-2xl flex flex-col items-stretch justify-start min-h-[110px] md:min-h-[130px] p-2 transition-all hover:bg-zinc-50 dark:hover:bg-white/5 border ${
                   isSelected 
                     ? 'bg-violet-600/10 border-violet-500/30 dark:border-violet-500/20' 
                     : 'border-zinc-100 dark:border-white/5'
@@ -760,7 +760,7 @@ function CalendarView({
                         key={c.id}
                         onClick={handleBadgeClick}
                         onDoubleClick={handleBadgeClick}
-                        className={`text-[9px] font-bold truncate rounded px-1 py-0.5 cursor-pointer transition-all active:scale-95 ${colorCls}`}
+                        className={`text-[10px] font-bold truncate rounded px-1.5 py-0.5 cursor-pointer transition-all active:scale-95 ${colorCls}`}
                         title={`${c.name} (Clic para ver)`}
                       >
                         {c.name}
@@ -1141,7 +1141,7 @@ export default function EmailMarketingPage() {
     const campaignStatuses = ['All', ...Array.from(new Set(campaigns.map(c => c.status)))];
 
     return (
-      <div className={`${tab === 'calendar' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500`}>
+      <div className="max-w-6xl mx-auto space-y-6 flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>

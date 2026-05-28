@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Menu, Sun, Moon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
+import { AIChatFloat } from '../AIChatFloat';
 
 // Pages
 import DashboardPage from '../../pages/DashboardPage';
@@ -85,6 +86,7 @@ export const MainLayout = () => {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
+        <AIChatFloat />
       </main>
     </div>
   );
