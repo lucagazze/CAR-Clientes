@@ -3,24 +3,28 @@
     "file": "TSF_Oferta_ImageOnly_v1.html",
     "client": "TSF",
     "angle": "Oferta",
-    "desc": "ImageOnly v1"
+    "desc": "ImageOnly v1",
+    "subject": "Summer Stock. All In."
   },
   {
     "file": "TSF_Oferta_ProductGrid_v1.html",
     "client": "TSF",
     "angle": "Oferta",
-    "desc": "ProductGrid v1"
+    "desc": "ProductGrid v1",
+    "subject": "Summer Stock — All In"
   },
   {
     "file": "TSF_Oferta_ProductGrid_v2.html",
     "client": "TSF",
     "angle": "Oferta",
-    "desc": "ProductGrid v2"
+    "desc": "ProductGrid v2",
+    "subject": "Summer Stock. All In."
   },
   {
     "file": "TSF_Producto_Chestnut_v1.html",
     "client": "TSF",
     "angle": "Producto",
-    "desc": "Chestnut v1"
+    "desc": "Chestnut v1",
+    "subject": "Chestnut Skirting Leather — In Stock Now"
   }
 ]
