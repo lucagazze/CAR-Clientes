@@ -167,7 +167,7 @@ const STATUS_DOT: Record<string, string> = {
   scheduled: 'bg-violet-500',
 };
 
-// ── Assign Modal (single email — manage existing + add) ───────────────────────
+// ── Assign Modal (single email — multi-select checklist) ─────────────────────
 function AssignModal({ email, allAssignments, clients, onClose, onRefresh }: {
   email: EmailEntry;
   allAssignments: EmailAssignment[];
@@ -175,44 +175,60 @@ function AssignModal({ email, allAssignments, clients, onClose, onRefresh }: {
   onClose: () => void;
   onRefresh: () => void;
 }) {
-  const existing = allAssignments.filter(a => a.email_file === email.file);
-  const [newClient, setNewClient]     = useState('');
+  const existing   = allAssignments.filter(a => a.email_file === email.file);
+  const existingIds = new Set(existing.map(a => a.client_id));
+  const available  = clients.filter(c => !existingIds.has(c.id));
+  const clientName = (id: string) => clients.find(c => c.id === id)?.business_name ?? id;
+
+  const [newSelected, setNewSelected] = useState<Set<string>>(new Set());
   const [newStatus, setNewStatus]     = useState<'active' | 'inactive' | 'scheduled'>('active');
   const [newApproved, setNewApproved] = useState(true);
   const [saving, setSaving]           = useState(false);
-  const assignedIds = new Set(existing.map(a => a.client_id));
-  const available = clients.filter(c => !assignedIds.has(c.id));
-  const clientName = (id: string) => clients.find(c => c.id === id)?.business_name ?? id;
 
-  const handleAdd = async () => {
-    if (!newClient) return;
+  const toggleNew = (id: string) => setNewSelected(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+
+  const handleSave = async () => {
+    if (newSelected.size === 0) return;
     setSaving(true);
     try {
-      await db.emailAssignments.upsert({ email_file: email.file, client_id: newClient, status: newStatus, approved: newApproved });
-      onRefresh(); setNewClient('');
+      await Promise.all([...newSelected].map(id =>
+        db.emailAssignments.upsert({ email_file: email.file, client_id: id, status: newStatus, approved: newApproved })
+      ));
+      setNewSelected(new Set());
+      onRefresh();
     } catch (e) { console.error(e); }
     setSaving(false);
   };
 
   return (
     <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-100 dark:border-white/5">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-100 dark:border-white/5 flex-shrink-0">
           <div>
             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Asignaciones</p>
             <p className="text-[14px] font-bold text-zinc-900 dark:text-white truncate max-w-[300px]">{email.subject || email.file}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-        <div className="px-5 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+          {/* Already assigned */}
           {existing.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Asignados</p>
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Asignados ({existing.length})</p>
               {existing.map(a => (
                 <div key={a.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.07]">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[a.status]}`} />
                   <span className="flex-1 text-[12px] font-bold text-zinc-800 dark:text-zinc-200 truncate">{clientName(a.client_id)}</span>
-                  <select value={a.status} onChange={e => { db.emailAssignments.upsert({ ...a, status: e.target.value as any }).then(onRefresh); }}
+                  <select value={a.status} onChange={e => db.emailAssignments.upsert({ ...a, status: e.target.value as any }).then(onRefresh)}
                     className="text-[10px] font-bold bg-zinc-100 dark:bg-white/5 border-0 rounded-lg px-2 py-1 text-zinc-600 dark:text-zinc-400 focus:outline-none cursor-pointer" style={{ colorScheme: 'light' }}>
                     {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value} style={{ color: '#111', background: '#fff' }}>{s.label}</option>)}
                   </select>
@@ -220,44 +236,95 @@ function AssignModal({ email, allAssignments, clients, onClose, onRefresh }: {
                     className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg transition-all ${a.approved ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-100 dark:bg-white/5 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-500'}`}>
                     {a.approved ? 'Visible' : 'Oculto'}
                   </button>
-                  <button onClick={() => db.emailAssignments.delete(a.id).then(onRefresh)} className="p-1 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"><X className="w-3 h-3" /></button>
+                  <button onClick={() => db.emailAssignments.delete(a.id).then(onRefresh)} className="p-1 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all">
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
               ))}
             </div>
           )}
+
+          {/* Add clients — checklist */}
           {available.length > 0 && (
-            <div className="space-y-2.5 pt-1">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Agregar cliente</p>
-              <select value={newClient} onChange={e => setNewClient(e.target.value)}
-                className="w-full text-[12px] font-semibold bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2.5 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                style={{ colorScheme: 'light' }}>
-                <option value="" style={{ color: '#111', background: '#fff' }}>Seleccionar cliente…</option>
-                {available.map(c => <option key={c.id} value={c.id} style={{ color: '#111', background: '#fff' }}>{c.business_name}</option>)}
-              </select>
-              <div className="flex gap-2">
-                {STATUS_OPTIONS.map(s => (
-                  <button key={s.value} onClick={() => setNewStatus(s.value)}
-                    className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${newStatus === s.value ? 'border-violet-500 bg-violet-500/10 text-violet-600 dark:text-violet-400' : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:border-zinc-300 dark:hover:border-white/20'}`}>
-                    {s.label}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Agregar clientes</p>
+                {available.length > 1 && (
+                  <button
+                    onClick={() => newSelected.size === available.length ? setNewSelected(new Set()) : setNewSelected(new Set(available.map(c => c.id)))}
+                    className="text-[10px] font-bold text-violet-500 hover:text-violet-400 transition-colors"
+                  >
+                    {newSelected.size === available.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                {available.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => toggleNew(c.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left ${
+                      newSelected.has(c.id)
+                        ? 'border-violet-500 bg-violet-500/10'
+                        : 'border-zinc-200 dark:border-white/[0.07] bg-zinc-50 dark:bg-white/[0.03] hover:border-zinc-300 dark:hover:border-white/15'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                      newSelected.has(c.id) ? 'bg-violet-500 border-violet-500' : 'bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600'
+                    }`}>
+                      {newSelected.has(c.id) && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <span className="text-[13px] font-bold text-zinc-800 dark:text-zinc-200">{c.business_name}</span>
                   </button>
                 ))}
               </div>
-              <div className="flex items-center justify-between">
-                <button onClick={() => setNewApproved(p => !p)} className="flex items-center gap-2.5">
-                  <div className={`w-9 h-5 rounded-full transition-all relative ${newApproved ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${newApproved ? 'left-4' : 'left-0.5'}`} />
+
+              {/* Status + visible — only when something is selected */}
+              {newSelected.size > 0 && (
+                <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-white/5">
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pt-1">Estado para los seleccionados</p>
+                  <div className="flex gap-2">
+                    {STATUS_OPTIONS.map(s => (
+                      <button key={s.value} onClick={() => setNewStatus(s.value)}
+                        className={`flex-1 py-2 rounded-xl text-[11px] font-bold border transition-all ${
+                          newStatus === s.value
+                            ? 'border-violet-500 bg-violet-500/10 text-violet-600 dark:text-violet-400'
+                            : 'border-zinc-200 dark:border-white/10 text-zinc-500 hover:border-zinc-300 dark:hover:border-white/20'
+                        }`}>
+                        {s.label}
+                      </button>
+                    ))}
                   </div>
-                  <span className="text-[12px] font-semibold text-zinc-700 dark:text-zinc-300">Visible para el cliente</span>
-                </button>
-                <button onClick={handleAdd} disabled={!newClient || saving}
-                  className="px-4 py-2 rounded-xl text-[12px] font-bold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                  {saving ? '…' : 'Agregar'}
-                </button>
-              </div>
+                  <button onClick={() => setNewApproved(p => !p)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-zinc-200 dark:border-white/10 hover:border-violet-500/40 transition-all">
+                    <div className={`w-9 h-5 rounded-full transition-all relative flex-shrink-0 ${newApproved ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${newApproved ? 'left-4' : 'left-0.5'}`} />
+                    </div>
+                    <span className="text-[12px] font-semibold text-zinc-700 dark:text-zinc-300">Visible para el cliente</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
-          {existing.length === 0 && available.length === 0 && <p className="text-[12px] text-zinc-400 text-center py-4">Todos los clientes están asignados.</p>}
+
+          {existing.length === 0 && available.length === 0 && (
+            <p className="text-[12px] text-zinc-400 text-center py-4">Todos los clientes ya están asignados.</p>
+          )}
         </div>
+
+        {/* Footer CTA */}
+        {newSelected.size > 0 && (
+          <div className="flex-shrink-0 px-5 pb-5 pt-3 border-t border-zinc-100 dark:border-white/5">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full py-3 rounded-xl text-[13px] font-black bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-40 transition-all"
+            >
+              {saving ? 'Guardando…' : `Asignar a ${newSelected.size} cliente${newSelected.size !== 1 ? 's' : ''}`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -818,20 +885,24 @@ export default function EmailLibraryPage() {
                     <p className="text-[11px] font-bold text-zinc-800 dark:text-zinc-100 truncate leading-tight" title={email.subject}>
                       {email.subject || `${email.angle} ${email.desc}`}
                     </p>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <div className="mt-1.5">
                       <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full text-white ${ANGLE_COLORS[email.angle] ?? 'bg-zinc-500'}`}>
                         {email.angle}
                       </span>
-                      {assignments.filter(a => a.email_file === email.file).map(a => (
-                        <span key={a.id} className="flex items-center gap-1">
-                          <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[a.status]}`} />
-                          <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
-                            {allClients.find(c => c.id === a.client_id)?.business_name ?? '?'}
-                            {a.approved && <span className="text-emerald-500"> ✓</span>}
-                          </span>
-                        </span>
-                      ))}
                     </div>
+                    {assignments.filter(a => a.email_file === email.file).length > 0 && (
+                      <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1.5">
+                        {assignments.filter(a => a.email_file === email.file).map(a => (
+                          <span key={a.id} className="flex items-center gap-1">
+                            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[a.status]}`} />
+                            <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
+                              {allClients.find(c => c.id === a.client_id)?.business_name ?? '?'}
+                              {a.approved && <span className="text-emerald-500"> ✓</span>}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
