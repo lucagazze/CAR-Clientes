@@ -396,12 +396,49 @@ export default function EmailLibraryPage() {
   const [assignModal, setAssignModal]   = useState<EmailEntry | null>(null);
   const [bulkAssign, setBulkAssign]     = useState(false);
   const [justAssigned, setJustAssigned] = useState<Set<string>>(new Set());
-  const dragIdx = useRef<number | null>(null);
+  const [rubberRect, setRubberRect]     = useState<{x1:number;y1:number;x2:number;y2:number}|null>(null);
+  const dragIdx        = useRef<number | null>(null);
+  const lastClickedIdx = useRef<number>(-1);
+  const cardEls        = useRef<Map<string, HTMLDivElement>>(new Map());
+  const rbOrigin       = useRef<{x:number;y:number}|null>(null);
+  const rbDragging     = useRef(false);
+  const rbCurrent      = useRef<{x1:number;y1:number;x2:number;y2:number}|null>(null);
 
   // Admin guard
   useEffect(() => {
     if (profile && !profile.is_admin) navigate('/', { replace: true });
   }, [profile, navigate]);
+
+  // Rubber band selection (global mouse listeners)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!rbOrigin.current) return;
+      const dx = e.clientX - rbOrigin.current.x, dy = e.clientY - rbOrigin.current.y;
+      if (!rbDragging.current && Math.hypot(dx, dy) < 6) return;
+      rbDragging.current = true;
+      const r = { x1: rbOrigin.current.x, y1: rbOrigin.current.y, x2: e.clientX, y2: e.clientY };
+      rbCurrent.current = r;
+      setRubberRect({ ...r });
+      setSelectMode(true);
+    };
+    const onUp = () => {
+      if (rbDragging.current && rbCurrent.current) {
+        const { x1, y1, x2, y2 } = rbCurrent.current;
+        const L = Math.min(x1, x2), T = Math.min(y1, y2), R = Math.max(x1, x2), B = Math.max(y1, y2);
+        const toAdd = new Set<string>();
+        cardEls.current.forEach((el, file) => {
+          const r = el.getBoundingClientRect();
+          if (r.left < R && r.right > L && r.top < B && r.bottom > T) toAdd.add(file);
+        });
+        if (toAdd.size > 0) { setSelected(prev => new Set([...prev, ...toAdd])); setSelectMode(true); }
+      }
+      rbOrigin.current = null; rbDragging.current = false; rbCurrent.current = null;
+      setRubberRect(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
 
   // Load assignments + clients
   const loadAssignments = () => db.emailAssignments.getAll().then(setAssignments);
@@ -633,16 +670,39 @@ export default function EmailLibraryPage() {
               return (
                 <div
                   key={email.file}
+                  ref={el => { if (el) cardEls.current.set(email.file, el); else cardEls.current.delete(email.file); }}
                   draggable={!selectMode}
                   onDragStart={() => onDragStart(idx)}
                   onDragOver={e => onDragOver(e, idx)}
                   onDrop={() => onDrop(idx)}
                   onDragLeave={() => setDragOver(null)}
                   onDragEnd={() => setDragOver(null)}
-                  onClick={() => {
+                  onMouseDown={e => {
+                    if (e.button !== 0) return;
+                    if (selectMode || e.ctrlKey || e.metaKey) {
+                      rbOrigin.current = { x: e.clientX, y: e.clientY };
+                    }
+                  }}
+                  onClick={e => {
                     if (ctxMenu) { setCtxMenu(null); return; }
-                    if (selectMode) { toggleSelect(email.file); return; }
+                    if (rbDragging.current) return; // was a drag, not a click
+                    if (e.ctrlKey || e.metaKey) {
+                      setSelectMode(true);
+                      toggleSelect(email.file);
+                      lastClickedIdx.current = idx;
+                      return;
+                    }
+                    if (e.shiftKey && lastClickedIdx.current >= 0) {
+                      const s = Math.min(lastClickedIdx.current, idx);
+                      const end = Math.max(lastClickedIdx.current, idx);
+                      const range = filtered.slice(s, end + 1).map(e => e.file);
+                      setSelected(prev => new Set([...prev, ...range]));
+                      setSelectMode(true);
+                      return;
+                    }
+                    if (selectMode) { toggleSelect(email.file); lastClickedIdx.current = idx; return; }
                     setPreview(email); setPreviewMode('desktop');
+                    lastClickedIdx.current = idx;
                   }}
                   onContextMenu={e => {
                     e.preventDefault();
@@ -932,6 +992,19 @@ export default function EmailLibraryPage() {
           </div>
         )}
       </div>
+
+      {/* Rubber band overlay */}
+      {rubberRect && (
+        <div
+          className="pointer-events-none fixed z-[60] border border-violet-500 bg-violet-500/10 rounded-sm"
+          style={{
+            left:   Math.min(rubberRect.x1, rubberRect.x2),
+            top:    Math.min(rubberRect.y1, rubberRect.y2),
+            width:  Math.abs(rubberRect.x2 - rubberRect.x1),
+            height: Math.abs(rubberRect.y2 - rubberRect.y1),
+          }}
+        />
+      )}
 
       {/* Context menu */}
       {ctxMenu && (
