@@ -136,6 +136,7 @@ function ContextMenu({ ctx, onCopyHtml, onShare, onPreview, onDelete, onClose }:
       {item(<ExternalLink className="w-3.5 h-3.5" />, 'Ver preview', () => onPreview(ctx.email))}
       {item(<Code2 className="w-3.5 h-3.5" />, 'Copiar HTML', () => onCopyHtml(ctx.email))}
       {item(<Share2 className="w-3.5 h-3.5" />, 'Copiar link', () => onShare(ctx.email))}
+      {item(<FileDown className="w-3.5 h-3.5" />, 'Descargar PDF', () => window.open(`/print.html?email=${encodeURIComponent(ctx.email.file)}`, '_blank'))}
       <div className="my-1 border-t border-zinc-100 dark:border-white/5" />
       {item(<Trash2 className="w-3.5 h-3.5" />, 'Eliminar', () => onDelete(ctx.email), true)}
     </div>
