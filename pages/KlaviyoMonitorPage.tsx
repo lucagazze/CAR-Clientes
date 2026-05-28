@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  RefreshCw, Mail, Workflow, ChevronDown, ChevronRight,
+  RefreshCw, Mail, Workflow, ChevronDown, ChevronRight, ChevronLeft,
   Eye, Key, ExternalLink, AlertCircle, X, Monitor, Smartphone,
   Clock, Send, CalendarClock, Archive, Zap, Check, Copy, Trash2, Undo2,
 } from 'lucide-react';
@@ -203,6 +203,29 @@ const revertCampaignAPI = async (campaignId: string, apiKey: string): Promise<vo
   });
 };
 
+const scheduleCampaignAPI = async (messageId: string, dateTime: string, apiKey: string): Promise<void> => {
+  await kRequest('campaign-message-schedule', apiKey, 'POST', {
+    data: {
+      type: 'campaign-message-schedule',
+      attributes: {
+        strategy: {
+          static: {
+            datetime: dateTime,
+          },
+        },
+      },
+      relationships: {
+        'campaign-message': {
+          data: {
+            type: 'campaign-message',
+            id: messageId,
+          },
+        },
+      },
+    },
+  });
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmtDate = (iso?: string) => {
@@ -385,12 +408,14 @@ function CampaignCard({
   onDelete,
   onCancel,
   onRevert,
+  onSchedule,
 }: {
   c: KvCampaign;
   onPreview: () => void;
   onDelete?: (id: string) => Promise<void>;
   onCancel?: (id: string) => Promise<void>;
   onRevert?: (id: string) => Promise<void>;
+  onSchedule?: (id: string, msgId: string) => void;
 }) {
   const st = CAMP_STATUS[c.status] ?? { label: c.status, cls: 'bg-zinc-100 dark:bg-white/10 text-zinc-500' };
   const dateLabel = c.status === 'Sent' ? `Enviado el: ${fmtDate(c.send_time)}` :
@@ -417,8 +442,19 @@ function CampaignCard({
     }
   };
 
+  const handleCardClick = () => {
+    if (c.message?.template_id) {
+      onPreview();
+    }
+  };
+
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.07] rounded-2xl px-5 py-4 flex items-start gap-4 hover:border-zinc-300 dark:hover:border-white/15 transition-all">
+    <div
+      onClick={handleCardClick}
+      className={`bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.07] rounded-2xl px-5 py-4 flex items-start gap-4 hover:border-zinc-300 dark:hover:border-white/15 transition-all ${
+        c.message?.template_id ? 'cursor-pointer hover:bg-zinc-50/50 dark:hover:bg-white/[0.01]' : ''
+      }`}
+    >
       <div className="w-9 h-9 rounded-xl bg-zinc-100 dark:bg-white/5 flex items-center justify-center flex-shrink-0 mt-0.5">
         <Mail className="w-4 h-4 text-zinc-400" />
       </div>
@@ -443,7 +479,7 @@ function CampaignCard({
         </div>
         {error && (
           <div className="mt-2 text-[11px] text-red-500 font-medium flex items-center gap-1 animate-in fade-in slide-in-from-top-1 duration-200">
-            <AlertCircle className="w-3 h-3 flex-shrink-0" />
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
@@ -451,27 +487,44 @@ function CampaignCard({
       <div className="flex items-center gap-2 flex-shrink-0">
         {c.message?.template_id && (
           <button
-            onClick={onPreview}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-violet-600 hover:text-white transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview();
+            }}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-violet-600 hover:text-white transition-all"
           >
-            <Eye className="w-3.5 h-3.5" />Ver
+            <Eye className="w-3 h-3" />Ver
+          </button>
+        )}
+
+        {c.status === 'Draft' && c.message?.id && onSchedule && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSchedule(c.id, c.message!.id);
+            }}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-violet-600 hover:bg-violet-700 text-white transition-all"
+          >
+            <CalendarClock className="w-3 h-3" />
+            Programar
           </button>
         )}
 
         {c.status === 'Draft' && onDelete && (
           <button
             disabled={loadingAction !== null}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (window.confirm(`¿Estás seguro de que querés eliminar la campaña "${c.name}" permanentemente de Klaviyo?`)) {
                 handleAction('delete', onDelete);
               }
             }}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-red-500/10 hover:bg-red-500 text-red-600 hover:text-white disabled:opacity-40 transition-all border border-red-500/10"
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-500/10 hover:bg-red-500 text-red-600 hover:text-white disabled:opacity-40 transition-all border border-red-500/10"
           >
             {loadingAction === 'delete' ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <RefreshCw className="w-3 h-3 animate-spin" />
             ) : (
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3 h-3" />
             )}
             Eliminar
           </button>
@@ -480,17 +533,18 @@ function CampaignCard({
         {c.status === 'Scheduled' && onRevert && (
           <button
             disabled={loadingAction !== null}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (window.confirm(`¿Estás seguro de que querés volver la campaña "${c.name}" a borrador?`)) {
                 handleAction('revert', onRevert);
               }
             }}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/10 disabled:opacity-40 transition-all border border-zinc-200 dark:border-white/5"
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/10 disabled:opacity-40 transition-all border border-zinc-200 dark:border-white/5"
           >
             {loadingAction === 'revert' ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <RefreshCw className="w-3 h-3 animate-spin" />
             ) : (
-              <Undo2 className="w-3.5 h-3.5" />
+              <Undo2 className="w-3 h-3" />
             )}
             Borrador
           </button>
@@ -499,17 +553,18 @@ function CampaignCard({
         {(c.status === 'Scheduled' || c.status === 'Sending') && onCancel && (
           <button
             disabled={loadingAction !== null}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (window.confirm(`¿Estás seguro de que querés cancelar el envío de la campaña "${c.name}"?`)) {
                 handleAction('cancel', onCancel);
               }
             }}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-red-500/10 hover:bg-red-500 text-red-600 hover:text-white disabled:opacity-40 transition-all border border-red-500/10"
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-500/10 hover:bg-red-500 text-red-600 hover:text-white disabled:opacity-40 transition-all border border-red-500/10"
           >
             {loadingAction === 'cancel' ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <RefreshCw className="w-3 h-3 animate-spin" />
             ) : (
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3 h-3" />
             )}
             Cancelar
           </button>
@@ -614,6 +669,351 @@ function FlowRow({ f, apiKey, onPreview }: {
   );
 }
 
+// ─── Schedule Modal ────────────────────────────────────────────────────────────
+
+function ScheduleModal({
+  campaignName,
+  onClose,
+  onConfirm,
+}: {
+  campaignName: string;
+  onClose: () => void;
+  onConfirm: (dateTime: string) => Promise<void>;
+}) {
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Get current local date in YYYY-MM-DD format for min date restriction
+  const todayStr = new Date().toLocaleDateString('sv-SE'); // returns YYYY-MM-DD in local time
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!date || !time) return;
+    setLoading(true);
+    setError('');
+    try {
+      // Merge date and time
+      const localDateTime = new Date(`${date}T${time}`);
+      if (isNaN(localDateTime.getTime())) {
+        throw new Error('Fecha u hora inválida');
+      }
+      if (localDateTime.getTime() <= Date.now()) {
+        throw new Error('La fecha y hora deben ser en el futuro');
+      }
+      await onConfirm(localDateTime.toISOString());
+      onClose();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Error al programar campaña');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="absolute inset-0 cursor-default" onClick={onClose} />
+      <div className="relative z-10 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between px-5 py-4 bg-zinc-950 border-b border-white/10">
+          <h3 className="text-sm font-bold text-white">Programar Campaña</h3>
+          <button onClick={onClose} className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-all">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Campaña</p>
+            <p className="text-xs font-bold text-white mt-1 truncate">{campaignName}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Fecha</label>
+              <input
+                type="date"
+                required
+                min={todayStr}
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                className="w-full text-xs font-semibold bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Hora</label>
+              <input
+                type="time"
+                required
+                value={time}
+                onChange={e => setTime(e.target.value)}
+                className="w-full text-xs font-semibold bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+          {error && (
+            <div className="text-xs text-red-400 flex items-start gap-1.5 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !date || !time}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-40 transition-all flex items-center gap-1.5"
+            >
+              {loading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+              {loading ? 'Programando...' : 'Confirmar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Calendar View Component ──────────────────────────────────────────────────
+
+function CalendarView({
+  campaigns,
+  onPreview,
+  onCancel,
+  onRevert,
+}: {
+  campaigns: KvCampaign[];
+  onPreview: (templateId: string, title: string, subject?: string) => void;
+  onCancel?: (id: string) => Promise<void>;
+  onRevert?: (id: string) => Promise<void>;
+}) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+
+  const prevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+  const nextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const firstDayIndex = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+
+  const days = [];
+  for (let i = 0; i < firstDayIndex; i++) {
+    days.push(null);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), d));
+  }
+
+  const getCampaignsForDate = (date: Date) => {
+    const dStr = date.toLocaleDateString('sv-SE');
+    return campaigns.filter(c => {
+      const dateVal = c.status === 'Scheduled' ? c.scheduled_at : c.send_time;
+      if (!dateVal) return false;
+      return new Date(dateVal).toLocaleDateString('sv-SE') === dStr;
+    });
+  };
+
+  const monthYearLabel = currentDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+
+  const selectedDateCampaigns = selectedDateStr 
+    ? campaigns.filter(c => {
+        const dateVal = c.status === 'Scheduled' ? c.scheduled_at : c.send_time;
+        if (!dateVal) return false;
+        return new Date(dateVal).toLocaleDateString('sv-SE') === selectedDateStr;
+      })
+    : [];
+
+  const scheduledCampaigns = campaigns
+    .filter(c => c.status === 'Scheduled')
+    .sort((a, b) => {
+      const aTime = new Date(a.scheduled_at || '').getTime();
+      const bTime = new Date(b.scheduled_at || '').getTime();
+      return aTime - bTime;
+    });
+
+  const todayStr = new Date().toLocaleDateString('sv-SE');
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Calendar Grid (left 2 cols) */}
+      <div className="md:col-span-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.07] rounded-3xl p-5 space-y-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-white capitalize">
+            {monthYearLabel}
+          </h3>
+          <div className="flex gap-1">
+            <button
+              onClick={prevMonth}
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={nextMonth}
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 text-center text-[10px] font-bold text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-white/5 pb-2">
+          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+            <div key={day}>{day}</div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-y-2 text-center">
+          {days.map((day, idx) => {
+            if (!day) return <div key={`empty-${idx}`} />;
+            const dayCamp = getCampaignsForDate(day);
+            const isToday = day.toLocaleDateString('sv-SE') === todayStr;
+            const isSelected = day.toLocaleDateString('sv-SE') === selectedDateStr;
+
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => setSelectedDateStr(day.toLocaleDateString('sv-SE'))}
+                className={`relative py-3 rounded-2xl flex flex-col items-center justify-between min-h-[55px] transition-all hover:bg-zinc-50 dark:hover:bg-white/5 border ${
+                  isSelected 
+                    ? 'bg-violet-600/10 border-violet-500/30 dark:border-violet-500/20' 
+                    : 'border-transparent'
+                }`}
+              >
+                <span className={`text-[12px] font-bold ${
+                  isToday 
+                    ? 'w-5 h-5 flex items-center justify-center bg-violet-600 text-white rounded-full' 
+                    : 'text-zinc-800 dark:text-zinc-200'
+                }`}>
+                  {day.getDate()}
+                </span>
+                
+                <div className="flex gap-0.5 justify-center mt-1">
+                  {dayCamp.map(c => {
+                    const color = c.status === 'Scheduled' 
+                      ? 'bg-violet-500' 
+                      : c.status === 'Sent' 
+                        ? 'bg-emerald-500' 
+                        : 'bg-zinc-400';
+                    return (
+                      <span
+                        key={c.id}
+                        className={`w-1.5 h-1.5 rounded-full ${color}`}
+                        title={`${c.name} (${c.status})`}
+                      />
+                    );
+                  })}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedDateStr && (
+          <div className="border-t border-zinc-100 dark:border-white/5 pt-4 mt-2 space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                Eventos para el {new Date(selectedDateStr + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}
+              </h4>
+              <button
+                onClick={() => setSelectedDateStr(null)}
+                className="text-[10px] font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                Cerrar
+              </button>
+            </div>
+            {selectedDateCampaigns.length === 0 ? (
+              <p className="text-xs text-zinc-400 italic">No hay campañas programadas o enviadas para esta fecha.</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedDateCampaigns.map(c => (
+                  <CampaignCard
+                    key={c.id}
+                    c={c}
+                    onPreview={() => c.message?.template_id && onPreview(c.message.template_id, c.name, c.message.subject)}
+                    onCancel={onCancel}
+                    onRevert={onRevert}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Agenda/Upcoming List (right 1 col) */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.07] rounded-3xl p-5 space-y-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div>
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-white">
+            Próximos Envíos
+          </h3>
+          <p className="text-[11px] text-zinc-400 mt-0.5">
+            Cronograma de campañas programadas
+          </p>
+        </div>
+
+        {scheduledCampaigns.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-zinc-400">
+            <CalendarClock className="w-8 h-8 opacity-20 mb-2" />
+            <p className="text-xs italic text-center">No hay envíos programados actualmente.</p>
+          </div>
+        ) : (
+          <div className="space-y-3 overflow-y-auto max-h-[400px] pr-1">
+            {scheduledCampaigns.map(c => {
+              const diffMs = new Date(c.scheduled_at || '').getTime() - Date.now();
+              const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+              const countdownLabel = diffDays === 1 ? 'Mañana' :
+                diffDays === 0 ? 'Hoy' :
+                diffDays < 0 ? 'Pasado' : `Faltan ${diffDays} días`;
+
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => c.message?.template_id && onPreview(c.message.template_id, c.name, c.message.subject)}
+                  className="group relative p-3.5 bg-zinc-50 dark:bg-white/[0.02] border border-zinc-100 dark:border-white/5 rounded-2xl cursor-pointer hover:border-violet-500/30 dark:hover:border-violet-500/20 transition-all flex flex-col gap-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 line-clamp-1 group-hover:text-violet-500 dark:group-hover:text-violet-400 transition-colors">
+                      {c.name}
+                    </p>
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${
+                      diffDays <= 1 
+                        ? 'bg-red-500/10 text-red-500' 
+                        : 'bg-violet-500/10 text-violet-500'
+                    }`}>
+                      {countdownLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                    <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>{fmtDate(c.scheduled_at)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function KlaviyoMonitorPage() {
@@ -625,7 +1025,8 @@ export default function KlaviyoMonitorPage() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
 
-  const [tab, setTab] = useState<'campaigns' | 'flows'>('campaigns');
+  const [tab, setTab] = useState<'campaigns' | 'flows' | 'calendar'>('campaigns');
+  const [selectedCampaignForSchedule, setSelectedCampaignForSchedule] = useState<{ id: string; name: string; messageId: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState('All');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -693,6 +1094,12 @@ export default function KlaviyoMonitorPage() {
     if (!apiKey) return;
     await revertCampaignAPI(campaignId, apiKey);
     setCampaigns(prev => prev.map(c => c.id === campaignId ? { ...c, status: 'Draft', scheduled_at: undefined, send_time: undefined } : c));
+  }, [apiKey]);
+
+  const handleScheduleCampaign = useCallback(async (campaignId: string, messageId: string, dateTime: string) => {
+    if (!apiKey) return;
+    await scheduleCampaignAPI(messageId, dateTime, apiKey);
+    setCampaigns(prev => prev.map(c => c.id === campaignId ? { ...c, status: 'Scheduled', scheduled_at: dateTime } : c));
   }, [apiKey]);
 
   const saveApiKey = async () => {
@@ -830,18 +1237,22 @@ export default function KlaviyoMonitorPage() {
 
           {/* Tabs */}
           <div className="flex gap-1 p-1 bg-zinc-100 dark:bg-white/5 rounded-2xl w-fit">
-            {(['campaigns', 'flows'] as const).map(t => (
+            {[
+              { id: 'campaigns', label: 'Campañas', count: campaigns.length, icon: <Mail className="w-3.5 h-3.5" /> },
+              { id: 'flows', label: 'Flows', count: flows.length, icon: <Workflow className="w-3.5 h-3.5" /> },
+              { id: 'calendar', label: 'Calendario', count: campaigns.filter(c => c.status === 'Scheduled').length, icon: <CalendarClock className="w-3.5 h-3.5" /> },
+            ].map(t => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={t.id}
+                onClick={() => setTab(t.id as any)}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold transition-all ${
-                  tab === t ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                  tab === t.id ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
                 }`}
               >
-                {t === 'campaigns' ? <Mail className="w-3.5 h-3.5" /> : <Workflow className="w-3.5 h-3.5" />}
-                {t === 'campaigns' ? 'Campañas' : 'Flows'}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${tab === t ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400' : 'bg-zinc-200 dark:bg-white/10 text-zinc-400'}`}>
-                  {t === 'campaigns' ? campaigns.length : flows.length}
+                {t.icon}
+                {t.label}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${tab === t.id ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400' : 'bg-zinc-200 dark:bg-white/10 text-zinc-400'}`}>
+                  {t.count}
                 </span>
               </button>
             ))}
@@ -896,6 +1307,7 @@ export default function KlaviyoMonitorPage() {
                   onDelete={handleDeleteCampaign}
                   onCancel={handleCancelCampaign}
                   onRevert={handleRevertCampaign}
+                  onSchedule={(campId, msgId) => setSelectedCampaignForSchedule({ id: campId, name: c.name, messageId: msgId })}
                 />
               ))}
             </div>
@@ -920,7 +1332,28 @@ export default function KlaviyoMonitorPage() {
               ))}
             </div>
           )}
+
+          {/* Calendar tab */}
+          {!loading && tab === 'calendar' && (
+            <CalendarView
+              campaigns={campaigns}
+              onPreview={(tId, title, subject) => setPreview({ templateId: tId, title, subject })}
+              onCancel={handleCancelCampaign}
+              onRevert={handleRevertCampaign}
+            />
+          )}
         </>
+      )}
+
+      {/* Schedule modal */}
+      {selectedCampaignForSchedule && (
+        <ScheduleModal
+          campaignName={selectedCampaignForSchedule.name}
+          onClose={() => setSelectedCampaignForSchedule(null)}
+          onConfirm={async (dateTime) => {
+            await handleScheduleCampaign(selectedCampaignForSchedule.id, selectedCampaignForSchedule.messageId, dateTime);
+          }}
+        />
       )}
 
       {/* Preview modal */}
