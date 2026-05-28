@@ -504,6 +504,7 @@ export default function EmailLibraryPage() {
   const rbOrigin       = useRef<{x:number;y:number}|null>(null);
   const rbDragging     = useRef(false);
   const rbCurrent      = useRef<{x1:number;y1:number;x2:number;y2:number}|null>(null);
+  const wasDragging    = useRef(false);
 
   // Admin guard
   useEffect(() => {
@@ -532,6 +533,8 @@ export default function EmailLibraryPage() {
           if (r.left < R && r.right > L && r.top < B && r.bottom > T) toAdd.add(file);
         });
         if (toAdd.size > 0) { setSelected(prev => new Set([...prev, ...toAdd])); setSelectMode(true); }
+        wasDragging.current = true;
+        setTimeout(() => { wasDragging.current = false; }, 100);
       }
       rbOrigin.current = null; rbDragging.current = false; rbCurrent.current = null;
       setRubberRect(null);
@@ -788,8 +791,9 @@ export default function EmailLibraryPage() {
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}
             onMouseDown={e => {
               if (e.button !== 0) return;
-              const tag = (e.target as HTMLElement).tagName;
-              if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'A') return;
+              const target = e.target as HTMLElement;
+              if (target.closest('button, input, a, select, [data-drag-handle]')) return;
+              e.preventDefault(); // block native text-selection / image-drag
               rbOrigin.current = { x: e.clientX, y: e.clientY };
             }}
           >
@@ -807,15 +811,13 @@ export default function EmailLibraryPage() {
                 <div
                   key={email.file}
                   ref={el => { if (el) cardEls.current.set(email.file, el); else cardEls.current.delete(email.file); }}
-                  draggable={!selectMode}
-                  onDragStart={() => onDragStart(idx)}
                   onDragOver={e => onDragOver(e, idx)}
                   onDrop={() => onDrop(idx)}
                   onDragLeave={() => setDragOver(null)}
                   onDragEnd={() => setDragOver(null)}
                   onClick={e => {
                     if (ctxMenu) { setCtxMenu(null); return; }
-                    if (rbDragging.current) return; // was a drag, not a click
+                    if (wasDragging.current) return; // was a rubber band drag
                     if (e.ctrlKey || e.metaKey) {
                       setSelectMode(true);
                       toggleSelect(email.file);
@@ -838,9 +840,7 @@ export default function EmailLibraryPage() {
                     e.preventDefault();
                     setCtxMenu({ x: e.clientX, y: e.clientY, email });
                   }}
-                  className={`group relative bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden shadow-sm transition-all select-none w-full ${
-                    selectMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
-                  } ${
+                  className={`group relative bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden shadow-sm transition-all select-none w-full cursor-pointer ${
                     wasAssigned
                       ? 'border-emerald-500 ring-2 ring-emerald-500/40'
                       : isSelected
@@ -861,9 +861,15 @@ export default function EmailLibraryPage() {
                     </div>
                   )}
 
-                  {/* Drag handle */}
+                  {/* Drag handle — only this element is draggable for reordering */}
                   {!selectMode && (
-                    <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-white/80 dark:bg-black/50 backdrop-blur-sm rounded-lg">
+                    <div
+                      data-drag-handle
+                      draggable
+                      onDragStart={e => { e.stopPropagation(); onDragStart(idx); }}
+                      onMouseDown={e => { e.stopPropagation(); rbOrigin.current = null; }}
+                      className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-white/80 dark:bg-black/50 backdrop-blur-sm rounded-lg cursor-grab active:cursor-grabbing"
+                    >
                       <GripVertical className="w-3.5 h-3.5 text-zinc-400" />
                     </div>
                   )}
