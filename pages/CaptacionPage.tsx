@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Download, RefreshCw, Calendar, ChevronDown, ChevronRight,
-  Users, DollarSign, Target, BarChart2, Globe, Smartphone, User, Megaphone, MessageSquare, Layers, Film
+  Users, DollarSign, Target, BarChart2, Globe, Smartphone, User, Megaphone, MessageSquare, Layers, Film, X
 } from 'lucide-react';
 import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
 import KlaviyoLoader from '../components/ui/KlaviyoLoader';
@@ -92,17 +92,11 @@ export default function CaptacionPage() {
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [expandedMetric, setExpandedMetric] = useState<string | null>('spend');
 
-  // Campaign Explorer state
-  const [activeCampaigns, setActiveCampaigns] = useState<any[]>([]);
-  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
-  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
-  const [adsetsByCampaign, setAdsetsByCampaign] = useState<Record<string, any[]>>({});
-  const [loadingAdsets, setLoadingAdsets] = useState<Set<string>>(new Set());
-  const [expandedAdsets, setExpandedAdsets] = useState<Set<string>>(new Set());
-  const [adsByAdset, setAdsByAdset] = useState<Record<string, any[]>>({});
-  const [loadingAds, setLoadingAds] = useState<Set<string>>(new Set());
-  const [adInsightsByAdset, setAdInsightsByAdset] = useState<Record<string, Record<string, any>>>({});
-  const [expandedAd, setExpandedAd] = useState<string | null>(null);
+  // Active Creatives state
+  const [activeAds, setActiveAds] = useState<any[]>([]);
+  const [adInsightsMap, setAdInsightsMap] = useState<Record<string, any>>({});
+  const [loadingAds, setLoadingAds] = useState(false);
+  const [activeImagePreview, setActiveImagePreview] = useState<string | null>(null);
 
   const range = activePreset === 'custom' ? { since: activeSince, until: activeUntil } : presetToRange(activePreset);
   const prevRange = getPrevPeriod(range.since, range.until);
@@ -311,19 +305,30 @@ export default function CaptacionPage() {
 
   useEffect(() => {
     if (!profile?.meta_account_id) return;
-    setLoadingCampaigns(true);
-    setActiveCampaigns([]);
-    setExpandedCampaigns(new Set());
-    setAdsetsByCampaign({});
-    setExpandedAdsets(new Set());
-    setAdsByAdset({});
-    setAdInsightsByAdset({});
-    setExpandedAd(null);
-    metaAds.getCampaigns(profile.meta_account_id)
-      .then((res: any) => setActiveCampaigns((res.data || []).filter((c: any) => c.status === 'ACTIVE')))
-      .catch(() => setActiveCampaigns([]))
-      .finally(() => setLoadingCampaigns(false));
-  }, [profile?.id]);
+    setLoadingAds(true);
+    
+    const accountId = profile.meta_account_id;
+    const adFields = 'ad_id,spend,impressions,reach,inline_link_click_ctr,inline_link_clicks,actions,cost_per_action_type,action_values,purchase_roas';
+    
+    Promise.all([
+      metaAds.getAccountAds(accountId),
+      metaAds.getAdInsightsForAccount(accountId, adFields, range).catch(() => [])
+    ]).then(([adsRes, insightsRes]) => {
+      const active = (adsRes.data || []).filter((ad: any) => ad.status === 'ACTIVE');
+      setActiveAds(active);
+      const byAdId: Record<string, any> = {};
+      (insightsRes || []).forEach((i: any) => {
+        if (i.ad_id) byAdId[i.ad_id] = i;
+      });
+      setAdInsightsMap(byAdId);
+    }).catch(err => {
+      console.error("Error loading active ads:", err);
+      setActiveAds([]);
+      setAdInsightsMap({});
+    }).finally(() => {
+      setLoadingAds(false);
+    });
+  }, [profile?.id, activePreset, activeSince, activeUntil]);
 
   const handleApply = () => { setActivePreset(pendingPreset); setActiveSince(pendingSince); setActiveUntil(pendingUntil || pendingSince); setShowDatePicker(false); };
   const handleExportPDF = () => {
@@ -342,49 +347,7 @@ export default function CaptacionPage() {
   const goalLabel = (goal: string) => ({ OFFSITE_CONVERSIONS: 'Conversiones', LINK_CLICKS: 'Clics', REACH: 'Alcance', IMPRESSIONS: 'Impresiones', LEAD_GENERATION: 'Leads', REPLIES: 'Respuestas', THRUPLAY: 'Video', CONVERSATIONS: 'Mensajes', PAGE_LIKES: 'Me gustas', ENGAGED_USERS: 'Engagement', VALUE: 'Valor' }[goal] || goal);
   const fmtBudget = (daily?: string, lifetime?: string) => { const v = daily || lifetime; if (!v) return '—'; return `$ ${parseFloat(v).toLocaleString('es-AR', { maximumFractionDigits: 0 })}${daily ? '/día' : ' total'}`; };
 
-  const toggleCampaign = async (campaignId: string) => {
-    if (expandedCampaigns.has(campaignId)) {
-      setExpandedCampaigns(prev => { const n = new Set(prev); n.delete(campaignId); return n; });
-      return;
-    }
-    setExpandedCampaigns(prev => new Set([...prev, campaignId]));
-    if (adsetsByCampaign[campaignId]) return;
-    setLoadingAdsets(prev => new Set([...prev, campaignId]));
-    try {
-      const res = await metaAds.getAdsets(campaignId);
-      setAdsetsByCampaign(prev => ({ ...prev, [campaignId]: (res.data || []).filter((a: any) => a.status === 'ACTIVE') }));
-    } catch {
-      setAdsetsByCampaign(prev => ({ ...prev, [campaignId]: [] }));
-    } finally {
-      setLoadingAdsets(prev => { const n = new Set(prev); n.delete(campaignId); return n; });
-    }
-  };
-
-  const toggleAdset = async (adsetId: string) => {
-    if (expandedAdsets.has(adsetId)) {
-      setExpandedAdsets(prev => { const n = new Set(prev); n.delete(adsetId); return n; });
-      return;
-    }
-    setExpandedAdsets(prev => new Set([...prev, adsetId]));
-    if (adsByAdset[adsetId]) return;
-    setLoadingAds(prev => new Set([...prev, adsetId]));
-    try {
-      const adFields = 'ad_id,spend,impressions,reach,inline_link_click_ctr,inline_link_clicks,actions,cost_per_action_type,action_values,purchase_roas';
-      const [adsRes, insights] = await Promise.all([
-        metaAds.getAds(adsetId),
-        metaAds.getAdInsightsForAdset(adsetId, adFields, range).catch(() => []),
-      ]);
-      setAdsByAdset(prev => ({ ...prev, [adsetId]: (adsRes.data || []).filter((a: any) => a.status === 'ACTIVE') }));
-      const byAdId: Record<string, any> = {};
-      (insights || []).forEach((i: any) => { if (i.ad_id) byAdId[i.ad_id] = i; });
-      setAdInsightsByAdset(prev => ({ ...prev, [adsetId]: byAdId }));
-    } catch {
-      setAdsByAdset(prev => ({ ...prev, [adsetId]: [] }));
-      setAdInsightsByAdset(prev => ({ ...prev, [adsetId]: {} }));
-    } finally {
-      setLoadingAds(prev => { const n = new Set(prev); n.delete(adsetId); return n; });
-    }
-  };
+  // Obsolete accordion helper functions removed.
 
   const fmtDateRange = (d: string) => {
     if (!d) return '';
@@ -780,7 +743,7 @@ export default function CaptacionPage() {
         </div>
       )}
 
-      {/* Explorador de Campañas Activas */}
+      {/* Creativos Activos */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-black/[0.06] dark:border-white/[0.06] shadow-sm p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -788,181 +751,109 @@ export default function CaptacionPage() {
               <Layers className="w-4 h-4 text-blue-500" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Estructura de Campañas</h3>
-              <p className="text-[11px] text-zinc-400">Campañas activas · Conjuntos · Creativos activos</p>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Creativos Activos</h3>
+              <p className="text-[11px] text-zinc-400">Anuncios en circulación y su rendimiento</p>
             </div>
           </div>
-          {loadingCampaigns && <div className="w-4 h-4 border-2 border-zinc-200 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />}
+          {loadingAds && <div className="w-4 h-4 border-2 border-zinc-200 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />}
         </div>
 
-        {!loadingCampaigns && activeCampaigns.length === 0 && (
-          <p className="text-xs text-zinc-400 text-center py-8">No hay campañas activas</p>
+        {!loadingAds && activeAds.length === 0 && (
+          <p className="text-xs text-zinc-400 text-center py-8">No hay creativos activos en este momento</p>
         )}
 
-        <div className="space-y-0.5">
-          {activeCampaigns.map(campaign => {
-            const isCampaignExpanded = expandedCampaigns.has(campaign.id);
-            const isCampaignLoading = loadingAdsets.has(campaign.id);
-            const adsets = adsetsByCampaign[campaign.id] || [];
+        {activeAds.length > 0 && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {activeAds.map(ad => {
+              const insights = adInsightsMap[ad.id];
+              const adSpend = parseFloat(insights?.spend || 0);
+              const adActions = insights?.actions || [];
+              const adResults = (() => {
+                if (isEcom) return extractActions(adActions, 'purchases');
+                if (isLead) return extractActions(adActions, 'leads');
+                if (isWpp) return extractActions(adActions, 'messages');
+                return extractActions(adActions, 'purchases');
+              })();
+              const adCpa = adResults > 0 ? adSpend / adResults : 0;
+              const adImpr = parseInt(insights?.impressions || 0);
+              const adReach = parseInt(insights?.reach || 0);
+              const adCtr = parseFloat(insights?.inline_link_click_ctr || 0);
+              const adRoas = parseFloat(insights?.purchase_roas?.[0]?.value || 0);
+              const adValue = (() => {
+                const av = insights?.action_values || [];
+                const v = av.find((a: any) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase');
+                return v ? parseFloat(v.value) : 0;
+              })();
 
-            return (
-              <div key={campaign.id}>
-                <button
-                  onClick={() => toggleCampaign(campaign.id)}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors text-left"
-                >
-                  <ChevronRight className={`w-4 h-4 text-zinc-400 flex-shrink-0 transition-transform duration-150 ${isCampaignExpanded ? 'rotate-90' : ''}`} />
-                  <span className="flex-1 text-[13px] font-bold text-zinc-900 dark:text-white truncate min-w-0">{campaign.name}</span>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">ACTIVA</span>
-                    <span className="hidden sm:block text-[11px] text-zinc-400">{objectiveLabel(campaign.objective)}</span>
-                    <span className="hidden sm:block text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">{fmtBudget(campaign.daily_budget, campaign.lifetime_budget)}</span>
-                  </div>
-                </button>
-
-                {isCampaignExpanded && (
-                  <div className="ml-7 border-l-2 border-zinc-100 dark:border-zinc-800 pl-4 pb-2">
-                    {isCampaignLoading ? (
-                      <div className="py-4 flex justify-center">
-                        <div className="w-4 h-4 border-2 border-zinc-200 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
-                      </div>
-                    ) : adsets.length === 0 ? (
-                      <p className="text-[11px] text-zinc-400 py-3 pl-2">Sin conjuntos activos</p>
-                    ) : adsets.map(adset => {
-                      const isAdsetExpanded = expandedAdsets.has(adset.id);
-                      const isAdsLoading = loadingAds.has(adset.id);
-                      const ads = adsByAdset[adset.id] || [];
-                      return (
-                        <div key={adset.id}>
-                          <button
-                            onClick={() => toggleAdset(adset.id)}
-                            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors text-left"
-                          >
-                            <ChevronRight className={`w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 flex-shrink-0 transition-transform duration-150 ${isAdsetExpanded ? 'rotate-90' : ''}`} />
-                            <span className="flex-1 text-[12px] font-semibold text-zinc-700 dark:text-zinc-200 truncate min-w-0">{adset.name}</span>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="hidden sm:block text-[10px] text-zinc-400">{goalLabel(adset.optimization_goal)}</span>
-                              <span className="hidden sm:block text-[11px] text-zinc-500 dark:text-zinc-400">{fmtBudget(adset.daily_budget, adset.lifetime_budget)}</span>
-                            </div>
-                          </button>
-
-                          {isAdsetExpanded && (
-                            <div className="ml-6 border-l-2 border-zinc-50 dark:border-zinc-800/50 pl-4 pb-2">
-                              {isAdsLoading ? (
-                                <div className="py-4 flex justify-center">
-                                  <div className="w-4 h-4 border-2 border-zinc-200 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
-                                </div>
-                              ) : ads.length === 0 ? (
-                                <p className="text-[11px] text-zinc-400 py-3 pl-2">Sin anuncios activos</p>
-                              ) : (
-                                <div className="flex flex-col gap-1.5 py-2">
-                                  {ads.map(ad => {
-                                    const adInsights = adInsightsByAdset[adset.id]?.[ad.id];
-                                    const adSpend = parseFloat(adInsights?.spend || 0);
-                                    const adActions = adInsights?.actions || [];
-                                    const adResults = (() => {
-                                      if (isEcom) return extractActions(adActions, 'purchases');
-                                      if (isLead) return extractActions(adActions, 'leads');
-                                      if (isWpp) return extractActions(adActions, 'messages');
-                                      return extractActions(adActions, 'purchases');
-                                    })();
-                                    const adCpa = adResults > 0 ? adSpend / adResults : 0;
-                                    const adImpr = parseInt(adInsights?.impressions || 0);
-                                    const adReach = parseInt(adInsights?.reach || 0);
-                                    const adCtr = parseFloat(adInsights?.inline_link_click_ctr || 0);
-                                    const adRoas = parseFloat(adInsights?.purchase_roas?.[0]?.value || 0);
-                                    const adValue = (() => {
-                                      const av = adInsights?.action_values || [];
-                                      const v = av.find((a: any) => a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase');
-                                      return v ? parseFloat(v.value) : 0;
-                                    })();
-                                    const isAdExpanded = expandedAd === ad.id;
-                                    return (
-                                      <div key={ad.id} className="rounded-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50">
-                                        <button
-                                          onClick={() => setExpandedAd(isAdExpanded ? null : ad.id)}
-                                          className="w-full flex items-center gap-3 p-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors text-left"
-                                        >
-                                          {ad.creative?.thumbnail_url ? (
-                                            <img src={ad.creative.thumbnail_url} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0 bg-zinc-100 dark:bg-zinc-800" />
-                                          ) : (
-                                            <div className="w-14 h-14 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                                              <Film className="w-5 h-5 text-zinc-300 dark:text-zinc-600" />
-                                            </div>
-                                          )}
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 truncate leading-tight" title={ad.name}>{ad.name || ad.creative?.name || 'Sin nombre'}</p>
-                                            <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 mt-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">ACTIVO</span>
-                                          </div>
-                                          <div className="flex items-center gap-4 flex-shrink-0 mr-1">
-                                            {adInsights ? (
-                                              <>
-                                                <div className="text-right hidden sm:block">
-                                                  <p className="text-[10px] text-zinc-400">Gasto</p>
-                                                  <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">${adSpend.toFixed(0)}</p>
-                                                </div>
-                                                <div className="text-right hidden sm:block">
-                                                  <p className="text-[10px] text-zinc-400">{resultsLabel}</p>
-                                                  <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">{adResults > 0 ? adResults.toFixed(0) : '—'}</p>
-                                                </div>
-                                                <div className="text-right hidden md:block">
-                                                  <p className="text-[10px] text-zinc-400">{cprLabel}</p>
-                                                  <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">{adCpa > 0 ? `$${adCpa.toFixed(2)}` : '—'}</p>
-                                                </div>
-                                              </>
-                                            ) : (
-                                              <p className="text-[10px] text-zinc-300 dark:text-zinc-600 hidden sm:block">Sin datos</p>
-                                            )}
-                                            <ChevronDown className={`w-4 h-4 text-zinc-300 dark:text-zinc-600 transition-transform duration-150 ${isAdExpanded ? 'rotate-180' : ''}`} />
-                                          </div>
-                                        </button>
-                                        {isAdExpanded && (
-                                          <div className="border-t border-zinc-100 dark:border-zinc-800 p-3 flex gap-4">
-                                            {ad.creative?.thumbnail_url && (
-                                              <img src={ad.creative.thumbnail_url} alt="" className="w-32 h-32 rounded-xl object-cover flex-shrink-0 bg-zinc-100 dark:bg-zinc-800" />
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                              <p className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-3 truncate">{ad.name || ad.creative?.name || 'Sin nombre'}</p>
-                                              {adInsights ? (
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                  {[
-                                                    { label: 'Gasto', val: `$${adSpend.toFixed(2)}` },
-                                                    { label: resultsLabel, val: adResults > 0 ? adResults.toFixed(0) : '—' },
-                                                    { label: cprLabel, val: adCpa > 0 ? `$${adCpa.toFixed(2)}` : '—' },
-                                                    ...(isEcom ? [{ label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(2)}x` : '—' }, { label: 'Valor', val: adValue > 0 ? `$${adValue.toFixed(0)}` : '—' }] : []),
-                                                    { label: 'Impresiones', val: adImpr > 0 ? (adImpr >= 1000 ? `${(adImpr/1000).toFixed(1)}k` : String(adImpr)) : '—' },
-                                                    { label: 'Alcance', val: adReach > 0 ? (adReach >= 1000 ? `${(adReach/1000).toFixed(1)}k` : String(adReach)) : '—' },
-                                                    { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(2)}%` : '—' },
-                                                  ].map(({ label, val }) => (
-                                                    <div key={label} className="bg-zinc-50 dark:bg-zinc-800/60 rounded-lg px-2.5 py-2">
-                                                      <p className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide mb-0.5">{label}</p>
-                                                      <p className="text-[13px] font-bold text-zinc-800 dark:text-zinc-100">{val}</p>
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              ) : (
-                                                <p className="text-[11px] text-zinc-400">Sin datos de rendimiento para el período seleccionado</p>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
+              return (
+                <div key={ad.id} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 shadow-sm flex flex-col sm:flex-row gap-4 p-4 hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
+                  {/* Thumbnail / Image Preview */}
+                  <div className="relative w-full sm:w-32 h-32 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex-shrink-0 group cursor-pointer" onClick={() => ad.creative?.thumbnail_url && setActiveImagePreview(ad.creative.thumbnail_url)}>
+                    {ad.creative?.thumbnail_url ? (
+                      <>
+                        <img src={ad.creative.thumbnail_url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-200" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center transition-colors">
+                          <span className="opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-zinc-900/90 text-zinc-900 dark:text-white text-[10px] font-bold px-2 py-1 rounded shadow transition-opacity">Ampliar</span>
                         </div>
-                      );
-                    })}
+                      </>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Film className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {/* Info and Metrics Grid */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 truncate leading-tight" title={ad.name}>{ad.name || ad.creative?.name || 'Sin nombre'}</p>
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex-shrink-0">ACTIVO</span>
+                      </div>
+                      {ad.creative?.object_type && (
+                        <p className="text-[9px] text-zinc-400 mt-0.5 font-medium uppercase tracking-wider">{ad.creative.object_type}</p>
+                      )}
+                    </div>
+
+                    {insights ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                        {[
+                          { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
+                          { label: resultsLabel, val: adResults > 0 ? adResults.toFixed(0) : '—' },
+                          { label: cprLabel, val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
+                          ...(isEcom ? [{ label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(2)}x` : '—' }, { label: 'Valor', val: adValue > 0 ? `$${adValue.toFixed(0)}` : '—' }] : []),
+                          { label: 'Impresiones', val: adImpr > 0 ? fmtVal(adImpr) : '—' },
+                          { label: 'Alcance', val: adReach > 0 ? fmtVal(adReach) : '—' },
+                          { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(2)}%` : '—' },
+                        ].map(({ label, val }) => (
+                          <div key={label} className="bg-zinc-50 dark:bg-zinc-800/40 rounded-lg p-2 border border-zinc-100/50 dark:border-white/[0.02]">
+                            <p className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wide mb-0.5">{label}</p>
+                            <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100">{val}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-zinc-400 italic mt-3">Sin datos de rendimiento en este período</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Lightbox / Modal for Image Preview */}
+      {activeImagePreview && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setActiveImagePreview(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setActiveImagePreview(null)} className="absolute top-3 right-3 p-2 rounded-xl bg-black/60 text-zinc-400 hover:text-white hover:bg-black/80 transition-all z-10">
+              <X className="w-5 h-5" />
+            </button>
+            <img src={activeImagePreview} alt="Ad Creative Preview" className="max-w-full max-h-[85vh] object-contain block bg-zinc-950" />
+          </div>
+        </div>
+      )}
 
       {/* Breakdowns grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

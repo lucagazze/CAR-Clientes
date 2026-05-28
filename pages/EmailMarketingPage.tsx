@@ -1019,6 +1019,37 @@ export default function EmailMarketingPage() {
   const [flows, setFlows]             = useState<KvFlow[]>([]);
   const [preview, setPreview]         = useState<{ templateId: string; title: string; subject?: string } | null>(null);
 
+  // Loading progress bar simulation
+  const [progress, setProgress] = useState(0);
+  const [isDoneLoading, setIsDoneLoading] = useState(false);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (loading && (apiKey ? campaigns.length === 0 && flows.length === 0 : assignments.length === 0)) {
+      setProgress(0);
+      setIsDoneLoading(false);
+      interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(interval);
+            return 95;
+          }
+          const increment = Math.floor(Math.random() * 8) + 4; // increment 4% to 12%
+          return Math.min(prev + increment, 95);
+        });
+      }, 70);
+    } else if (!loading) {
+      setProgress(100);
+      const timeout = setTimeout(() => {
+        setIsDoneLoading(true);
+      }, 500); // Allow progress bar transition to 100% and fade out transition
+      return () => clearTimeout(timeout);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [loading, apiKey]);
+
   const sync = useCallback(async (key: string) => {
     if (!key) return;
     setLoading(true);
@@ -1062,11 +1093,41 @@ export default function EmailMarketingPage() {
     }
   }, [activeProfile?.id, apiKey, sync]);
 
-  // Loading indicator for first-time load
-  if (loading && (apiKey ? campaigns.length === 0 && flows.length === 0 : assignments.length === 0)) {
+  // 1. Full-screen progress bar loader animation (covering the layout)
+  if (!isDoneLoading) {
+    const isFading = progress === 100;
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-700 border-t-violet-600 rounded-full animate-spin" />
+      <div className={`fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#f5f5f7] dark:bg-[#0a0a0a] transition-all duration-500 ${isFading ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
+        <div className="w-full max-w-sm px-6 text-center space-y-5">
+          {/* Glowing pulse mail icon */}
+          <div className="relative mx-auto w-16 h-16 rounded-2xl bg-violet-600/10 flex items-center justify-center shadow-lg border border-violet-500/20 animate-pulse">
+            <Mail className="w-8 h-8 text-violet-500 animate-bounce" style={{ animationDuration: '2s' }} />
+            <div className="absolute inset-0 rounded-2xl bg-violet-500/20 blur-md -z-10 animate-ping opacity-35" style={{ animationDuration: '3s' }} />
+          </div>
+          
+          <div className="space-y-1">
+            <h2 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-widest">
+              Email Marketing
+            </h2>
+            <p className="text-[12px] text-zinc-400 dark:text-zinc-500">
+              {apiKey ? 'Conectando con Klaviyo...' : 'Cargando asignaciones locales...'}
+            </p>
+          </div>
+
+          {/* Glowing premium progress bar */}
+          <div className="space-y-2">
+            <div className="w-full h-1.5 bg-zinc-250 dark:bg-zinc-800 rounded-full overflow-hidden border border-black/[0.03] dark:border-white/[0.03]">
+              <div 
+                className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full shadow-[0_0_8px_rgba(139,92,246,0.5)] transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500">
+              <span>{progress}%</span>
+              <span>{progress === 100 ? '¡Listo!' : 'Cargando...'}</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1080,7 +1141,7 @@ export default function EmailMarketingPage() {
     const campaignStatuses = ['All', ...Array.from(new Set(campaigns.map(c => c.status)))];
 
     return (
-      <div className={`${tab === 'calendar' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 flex-1 min-w-0 flex flex-col relative`}>
+      <div className={`${tab === 'calendar' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500`}>
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -1254,7 +1315,7 @@ export default function EmailMarketingPage() {
     });
 
   return (
-    <div className="max-w-4xl mx-auto flex-1 min-w-0 flex flex-col relative">
+    <div className="max-w-4xl mx-auto flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
       {/* Header */}
       <div className="mb-6 flex items-end justify-between">
         <div>

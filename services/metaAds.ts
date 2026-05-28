@@ -190,6 +190,13 @@ export const metaAds = {
       limit: '50',
     }),
 
+  // ── ALL ADS FOR ACCOUNT ──────────────────────────────────
+  getAccountAds: (accountId = META_AD_ACCOUNT) =>
+    apiGet(`${accountId}/ads`, {
+      fields: 'id,name,status,creative{id,name,thumbnail_url,object_type}',
+      limit: '150',
+    }),
+
   // ── AD-LEVEL INSIGHTS for a specific adset ────────────────
   getAdInsightsForAdset: async (adsetId: string, fields: string, timeRange: TimeRange): Promise<any[]> => {
     const res = await apiGet(`${adsetId}/insights`, {
@@ -197,6 +204,17 @@ export const metaAds = {
       level: 'ad',
       time_range: JSON.stringify(timeRange),
       limit: '50',
+    });
+    return res?.data || [];
+  },
+
+  // ── AD-LEVEL INSIGHTS FOR ACCOUNT ────────────────────────
+  getAdInsightsForAccount: async (accountId: string, fields: string, timeRange: TimeRange): Promise<any[]> => {
+    const res = await apiGet(`${accountId}/insights`, {
+      fields,
+      level: 'ad',
+      time_range: JSON.stringify(timeRange),
+      limit: '150',
     });
     return res?.data || [];
   },
