@@ -475,7 +475,7 @@ export default function EmailLibraryPage() {
                       />
                     ) : (
                       <img
-                        src={`/email-library/screenshots/${email.file.replace('.html', '.png')}`}
+                        src={`/email-library/screenshots/${email.file.replace('.html', '.webp')}`}
                         onError={() => setImgErrors(prev => new Set([...prev, email.file]))}
                         draggable={false}
                         style={{ width: CARD_W, height: CARD_H, objectFit: 'cover', objectPosition: 'top', display: 'block' }}
