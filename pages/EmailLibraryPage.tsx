@@ -281,15 +281,16 @@ export default function EmailLibraryPage() {
 
           {/* Preview area */}
           <div
-            className="flex-1 overflow-auto flex items-start justify-center py-8"
+            className="flex-1 overflow-auto flex items-start justify-center"
+            style={{ background: previewMode === 'desktop' ? '#d0d0d0' : '#1a1a1a' }}
           >
             <div
-              className="shadow-2xl rounded-sm transition-all duration-300 overflow-hidden"
+              className="transition-all duration-300 overflow-hidden"
               onClick={e => e.stopPropagation()}
-              style={{
-                width: previewMode === 'desktop' ? 760 : 375,
-                background: previewMode === 'desktop' ? '#f0f0f0' : '#ffffff',
-              }}
+              style={previewMode === 'desktop'
+                ? { width: '100%', minHeight: '100%' }
+                : { width: 375, margin: '32px auto', boxShadow: '0 8px 40px rgba(0,0,0,0.5)', borderRadius: 8 }
+              }
             >
               <iframe
                 src={`/email-library/${preview.file}`}
