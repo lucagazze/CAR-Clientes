@@ -105,7 +105,7 @@ const fetchFlows = async (apiKey: string): Promise<KvFlow[]> => {
 
 const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEmail[]> => {
   const data = await kFetch(
-    `flow-actions?filter=equals(flow.id,%22${flowId}%22)&filter=equals(action_type,%22SEND_EMAIL%22)&include=flow-message&page%5Bsize%5D=50`,
+    `flows/${flowId}/flow-actions?filter=equals(action_type,%22SEND_EMAIL%22)&include=flow-messages&page%5Bsize%5D=50`,
     apiKey,
   );
   const msgMap = new Map<string, any>();
