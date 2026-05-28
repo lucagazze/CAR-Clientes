@@ -104,7 +104,7 @@ const fetchFlows = async (apiKey: string): Promise<KvFlow[]> => {
       created: f.attributes.created,
       updated: f.attributes.updated,
     }))
-    .filter((f: any) => f.status !== 'archived');
+    .filter((f: any) => f.status.toLowerCase() === 'live');
 };
 
 const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEmail[]> => {
@@ -146,7 +146,7 @@ const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEm
     })
   );
   
-  return results.filter((a: KvFlowEmail) => a.status !== 'archived');
+  return results.filter((a: KvFlowEmail) => a.status.toLowerCase() === 'live');
 };
 
 const fetchTemplateHtml = async (templateId: string, apiKey: string): Promise<string> => {
