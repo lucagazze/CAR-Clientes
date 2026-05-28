@@ -674,7 +674,8 @@ export default function EmailLibraryPage() {
           </div>
         ) : (
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4"
+            className="grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}
             onMouseDown={e => {
               if (e.button !== 0) return;
               const tag = (e.target as HTMLElement).tagName;
@@ -812,39 +813,19 @@ export default function EmailLibraryPage() {
                     <p className="text-[11px] font-bold text-zinc-800 dark:text-zinc-100 truncate leading-tight" title={email.subject}>
                       {email.subject || `${email.angle} ${email.desc}`}
                     </p>
-                    {email.klaviyo_subject && !selectMode && (
-                      <button
-                        className="group/ks w-full text-left flex items-center gap-1 mt-0.5"
-                        onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(email.klaviyo_subject); setCopied(email.file + '_subj'); setTimeout(() => setCopied(null), 1500); }}
-                        title="Copiar asunto Klaviyo"
-                      >
-                        <span className="text-[9px] text-zinc-400 dark:text-zinc-500 truncate font-mono group-hover/ks:text-violet-500 transition-colors">
-                          {copied === email.file + '_subj' ? '¡Copiado!' : email.klaviyo_subject}
-                        </span>
-                        <Copy className="w-2 h-2 text-zinc-400 flex-shrink-0 opacity-0 group-hover/ks:opacity-100 transition-opacity" />
-                      </button>
-                    )}
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full text-white ${ANGLE_COLORS[email.angle] ?? 'bg-zinc-500'}`}>
                         {email.angle}
                       </span>
-                      {(() => {
-                        const asgns = assignments.filter(a => a.email_file === email.file);
-                        if (!asgns.length) return (
-                          <button onClick={e => { e.stopPropagation(); setAssignModal(email); }} className="flex items-center gap-0.5 text-[9px] text-zinc-400 hover:text-violet-500 transition-colors">
-                            <UserPlus className="w-2.5 h-2.5" />Asignar
-                          </button>
-                        );
-                        return asgns.map(a => (
-                          <span key={a.id} className="flex items-center gap-1">
-                            <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[a.status]}`} />
-                            <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
-                              {allClients.find(c => c.id === a.client_id)?.business_name ?? '?'}
-                              {a.approved && <span className="text-emerald-500"> ✓</span>}
-                            </span>
+                      {assignments.filter(a => a.email_file === email.file).map(a => (
+                        <span key={a.id} className="flex items-center gap-1">
+                          <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[a.status]}`} />
+                          <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
+                            {allClients.find(c => c.id === a.client_id)?.business_name ?? '?'}
+                            {a.approved && <span className="text-emerald-500"> ✓</span>}
                           </span>
-                        ));
-                      })()}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
