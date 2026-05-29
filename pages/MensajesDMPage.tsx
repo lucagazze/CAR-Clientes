@@ -68,16 +68,21 @@ export default function MensajesDMPage() {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Set FB page ID for service token lookup
   useEffect(() => {
     if (fbPageId) localStorage.setItem('active_fb_page_id', fbPageId);
   }, [fbPageId]);
 
-  // Auto-scroll to latest message
+  // Auto-scroll to latest message inside the container
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [convMessages]);
 
   // Load conversations
@@ -542,7 +547,7 @@ export default function MensajesDMPage() {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-5 space-y-3">
                   {loadingMessages ? (
                     <div className="flex flex-col items-center justify-center py-16 gap-3">
                       <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
@@ -585,7 +590,6 @@ export default function MensajesDMPage() {
                           </div>
                         );
                       })}
-                      <div ref={messagesEndRef} />
                     </>
                   )}
                 </div>
