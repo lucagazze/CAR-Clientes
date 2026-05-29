@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
   Instagram, Heart, MessageCircle, Layers, Loader2, RefreshCw, X, 
@@ -105,6 +105,11 @@ export default function MensajeriaPage() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [copiedProductId, setCopiedProductId] = useState<string | null>(null);
+
+  // Full conversation history states
+  const [conversationMessages, setConversationMessages] = useState<Record<string, any[]>>({});
+  const [loadingConversation, setLoadingConversation] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Resolve IDs and keys from client profile
   const igId = (profile as any)?.ig_business_id;
@@ -450,6 +455,31 @@ export default function MensajeriaPage() {
     setCopiedProductId(prodId);
     setTimeout(() => setCopiedProductId(null), 2000);
   };
+
+  // Load full conversation history for DM items
+  const loadConversationHistory = useCallback(async (item: any) => {
+    if (!item || !['ig_dm', 'fb_dm'].includes(item.type)) return;
+    if (conversationMessages[item.id]) return; // already loaded
+    setLoadingConversation(item.id);
+    try {
+      const res = await metaAds.getConversationMessages(item.id);
+      const msgs = (res?.data || []).reverse(); // oldest first
+      setConversationMessages(prev => ({ ...prev, [item.id]: msgs }));
+    } catch (err) {
+      console.error('Error loading conversation history:', err);
+      // Fall back to whatever we already have from the preview
+      setConversationMessages(prev => ({ ...prev, [item.id]: item.rawItem?.messages?.data ? [...item.rawItem.messages.data].reverse() : [] }));
+    } finally {
+      setLoadingConversation(null);
+    }
+  }, [conversationMessages]);
+
+  // Auto-scroll chat to bottom when messages update or conversation changes
+  useEffect(() => {
+    if (selectedItem && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [selectedItem, conversationMessages]);
 
   // Insert Shopify link directly into input
   const handleInsertLink = (handle: string, itemId: string) => {
@@ -1051,7 +1081,10 @@ export default function MensajeriaPage() {
               {filteredPendingItems.map((item: any) => (
                 <div 
                   key={item.id} 
-                  onClick={() => setSelectedItem(item)}
+                  onClick={() => {
+                    setSelectedItem(item);
+                    loadConversationHistory(item);
+                  }}
                   className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl p-4 shadow-sm space-y-3 hover:shadow-md hover:border-zinc-350 dark:hover:border-zinc-700 hover:scale-[1.01] active:scale-[0.99] cursor-pointer transition-all duration-200 flex flex-col justify-between group"
                 >
                   <div className="space-y-3">
@@ -1150,7 +1183,10 @@ export default function MensajeriaPage() {
               {filteredPendingItems.map((item: any) => (
                 <div
                   key={item.id}
-                  onClick={() => setSelectedItem(item)}
+                  onClick={() => {
+                    setSelectedItem(item);
+                    loadConversationHistory(item);
+                  }}
                   className="px-4 py-2.5 flex items-center justify-between gap-4 hover:bg-zinc-50/60 dark:hover:bg-zinc-850/45 cursor-pointer transition-colors group text-[12.5px]"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1232,21 +1268,30 @@ export default function MensajeriaPage() {
             <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/85 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 {selectedItem.platform === 'instagram' ? (
-                  <div className="w-8 h-8 bg-pink-50 dark:bg-pink-950/20 rounded-full flex items-center justify-center text-pink-500">
+                  <div className="w-8 h-8 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white">
                     <Instagram className="w-4 h-4" />
                   </div>
                 ) : (
-                  <div className="w-8 h-8 bg-blue-50 dark:bg-blue-950/20 rounded-full flex items-center justify-center text-blue-500 font-black text-sm">
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-black text-sm">
                     f
                   </div>
                 )}
                 <div>
                   <h3 className="font-black text-zinc-900 dark:text-white text-[15px] leading-tight">
-                    Conversación con @{selectedItem.username}
+                    {selectedItem.username}
                   </h3>
-                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5 uppercase tracking-wide">
-                    {selectedItem.type.replace('_', ' ')} · Recibido el {new Date(selectedItem.timestamp).toLocaleString('es-AR')}
-                  </span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
+                      selectedItem.platform === 'instagram'
+                        ? 'bg-pink-100 text-pink-700 dark:bg-pink-950/30 dark:text-pink-400'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400'
+                    }`}>
+                      {selectedItem.type === 'ig_dm' ? 'Instagram Direct' : selectedItem.type === 'fb_dm' ? 'Facebook Messenger' : selectedItem.platform}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-bold">
+                      {new Date(selectedItem.timestamp).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1324,33 +1369,54 @@ export default function MensajeriaPage() {
 
                   {/* Messages Flow bubbles */}
                   <div className="space-y-3 pt-2">
-                    {/* If Direct Messages */}
+                    {/* If Direct Messages: show full history */}
                     {(selectedItem.type === 'ig_dm' || selectedItem.type === 'fb_dm') ? (
-                      selectedItem.rawItem.messages?.data ? (
-                        [...selectedItem.rawItem.messages.data].reverse().map((msg: any) => {
-                          const isMe = msg.from?.id === fbPageId;
-                          return (
-                            <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                              <span className="text-[9px] text-zinc-400 font-bold mb-0.5 px-2">
-                                {isMe ? 'Yo' : `@${selectedItem.username}`} · {new Date(msg.created_time).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                              <div className={`max-w-[85%] rounded-[18px] px-4 py-2.5 text-[12.5px] leading-relaxed font-semibold ${
-                                isMe 
-                                  ? 'bg-violet-600 text-white shadow-sm' 
-                                  : 'bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 text-zinc-800 dark:text-zinc-100 shadow-sm'
-                              }`}>
-                                {msg.message}
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200/50 dark:border-zinc-800 text-center font-semibold text-zinc-700 dark:text-zinc-300">
-                          {selectedItem.text}
-                        </div>
-                      )
+                      <>
+                        {loadingConversation === selectedItem.id ? (
+                          <div className="flex flex-col items-center justify-center py-12 gap-3">
+                            <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+                            <p className="text-[12px] text-zinc-400 font-bold">Cargando historial completo...</p>
+                          </div>
+                        ) : (
+                          <>
+                            {(conversationMessages[selectedItem.id] || (selectedItem.rawItem?.messages?.data ? [...selectedItem.rawItem.messages.data].reverse() : [])).map((msg: any) => {
+                              const isMe = msg.from?.id === fbPageId;
+                              const senderName = isMe ? 'Yo' : selectedItem.username;
+                              const timeStr = msg.created_time
+                                ? new Date(msg.created_time).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                : '';
+                              return (
+                                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                  <span className="text-[9px] text-zinc-400 font-bold mb-0.5 px-2">
+                                    {senderName} · {timeStr}
+                                  </span>
+                                  {msg.message ? (
+                                    <div className={`max-w-[85%] rounded-[18px] px-4 py-2.5 text-[12.5px] leading-relaxed font-semibold ${
+                                      isMe 
+                                        ? 'bg-violet-600 text-white shadow-sm' 
+                                        : 'bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 text-zinc-800 dark:text-zinc-100 shadow-sm'
+                                    }`}>
+                                      {msg.message}
+                                    </div>
+                                  ) : (
+                                    <div className={`max-w-[85%] rounded-[18px] px-4 py-2.5 text-[11px] leading-relaxed font-semibold italic opacity-60 ${
+                                      isMe 
+                                        ? 'bg-violet-400 text-white' 
+                                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'
+                                    }`}>
+                                      📎 Archivo adjunto o mensaje de voz
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {/* Scroll anchor */}
+                            <div ref={messagesEndRef} />
+                          </>
+                        )}
+                      </>
                     ) : (
-                      // If comment
+                      // If comment thread
                       <div className="space-y-4">
                         <div className="flex flex-col items-start">
                           <span className="text-[9px] text-zinc-400 font-bold mb-0.5 px-2">
