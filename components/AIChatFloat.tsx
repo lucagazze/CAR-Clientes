@@ -510,7 +510,9 @@ export const AIChatFloat = () => {
           });
           if (r.ok) {
             const { text } = await r.json();
-            if (text) { setInput(text.trim()); setTimeout(() => inputRef.current?.focus(), 100); }
+            if (text && text.trim()) {
+              handleSend(text.trim());
+            }
           }
         } catch (e) { console.error('Transcription error:', e); }
         finally { setIsTranscribing(false); }
