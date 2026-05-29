@@ -9,6 +9,23 @@ interface Message {
   content: string;
 }
 
+interface ThinkingStep {
+  tool: string;
+  label: string;
+  icon: string;
+  done: boolean;
+}
+
+const TOOL_META: Record<string, { label: string; icon: string }> = {
+  'get_meta_ads_live_data':  { label: 'Consultando Meta Ads', icon: '📊' },
+  'get_meta_ads_creatives':  { label: 'Buscando creativos activos', icon: '🎨' },
+  'get_klaviyo_data':        { label: 'Revisando Email Marketing', icon: '📧' },
+  'get_ecommerce_data':      { label: 'Consultando la tienda', icon: '🛒' },
+  'get_instagram_posts':     { label: 'Cargando Instagram', icon: '📸' },
+  'list_clients':            { label: 'Buscando clientes', icon: '👥' },
+  'get_client_metrics':      { label: 'Analizando métricas', icon: '📈' },
+};
+
 // ── Markdown Renderer Component ───────────────────────────────────────────────
 const MarkdownRenderer = ({ content, onLinkClick, onSend }: { content: string; onLinkClick?: () => void; onSend?: (text: string) => void }) => {
   const lines = content.split('\n');
@@ -320,6 +337,7 @@ export const AIChatFloat = () => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(false);
+  const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
@@ -370,29 +388,61 @@ export const AIChatFloat = () => {
     setMessages(updatedMessages);
     setInput('');
     setIsThinking(true);
+    setThinkingSteps([]);
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages,
-          profile,
-          activeClientId,
-          activeBusinessName
-        }),
+        body: JSON.stringify({ messages: updatedMessages, profile, activeClientId, activeBusinessName }),
       });
 
-      if (!res.ok) throw new Error('API error');
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      if (!res.ok || !res.body) throw new Error('API error');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+
+        for (const event of events) {
+          const dataLine = event.split('\n').find(l => l.startsWith('data: '));
+          if (!dataLine) continue;
+          try {
+            const data = JSON.parse(dataLine.slice(6));
+
+            if (data.type === 'thinking') {
+              // Initialize steps — all pending
+              const steps: ThinkingStep[] = (data.steps || []).map((s: any) => ({
+                tool: s.tool,
+                label: s.label || TOOL_META[s.tool]?.label || s.tool,
+                icon: s.icon || TOOL_META[s.tool]?.icon || '⚙️',
+                done: false,
+              }));
+              setThinkingSteps(steps);
+            } else if (data.type === 'tool_done') {
+              setThinkingSteps(prev => prev.map(s => s.tool === data.tool ? { ...s, done: true } : s));
+            } else if (data.type === 'done') {
+              setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+              setThinkingSteps([]);
+            } else if (data.type === 'error') {
+              setMessages(prev => [...prev, { role: 'assistant', content: '❌ Hubo un problema técnico. Intentá de nuevo.' }]);
+              setThinkingSteps([]);
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
     } catch {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '❌ Hubo un problema técnico. Intentá de nuevo.',
-      }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: '❌ Hubo un problema técnico. Intentá de nuevo.' }]);
+      setThinkingSteps([]);
     } finally {
       setIsThinking(false);
+      setThinkingSteps([]);
     }
   };
 
@@ -453,7 +503,7 @@ export const AIChatFloat = () => {
     else startRecording();
   };
 
-  const clearChat = () => { setMessages([]); setInput(''); };
+  const clearChat = () => { setMessages([]); setInput(''); setThinkingSteps([]); };
 
   const quickPrompts = [
     '¿Qué mails están programados?',
@@ -533,13 +583,41 @@ export const AIChatFloat = () => {
 
           {isThinking && (
             <div className="flex justify-start">
-              <div className="w-7 h-7 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 overflow-hidden">
+              <div className="w-7 h-7 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 overflow-hidden shadow-sm">
                 <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="" className="w-5 h-5 object-contain" />
               </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/50 px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5 shadow-sm">
-                <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm min-w-[180px] max-w-[85%]">
+                {thinkingSteps.length === 0 ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-[0.15em] mb-2.5">Analizando...</p>
+                    {thinkingSteps.map((step, i) => (
+                      <div
+                        key={step.tool + i}
+                        className="flex items-center gap-2.5 animate-in fade-in slide-in-from-left-2 duration-300"
+                        style={{ animationDelay: `${i * 60}ms` }}
+                      >
+                        {step.done ? (
+                          <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-emerald-500/30">
+                            <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border-[2px] border-violet-500 border-t-transparent animate-spin flex-shrink-0" />
+                        )}
+                        <span className={`text-[12px] font-semibold leading-tight transition-colors duration-300 ${step.done ? 'text-zinc-400 dark:text-zinc-500 line-through decoration-zinc-300 dark:decoration-zinc-600' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                          {step.icon} {step.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

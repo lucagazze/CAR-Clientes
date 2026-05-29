@@ -18,6 +18,17 @@ const CLIENT_META_MAP: Record<string, { igId?: string; username?: string; adAcco
   '51a050d9-5f32-4f95-8724-8eefff9666d6': { igId: '17841463377689897', username: 'selecta' },
 };
 
+// Human-readable labels for each tool (sent to the client as thinking steps)
+const TOOL_META: Record<string, { label: string; icon: string }> = {
+  'get_meta_ads_live_data':  { label: 'Consultando Meta Ads', icon: '📊' },
+  'get_meta_ads_creatives':  { label: 'Buscando creativos activos', icon: '🎨' },
+  'get_klaviyo_data':        { label: 'Revisando Email Marketing', icon: '📧' },
+  'get_ecommerce_data':      { label: 'Consultando la tienda', icon: '🛒' },
+  'get_instagram_posts':     { label: 'Cargando posts de Instagram', icon: '📸' },
+  'list_clients':            { label: 'Buscando clientes', icon: '👥' },
+  'get_client_metrics':      { label: 'Analizando métricas históricas', icon: '📈' },
+};
+
 // In-memory caches to avoid repeated DB lookups on every request
 let metaTokenCache: { value: string; expiresAt: number } | null = null;
 const clientCache: Record<string, { data: any; expiresAt: number }> = {};
@@ -32,7 +43,7 @@ async function getMetaToken(): Promise<string> {
       .eq('key', 'meta_ads_token')
       .maybeSingle();
     const value = data?.value || '';
-    metaTokenCache = { value, expiresAt: now + 5 * 60 * 1000 }; // 5 min cache
+    metaTokenCache = { value, expiresAt: now + 5 * 60 * 1000 };
     return value;
   } catch {
     return '';
@@ -46,11 +57,10 @@ async function getClientData(clientId: string, fields: string): Promise<any> {
     return clientCache[cacheKey].data;
   }
   const { data } = await supabase.from('car_clients').select(fields).eq('id', clientId).maybeSingle();
-  clientCache[cacheKey] = { data, expiresAt: now + 2 * 60 * 1000 }; // 2 min cache
+  clientCache[cacheKey] = { data, expiresAt: now + 2 * 60 * 1000 };
   return data;
 }
 
-// Klaviyo Helper function — returns real live data from Klaviyo API
 async function fetchKlaviyoData(apiKey: string) {
   const kvFetch = async (path: string) => {
     const res = await fetch(`https://a.klaviyo.com/api/${path}`, {
@@ -150,6 +160,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
+  // ── Set SSE headers BEFORE writing any data ─────────────────────────────────
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const sendEvent = (data: object) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
   const isAdmin = !!profile?.is_admin;
   const userClientId = profile?.id;
   const fallbackClientId = activeClientId || userClientId;
@@ -160,10 +180,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       function: {
         name: 'list_clients',
         description: 'Get names and IDs of clients in the platform. Helpful to find the clientId of a specific client name mentioned by the user.',
-        parameters: {
-          type: 'object',
-          properties: {},
-        },
+        parameters: { type: 'object', properties: {} },
       },
     },
     {
@@ -173,9 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         description: 'Get historical performance metrics (Meta Ads spend/impressions/clicks/CTR/ROAS and email metrics open/click rates) for a client.',
         parameters: {
           type: 'object',
-          properties: {
-            clientId: { type: 'string', description: 'The UUID of the client' },
-          },
+          properties: { clientId: { type: 'string', description: 'The UUID of the client' } },
           required: ['clientId'],
         },
       },
@@ -187,9 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         description: 'Get live campaigns (sent, scheduled, and draft emails with subjects/send dates) and active flows directly from the email marketing provider for a client.',
         parameters: {
           type: 'object',
-          properties: {
-            clientId: { type: 'string', description: 'The UUID of the client' },
-          },
+          properties: { clientId: { type: 'string', description: 'The UUID of the client' } },
           required: ['clientId'],
         },
       },
@@ -213,12 +226,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       type: 'function',
       function: {
         name: 'get_meta_ads_creatives',
-        description: 'Get the count and names of active Meta Ads creatives/ads. Use ONLY when the user specifically asks how many creatives are active or what their names are. Do NOT use for performance metrics — use get_meta_ads_live_data for that.',
+        description: 'Get the list of active Meta Ads creatives/ads grouped by campaign. Use when the user asks which creatives are active, what ads are running, or wants to know the names of their active ads.',
         parameters: {
           type: 'object',
-          properties: {
-            clientId: { type: 'string', description: 'The UUID of the client' },
-          },
+          properties: { clientId: { type: 'string', description: 'The UUID of the client' } },
           required: ['clientId'],
         },
       },
@@ -230,9 +241,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         description: 'Get recent Instagram posts with their caption, permalink, like/comment counts, and image/thumbnail URLs. Helpful to show IG media/images.',
         parameters: {
           type: 'object',
-          properties: {
-            clientId: { type: 'string', description: 'The UUID of the client' },
-          },
+          properties: { clientId: { type: 'string', description: 'The UUID of the client' } },
           required: ['clientId'],
         },
       },
@@ -241,60 +250,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       type: 'function',
       function: {
         name: 'get_ecommerce_data',
-        description: 'Get this month\'s ecommerce data (total revenue, total orders count, average order value (AOV)) from Shopify or Tiendanube for a client.',
+        description: "Get this month's ecommerce data (total revenue, total orders count, average order value (AOV)) from Shopify or Tiendanube for a client.",
         parameters: {
           type: 'object',
-          properties: {
-            clientId: { type: 'string', description: 'The UUID of the client' },
-          },
+          properties: { clientId: { type: 'string', description: 'The UUID of the client' } },
           required: ['clientId'],
         },
       },
     },
   ];
 
-  // Helper security filter
   const isAuthorizedForClient = (targetClientId: string) => {
     if (isAdmin) return true;
     return targetClientId === userClientId;
   };
 
-  const activeClientText = activeBusinessName 
-    ? `El negocio seleccionado/activo actualmente en la pantalla del administrador es "${activeBusinessName}" (ID: ${fallbackClientId}).` 
-    : `El negocio del usuario actual es "${profile?.business_name || 'Desconocido'}" (ID: ${fallbackClientId}).`;
+  const activeClientText = activeBusinessName
+    ? `El negocio seleccionado/activo actualmente en la pantalla es "${activeBusinessName}" (ID: ${fallbackClientId}). Cuando el usuario pregunta sobre su negocio sin especificar, SIEMPRE usá este clientId: ${fallbackClientId}.`
+    : `El negocio del usuario actual es "${profile?.business_name || 'Desconocido'}" (ID: ${fallbackClientId}). SIEMPRE usá este clientId: ${fallbackClientId}.`;
 
   const systemMessage = `Sos el asistente de marketing digital inteligente de Algoritmia.
 Tu nombre es "Algo". Respondés en español argentino, de manera amigable y profesional.
 
 Tenés acceso a herramientas reales para consultar datos de clientes: Meta Ads, Email Marketing (Klaviyo), e-commerce (Shopify/Tiendanube), Instagram.
 
+CONTEXTO DEL CLIENTE ACTIVO:
+${activeClientText}
+
 CUÁNDO USAR CADA HERRAMIENTA:
 - 'get_meta_ads_live_data': SIEMPRE que el usuario pregunte sobre rendimiento de Meta Ads (gasto, ROAS, resultados, campañas activas, cómo le va en publicidad).
-- 'get_meta_ads_creatives': Solo para cantidad/nombres de creativos activos.
-- 'get_klaviyo_data': SIEMPRE que el usuario pregunte sobre email marketing: emails programados, campañas enviadas, flujos activos, qué emails están listos, cuándo se envía algo. Esta herramienta conecta DIRECTO a Klaviyo y trae datos en tiempo real.
+- 'get_meta_ads_creatives': SIEMPRE que el usuario pregunte qué creativos están activos, qué anuncios están corriendo, cuáles son los nombres de los creativos. Usá el clientId del contexto activo.
+- 'get_klaviyo_data': SIEMPRE que el usuario pregunte sobre email marketing: emails programados, campañas enviadas, flujos activos, qué emails están listos, cuándo se envía algo.
 - 'get_ecommerce_data': Para ventas, ingresos y pedidos de la tienda.
 - 'get_instagram_posts': Para posts recientes de Instagram.
 - 'list_clients': Para encontrar el clientId de un cliente por nombre.
+
+REGLA CRÍTICA DE TOOLS: Cuando el usuario pregunta algo, SIEMPRE llamá a la herramienta correspondiente antes de responder. NUNCA digas que no tenés acceso a esa información sin haber llamado la herramienta primero. Si la herramienta falla, decilo en forma natural.
 
 IMPORTANTE sobre email marketing:
 - Para cualquier pregunta sobre emails, campañas de email, flujos, automatizaciones → SIEMPRE usar 'get_klaviyo_data'.
 - El resultado incluye: campaigns.scheduled (programados con fecha), campaigns.sent (enviados), campaigns.draft (borradores), liveFlows (flujos activos).
 - Al responder sobre emails programados: mostrar SOLO los de campaigns.scheduled con su fecha. Si está vacío, decir que no hay emails programados actualmente.
-- No menciones "biblioteca" ni "asignaciones" - eso es interno de la agencia.
 
 FLUJO DE TRABAJO:
 1. Si no conocés el clientId del cliente mencionado, usá 'list_clients' primero.
-2. Si el usuario no especifica cliente, asumí que es el negocio activo en pantalla: ${activeClientText}
+2. Si el usuario no especifica cliente, SIEMPRE usá el clientId del contexto: ${fallbackClientId}
 3. Respondé siempre con datos reales de las herramientas. Sé específico con números, nombres y fechas.
-4. Si una herramienta devuelve error o datos vacíos: NUNCA digas "hubo un error" ni términos técnicos. En cambio, decí algo natural como "En este momento no pude traer esa info, pero la podés ver directamente acá:" + el link correspondiente.
+4. Si una herramienta devuelve error o datos vacíos: decí algo natural como "En este momento no pude traer esa info, pero la podés ver directamente acá:" + el link correspondiente.
 
 REGLAS DE TONO Y FORMATO:
 - Respuestas cortas, claras, naturales. Sin datos técnicos irrelevantes.
 - Viñetas cortas para listas. Tablas solo si es indispensable.
-- NO muestres imágenes ni creativos en markdown. Describílos brevemente y agregá el link.
+- NO muestres imágenes en markdown. Para creativos, listá los nombres agrupados por campaña.
 - Modismos argentinos: "tenés", "mirá", "querés", "che".
 
-LINKS DE NAVEGACIÓN — Usá estos links en su propia línea SOLO cuando sea útil que el usuario vea algo visualmente o tome una acción concreta. NO los incluyas si tu respuesta ya fue completa y clara por sí sola. Cuando los uses, poné uno solo, el más relevante:
+LINKS DE NAVEGACIÓN — Usá estos links en su propia línea SOLO cuando sea útil:
   * Anuncios/creativos/captación Meta Ads: ` + "`" + `[Ver en Captación](/#/captacion)` + "`" + `
   * Facturación/ventas/e-commerce: ` + "`" + `[Ver Tienda Online](/#/tienda)` + "`" + `
   * Email marketing/flujos/campañas: ` + "`" + `[Ver Email Marketing](/#/email-marketing)` + "`" + `
@@ -305,12 +315,6 @@ REGLA OBLIGATORIA - CIERRE DE CONVERSACIÓN: Al final de CADA respuesta sin exce
 [[OPT]]Primera acción concreta que el usuario podría querer
 [[OPT]]Segunda acción concreta que el usuario podría querer
 [[OPT]]Tercera acción concreta que el usuario podría querer
-
-Ejemplo tras responder sobre creativos:
-[[FOLLOWUP]]¿Querés analizar el rendimiento de alguna campaña en particular?
-[[OPT]]Ver resultados de la campaña de ventas
-[[OPT]]¿Cuánto gastamos en total este mes?
-[[OPT]]Ver los emails programados
 
 NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
 
@@ -345,21 +349,29 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
       if (!response.ok) {
         const errText = await response.text();
         console.error('OpenAI API Error:', errText);
-        return res.status(response.status).json({ error: 'OpenAI API completion error' });
+        sendEvent({ type: 'error', message: 'Error de OpenAI API' });
+        res.end();
+        return;
       }
 
       const responseData = await response.json();
       const choice = responseData.choices?.[0];
       const assistantMessage = choice?.message;
 
-      if (!assistantMessage) {
-        break;
-      }
+      if (!assistantMessage) break;
 
       apiMessages.push(assistantMessage);
 
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        // Execute all tool calls in parallel for maximum speed
+        // Emit thinking event with all tools being called
+        const toolSteps = assistantMessage.tool_calls.map((tc: any) => ({
+          tool: tc.function.name,
+          label: TOOL_META[tc.function.name]?.label || tc.function.name,
+          icon: TOOL_META[tc.function.name]?.icon || '⚙️',
+        }));
+        sendEvent({ type: 'thinking', steps: toolSteps });
+
+        // Execute all tool calls in parallel
         const toolResults = await Promise.all(assistantMessage.tool_calls.map(async (toolCall: any) => {
           const { name, arguments: argsString } = toolCall.function;
           let args: any = {};
@@ -370,20 +382,13 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
           if (name === 'list_clients') {
             if (!isAdmin) {
               if (userClientId) {
-                const { data } = await supabase
-                  .from('car_clients')
-                  .select('id, business_name')
-                  .eq('id', userClientId)
-                  .maybeSingle();
+                const { data } = await supabase.from('car_clients').select('id, business_name').eq('id', userClientId).maybeSingle();
                 toolResult = data ? [data] : [];
               } else {
                 toolResult = [];
               }
             } else {
-              const { data } = await supabase
-                .from('car_clients')
-                .select('id, business_name')
-                .order('business_name');
+              const { data } = await supabase.from('car_clients').select('id, business_name').order('business_name');
               toolResult = data || [];
             }
           } else if (name === 'get_client_metrics') {
@@ -392,23 +397,10 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
               toolResult = { error: 'Access denied or missing clientId' };
             } else {
               const [metaRes, emailRes] = await Promise.all([
-                supabase
-                  .from('car_meta_metrics')
-                  .select('*')
-                  .eq('client_id', clientId)
-                  .order('period_start', { ascending: false })
-                  .limit(10),
-                supabase
-                  .from('car_email_metrics')
-                  .select('*')
-                  .eq('client_id', clientId)
-                  .order('period_start', { ascending: false })
-                  .limit(10),
+                supabase.from('car_meta_metrics').select('*').eq('client_id', clientId).order('period_start', { ascending: false }).limit(10),
+                supabase.from('car_email_metrics').select('*').eq('client_id', clientId).order('period_start', { ascending: false }).limit(10),
               ]);
-              toolResult = {
-                metaMetrics: metaRes.data || [],
-                emailMetrics: emailRes.data || [],
-              };
+              toolResult = { metaMetrics: metaRes.data || [], emailMetrics: emailRes.data || [] };
             }
           } else if (name === 'get_klaviyo_data') {
             const { clientId } = args as { clientId: string };
@@ -427,7 +419,6 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
             if (!clientId || !isAuthorizedForClient(clientId)) {
               toolResult = { error: 'Access denied or missing clientId' };
             } else {
-              // Fetch client data and token in parallel
               const [clientData, token] = await Promise.all([
                 getClientData(clientId, 'meta_account_id'),
                 getMetaToken(),
@@ -555,7 +546,7 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
                   const grouped: Record<string, { campaignName: string; objective: string; creatives: string[] }> = {};
                   for (const ad of ads) {
                     const cid = ad.campaign_id || 'other';
-                    const camp = campMap.get(cid);
+                    const camp = campMap.get(cid) as any;
                     const cname = camp?.name || 'Sin campaña';
                     const obj = camp?.objective || '';
                     if (!grouped[cid]) grouped[cid] = { campaignName: cname, objective: obj, creatives: [] };
@@ -620,21 +611,15 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
                     try {
                       const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
                       const targetUrl = `https://${cleanDomain}/admin/api/2024-01/orders.json?status=any&created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=250`;
-                      
                       const res = await fetch(targetUrl, {
-                        headers: {
-                          'X-Shopify-Access-Token': token,
-                          'Content-Type': 'application/json',
-                        }
+                        headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' }
                       });
-
                       if (!res.ok) throw new Error(`Shopify status ${res.status}`);
                       const data = await res.json();
                       const orders = data.orders || [];
                       const validOrders = orders.filter((o: any) => !o.cancelled_at && o.financial_status !== 'voided');
                       const totalRevenue = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_price || 0), 0);
                       const totalDiscounts = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_discounts || 0), 0);
-                      
                       toolResult = {
                         platform: 'Shopify',
                         revenue: totalRevenue,
@@ -662,12 +647,10 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
                           'Content-Type': 'application/json',
                         }
                       });
-
                       if (!res.ok) throw new Error(`Tiendanube status ${res.status}`);
                       const orders = await res.json();
                       const validOrders = Array.isArray(orders) ? orders.filter((o: any) => o.status !== 'cancelled') : [];
                       const totalRevenue = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total || 0), 0);
-                      
                       toolResult = {
                         platform: 'Tiendanube',
                         revenue: totalRevenue,
@@ -688,6 +671,9 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
             toolResult = { error: `Tool ${name} not implemented` };
           }
 
+          // Emit tool_done for each tool as it completes
+          sendEvent({ type: 'tool_done', tool: name });
+
           return {
             role: 'tool' as const,
             tool_call_id: toolCall.id,
@@ -696,7 +682,6 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
           };
         }));
 
-        // Add all tool results to messages at once
         for (const result of toolResults) {
           apiMessages.push(result as any);
         }
@@ -706,10 +691,11 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
       }
     }
 
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ reply: finalReply || 'Perdón, no pude procesar la consulta.' });
+    sendEvent({ type: 'done', reply: finalReply || 'Perdón, no pude procesar la consulta.' });
+    res.end();
   } catch (err: any) {
     console.error('Chat handler execution error:', err);
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+    sendEvent({ type: 'error', message: err.message || 'Internal server error' });
+    res.end();
   }
 }
