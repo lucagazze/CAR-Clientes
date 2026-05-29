@@ -50,7 +50,7 @@ async function getClientData(clientId: string, fields: string): Promise<any> {
   return data;
 }
 
-// Klaviyo Helper function
+// Klaviyo Helper function — returns real live data from Klaviyo API
 async function fetchKlaviyoData(apiKey: string) {
   const kvFetch = async (path: string) => {
     const res = await fetch(`https://a.klaviyo.com/api/${path}`, {
@@ -60,54 +60,72 @@ async function fetchKlaviyoData(apiKey: string) {
         Accept: 'application/json',
       },
     });
-    if (!res.ok) throw new Error(`Email Marketing API error: ${res.status}`);
+    if (!res.ok) throw new Error(`Klaviyo API error ${res.status}`);
     return res.json();
+  };
+
+  const fmtDate = (d?: string) => {
+    if (!d) return null;
+    return new Date(d).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   try {
     const [campsData, flowsData] = await Promise.all([
-      kvFetch(
-        `campaigns?filter=equals(messages.channel,%22email%22)&include=campaign-messages&sort=-created_at`,
-      ),
-      kvFetch(`flows?sort=-updated`),
+      kvFetch(`campaigns?filter=equals(messages.channel,%22email%22)&include=campaign-messages&sort=-created_at&page[size]=50`),
+      kvFetch(`flows?sort=-updated&page[size]=50`),
     ]);
 
     const msgMap = new Map<string, any>();
     for (const item of campsData.included ?? []) {
       if (item.type === 'campaign-message') {
-        msgMap.set(item.id, {
-          subject: item.attributes.subject,
-          preview_text: item.attributes.preview_text,
-        });
+        msgMap.set(item.id, { subject: item.attributes.subject, preview_text: item.attributes.preview_text });
       }
     }
 
-    const campaigns = (campsData.data ?? [])
-      .filter((c: any) => c.attributes.status.toLowerCase() !== 'cancelled')
-      .map((c: any) => {
-        const msgIds: string[] = c.relationships?.['campaign-messages']?.data?.map((d: any) => d.id) ?? [];
-        const msg = msgIds[0] ? msgMap.get(msgIds[0]) : undefined;
-        return {
-          name: c.attributes.name,
-          status: c.attributes.status,
-          send_time: c.attributes.send_time,
-          scheduled_at: c.attributes.scheduled_at,
-          subject: msg?.subject,
-        };
-      });
+    const allCamps = (campsData.data ?? []).filter((c: any) => c.attributes.status.toLowerCase() !== 'cancelled');
+    const scheduled = allCamps.filter((c: any) => c.attributes.status.toLowerCase() === 'scheduled');
+    const sent = allCamps.filter((c: any) => c.attributes.status.toLowerCase() === 'sent');
+    const draft = allCamps.filter((c: any) => !['scheduled','sent'].includes(c.attributes.status.toLowerCase()));
 
-    const flows = (flowsData.data ?? [])
+    const mapCamp = (c: any) => {
+      const msgIds: string[] = c.relationships?.['campaign-messages']?.data?.map((d: any) => d.id) ?? [];
+      const msg = msgIds[0] ? msgMap.get(msgIds[0]) : undefined;
+      const sendDate = c.attributes.send_time ?? c.attributes.scheduled_at;
+      return {
+        name: c.attributes.name,
+        subject: msg?.subject || c.attributes.name,
+        status: c.attributes.status,
+        sendDate: sendDate ? fmtDate(sendDate) : null,
+      };
+    };
+
+    const campaigns = {
+      scheduled: scheduled.map(mapCamp),
+      sent: sent.slice(0, 10).map(mapCamp),
+      draft: draft.slice(0, 5).map(mapCamp),
+    };
+
+    const liveFlows = (flowsData.data ?? [])
       .filter((f: any) => f.attributes.status.toLowerCase() === 'live')
-      .map((f: any) => ({
-        name: f.attributes.name,
-        status: f.attributes.status,
-        trigger_type: f.attributes.trigger_type,
-      }));
+      .map((f: any) => ({ name: f.attributes.name, trigger: f.attributes.trigger_type }));
 
-    return { campaigns, flows };
+    const allFlows = (flowsData.data ?? [])
+      .map((f: any) => ({ name: f.attributes.name, status: f.attributes.status, trigger: f.attributes.trigger_type }));
+
+    return {
+      campaigns,
+      liveFlows,
+      totalFlows: allFlows.length,
+      summary: {
+        scheduledCount: scheduled.length,
+        sentCount: sent.length,
+        draftCount: draft.length,
+        liveFlowsCount: liveFlows.length,
+      }
+    };
   } catch (error: any) {
-    console.error('Email error:', error);
-    return { error: error.message || 'Error fetching Email Marketing data' };
+    console.error('Klaviyo error:', error);
+    return { error: error.message || 'Error al obtener datos de Email Marketing' };
   }
 }
 
@@ -167,20 +185,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       function: {
         name: 'get_klaviyo_data',
         description: 'Get live campaigns (sent, scheduled, and draft emails with subjects/send dates) and active flows directly from the email marketing provider for a client.',
-        parameters: {
-          type: 'object',
-          properties: {
-            clientId: { type: 'string', description: 'The UUID of the client' },
-          },
-          required: ['clientId'],
-        },
-      },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_assigned_emails',
-        description: 'Get the assigned and scheduled emails/files from the Supabase email library for a client.',
         parameters: {
           type: 'object',
           properties: {
@@ -262,16 +266,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const systemMessage = `Sos el asistente de marketing digital inteligente de Algoritmia.
 Tu nombre es "Algo". Respondés en español argentino, de manera amigable y profesional.
 
-Tenés acceso a herramientas reales para consultar datos de clientes: Meta Ads, Email Marketing (Klaviyo), e-commerce (Shopify/Tiendanube), Instagram y emails asignados.
+Tenés acceso a herramientas reales para consultar datos de clientes: Meta Ads, Email Marketing (Klaviyo), e-commerce (Shopify/Tiendanube), Instagram.
 
 CUÁNDO USAR CADA HERRAMIENTA:
-- 'get_meta_ads_live_data': SIEMPRE que el usuario pregunte sobre rendimiento de Meta Ads (gasto, ROAS, resultados, campañas activas, cómo le va en publicidad). Esta es la herramienta principal para Meta.
-- 'get_meta_ads_creatives': Solo cuando pregunten cuántos creativos/anuncios están activos o sus nombres. NO para métricas de rendimiento.
-- 'get_klaviyo_data': Para campañas y flujos de email marketing.
-- 'get_assigned_emails': Para ver emails asignados/programados desde la biblioteca.
+- 'get_meta_ads_live_data': SIEMPRE que el usuario pregunte sobre rendimiento de Meta Ads (gasto, ROAS, resultados, campañas activas, cómo le va en publicidad).
+- 'get_meta_ads_creatives': Solo para cantidad/nombres de creativos activos.
+- 'get_klaviyo_data': SIEMPRE que el usuario pregunte sobre email marketing: emails programados, campañas enviadas, flujos activos, qué emails están listos, cuándo se envía algo. Esta herramienta conecta DIRECTO a Klaviyo y trae datos en tiempo real.
 - 'get_ecommerce_data': Para ventas, ingresos y pedidos de la tienda.
 - 'get_instagram_posts': Para posts recientes de Instagram.
-- 'list_clients': Para encontrar el clientId de un cliente por nombre (solo si no lo sabés).
+- 'list_clients': Para encontrar el clientId de un cliente por nombre.
+
+IMPORTANTE sobre email marketing:
+- Para cualquier pregunta sobre emails, campañas de email, flujos, automatizaciones → SIEMPRE usar 'get_klaviyo_data'.
+- El resultado incluye: campaigns.scheduled (programados con fecha), campaigns.sent (enviados), campaigns.draft (borradores), liveFlows (flujos activos).
+- Al responder sobre emails programados: mostrar SOLO los de campaigns.scheduled con su fecha. Si está vacío, decir que no hay emails programados actualmente.
+- No menciones "biblioteca" ni "asignaciones" - eso es interno de la agencia.
 
 FLUJO DE TRABAJO:
 1. Si no conocés el clientId del cliente mencionado, usá 'list_clients' primero.
@@ -418,17 +427,6 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
               } else {
                 toolResult = await fetchKlaviyoData(clientData.klaviyo_api_key);
               }
-            }
-          } else if (name === 'get_assigned_emails') {
-            const { clientId } = args as { clientId: string };
-            if (!clientId || !isAuthorizedForClient(clientId)) {
-              toolResult = { error: 'Access denied or missing clientId' };
-            } else {
-              const { data } = await supabase
-                .from('car_email_assignments')
-                .select('*')
-                .eq('client_id', clientId);
-              toolResult = data || [];
             }
           } else if (name === 'get_meta_ads_live_data') {
             const { clientId, days = 14 } = args as { clientId: string; days?: number };

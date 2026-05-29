@@ -12,7 +12,6 @@ import {
   Users, DollarSign, Target, BarChart2, Globe, Smartphone, User, Megaphone, MessageSquare, Layers, Film, X
 } from 'lucide-react';
 import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
-import { TopLoadingBar } from '../components/ui/TopLoadingBar';
 import EmailLoader from '../components/ui/EmailLoader';
 
 const BLUE = '#3b82f6';
@@ -616,7 +615,6 @@ export default function CaptacionPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 print:space-y-6 print:p-0 print:max-w-none">
-      <TopLoadingBar loading={loading || loadingAds} color="#3b82f6" />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
         <div>
@@ -870,8 +868,24 @@ export default function CaptacionPage() {
               <p className="text-[11px] text-zinc-400">Anuncios en circulación y su rendimiento</p>
             </div>
           </div>
-          {loadingAds && <div className="w-4 h-4 border-2 border-zinc-200 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />}
         </div>
+
+        {loadingAds && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 flex flex-col animate-pulse">
+                <div className="h-52 bg-zinc-200 dark:bg-zinc-700" />
+                <div className="p-4 space-y-3">
+                  <div className="h-4 w-3/4 bg-zinc-200 dark:bg-zinc-700 rounded-full" />
+                  <div className="h-3 w-1/4 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+                  <div className="grid grid-cols-4 gap-2 mt-2">
+                    {[...Array(4)].map((_, j) => <div key={j} className="h-12 bg-zinc-100 dark:bg-zinc-800 rounded-xl" />)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {!loadingAds && activeAds.length === 0 && (
           <p className="text-xs text-zinc-400 text-center py-8">No hay creativos activos en este momento</p>

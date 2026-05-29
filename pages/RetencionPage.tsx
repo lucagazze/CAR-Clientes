@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
 import EmailLoader from '../components/ui/EmailLoader';
-import { TopLoadingBar } from '../components/ui/TopLoadingBar';
 
 const MAIN_COLOR = '#10b981'; // Green (Emerald) for Retention
 
@@ -200,7 +199,6 @@ export default function RetencionPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8">
-      <TopLoadingBar loading={fetchingKlaviyo || fetchingDetailed} color="#10b981" />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
         <div>
@@ -262,7 +260,15 @@ export default function RetencionPage() {
       {profile?.klaviyo_api_key && (
         <div className="space-y-4">
           {fetchingKlaviyo ? (
-            <EmailLoader loading={fetchingKlaviyo} color={MAIN_COLOR} />
+            <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] overflow-hidden grid grid-cols-2 lg:grid-cols-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="px-6 py-5 border-r border-zinc-100 dark:border-zinc-800 last:border-r-0 space-y-3">
+                  <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-700 rounded-full animate-pulse" />
+                  <div className="h-7 w-24 bg-zinc-200 dark:bg-zinc-700 rounded-lg animate-pulse" />
+                  <div className="h-8 w-full bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse opacity-50" />
+                </div>
+              ))}
+            </div>
           ) : currentKlaviyo ? (
             <div className="space-y-4">
               <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap overflow-x-auto scrollbar-hide">
