@@ -504,14 +504,10 @@ export default function RedesSocialesPage() {
                               ) : (
                                 <div 
                                   onClick={() => {
-                                    if (m.media_type === 'VIDEO') {
-                                      setPlayingVideoId(m.id);
-                                    } else {
-                                      openCommentsModal(m.id, m.permalink, 'instagram');
-                                    }
+                                    openCommentsModal(m.id, m.permalink, 'instagram');
                                   }}
                                   className="w-full h-full relative cursor-pointer"
-                                  title={m.media_type === 'VIDEO' ? "Reproducir video" : "Ver comentarios"}
+                                  title="Ver comentarios"
                                 >
                                   {m.media_url || m.thumbnail_url ? (
                                     <img 
@@ -524,31 +520,57 @@ export default function RedesSocialesPage() {
                                     <ImageIcon className="w-8 h-8 text-zinc-300 dark:text-zinc-700 animate-pulse" />
                                   )}
 
+                                  {/* Play Icon/Button - Always visible for videos, handles click to play in-place */}
                                   {m.media_type === 'VIDEO' && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 hover:bg-black/30 transition-colors">
-                                      <div className="w-14 h-14 rounded-full bg-white/90 hover:bg-white text-pink-600 flex items-center justify-center shadow-lg hover:scale-105 transition-all">
+                                    <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPlayingVideoId(m.id);
+                                        }}
+                                        className="pointer-events-auto w-14 h-14 rounded-full bg-white/90 hover:bg-white text-pink-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer"
+                                        title="Reproducir video"
+                                      >
                                         <svg className="w-6 h-6 fill-current ml-1" viewBox="0 0 24 24">
                                           <path d="M8 5v14l11-7z" />
                                         </svg>
-                                      </div>
+                                      </button>
                                     </div>
                                   )}
                                   
-                                  <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white p-1.5 rounded-lg text-xs flex items-center justify-center">
+                                  <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white p-1.5 rounded-lg text-xs flex items-center justify-center z-10">
                                     {m.media_type === 'VIDEO' && <Video className="w-3.5 h-3.5" />}
                                     {m.media_type === 'CAROUSEL_ALBUM' && <Layers className="w-3.5 h-3.5" />}
                                     {m.media_type === 'IMAGE' && <ImageIcon className="w-3.5 h-3.5" />}
                                   </div>
 
-                                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-6 text-white font-bold select-none">
-                                    <div className="flex items-center gap-1.5 text-[14px]">
-                                      <Heart className="w-5 h-5 fill-white text-white" />
-                                      <span>{fmtNumber(m.like_count || 0)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-[14px]">
-                                      <MessageCircle className="w-5 h-5 fill-white text-white" />
-                                      <span>{fmtNumber(m.comments_count || 0)}</span>
-                                    </div>
+                                  {/* Hover Overlay: Likes & Comments */}
+                                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-6 text-white font-bold select-none z-10">
+                                    {m.media_type === 'VIDEO' ? (
+                                      <div className="flex flex-col items-center justify-end h-full pb-8 gap-4">
+                                        <div className="flex items-center gap-6">
+                                          <div className="flex items-center gap-1.5 text-[14px]">
+                                            <Heart className="w-5 h-5 fill-white text-white" />
+                                            <span>{fmtNumber(m.like_count || 0)}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 text-[14px]">
+                                            <MessageCircle className="w-5 h-5 fill-white text-white" />
+                                            <span>{fmtNumber(m.comments_count || 0)}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <div className="flex items-center gap-1.5 text-[14px]">
+                                          <Heart className="w-5 h-5 fill-white text-white" />
+                                          <span>{fmtNumber(m.like_count || 0)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[14px]">
+                                          <MessageCircle className="w-5 h-5 fill-white text-white" />
+                                          <span>{fmtNumber(m.comments_count || 0)}</span>
+                                        </div>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               )}
