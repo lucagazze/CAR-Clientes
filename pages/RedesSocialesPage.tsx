@@ -501,7 +501,10 @@ export default function RedesSocialesPage() {
         setIgMedia(resolvedIgMedia);
 
         setFbProfile(fbProfileRes);
-        const resolvedFbMedia = (fbMediaRes as any)?.data || fbMediaRes || [];
+        const resolvedFbMedia = ((fbMediaRes as any)?.data || fbMediaRes || []).map((post: any) => ({
+          ...post,
+          source: post.source || post.attachments?.data?.[0]?.media?.source || null
+        }));
         setFbMedia(resolvedFbMedia);
 
       } catch (err: any) {
