@@ -53,15 +53,28 @@ async function getClientData(clientId: string, fields: string): Promise<any> {
 
 // ── Optimized Klaviyo fetch ───────────────────────────────────────────────────
 async function fetchKlaviyoData(apiKey: string) {
-  // Use the same headers as the /api/klaviyo proxy (JSON:API format required by Klaviyo)
   const h = {
     Authorization: `Klaviyo-API-Key ${apiKey}`,
     Revision: '2024-10-15',
-    Accept: 'application/vnd.api+json',
+    Accept: 'application/json',
   };
-  const kvFetch = (path: string) =>
-    fetch(`https://a.klaviyo.com/api/${path}`, { headers: h })
-      .then(r => { if (!r.ok) throw new Error(`Klaviyo ${r.status}`); return r.json(); });
+
+  const kvFetch = async (path: string) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const r = await fetch(`https://a.klaviyo.com/api/${path}`, { headers: h });
+      if ((r.status === 429 || r.status >= 500) && attempt < 2) {
+        const wait = r.status === 429 ? parseInt(r.headers.get('retry-after') || '2') * 1000 : 1000 * (attempt + 1);
+        await new Promise(res => setTimeout(res, Math.min(wait, 5000)));
+        continue;
+      }
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '');
+        throw new Error(`Klaviyo ${r.status}: ${txt.slice(0, 150)}`);
+      }
+      return r.json();
+    }
+    throw new Error('Klaviyo: max retries exceeded');
+  };
 
   const fmtDate = (d?: string) => d
     ? new Date(d).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -136,7 +149,8 @@ function startSpeculativeFetches(
     if (cache.has(tool)) continue;
 
     if (tool === 'get_klaviyo_data' && klaviyoKey) {
-      cache.set(tool, fetchKlaviyoData(klaviyoKey).catch(() => null));
+      // Keep the error object so the tool handler can detect failure and retry
+      cache.set(tool, fetchKlaviyoData(klaviyoKey));
     }
 
     if (tool === 'get_meta_ads_creatives' && metaAccountId && token) {
@@ -389,14 +403,25 @@ END every response with exactly:
           const { clientId } = args;
           if (!clientId || !isAuthorizedForClient(clientId)) { toolResult = { error: 'Access denied' }; }
           else {
-            // Check speculative cache first
-            const spec = specCache.get('get_klaviyo_data');
-            if (spec) {
-              toolResult = await spec;
+            // Resolve API key: prefer direct key from client, fallback to DB
+            let apiKey = (clientId === fallbackClientId) ? directKlaviyoKey : undefined;
+            if (!apiKey) apiKey = (await getClientData(clientId, 'klaviyo_api_key'))?.klaviyo_api_key;
+
+            if (!apiKey) {
+              toolResult = { error: 'Klaviyo API key not configured for this client.' };
             } else {
-              let apiKey = (clientId === fallbackClientId) ? directKlaviyoKey : undefined;
-              if (!apiKey) apiKey = (await getClientData(clientId, 'klaviyo_api_key'))?.klaviyo_api_key;
-              toolResult = apiKey ? await fetchKlaviyoData(apiKey) : { error: 'Klaviyo API key not configured' };
+              // Try speculative cache first; if it failed (has .error), make a fresh call
+              const spec = specCache.get('get_klaviyo_data');
+              if (spec) {
+                const cached = await spec;
+                if (cached && !cached.error) {
+                  toolResult = cached; // Speculative fetch succeeded
+                } else {
+                  toolResult = await fetchKlaviyoData(apiKey); // Retry fresh
+                }
+              } else {
+                toolResult = await fetchKlaviyoData(apiKey);
+              }
             }
           }
 
