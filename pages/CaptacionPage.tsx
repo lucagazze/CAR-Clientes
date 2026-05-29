@@ -12,6 +12,7 @@ import {
   Users, DollarSign, Target, BarChart2, Globe, Smartphone, User, Megaphone, MessageSquare, Layers, Film, X
 } from 'lucide-react';
 import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
+import { TopLoadingBar } from '../components/ui/TopLoadingBar';
 import EmailLoader from '../components/ui/EmailLoader';
 
 const BLUE = '#3b82f6';
@@ -249,6 +250,7 @@ export default function CaptacionPage() {
 
   // Active Creatives state
   const [activeAds, setActiveAds] = useState<any[]>([]);
+  const [campaignMap, setCampaignMap] = useState<Record<string, string>>({});
   const [adInsightsMap, setAdInsightsMap] = useState<Record<string, any>>({});
   const [loadingAds, setLoadingAds] = useState(false);
   const [activePreview, setActivePreview] = useState<{ url: string; isVideo: boolean; videoId?: string; name?: string } | null>(null);
@@ -496,15 +498,17 @@ export default function CaptacionPage() {
     
     Promise.all([
       metaAds.getAccountAds(accountId),
-      metaAds.getAdInsightsForAccount(accountId, adFields, range).catch(() => [])
-    ]).then(([adsRes, insightsRes]) => {
+      metaAds.getAdInsightsForAccount(accountId, adFields, range).catch(() => []),
+      metaAds.getCampaigns(accountId).catch(() => ({ data: [] })),
+    ]).then(([adsRes, insightsRes, campsRes]) => {
       const active = (adsRes.data || []).filter((ad: any) => ad.status === 'ACTIVE');
       setActiveAds(active);
       const byAdId: Record<string, any> = {};
-      (insightsRes || []).forEach((i: any) => {
-        if (i.ad_id) byAdId[i.ad_id] = i;
-      });
+      (insightsRes || []).forEach((i: any) => { if (i.ad_id) byAdId[i.ad_id] = i; });
       setAdInsightsMap(byAdId);
+      const cMap: Record<string, string> = {};
+      ((campsRes as any).data || []).forEach((c: any) => { if (c.id) cMap[c.id] = c.name; });
+      setCampaignMap(cMap);
     }).catch(err => {
       console.error("Error loading active ads:", err);
       setActiveAds([]);
@@ -612,6 +616,7 @@ export default function CaptacionPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 print:space-y-6 print:p-0 print:max-w-none">
+      <TopLoadingBar loading={loading || loadingAds} color="#3b82f6" />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
         <div>
@@ -872,9 +877,28 @@ export default function CaptacionPage() {
           <p className="text-xs text-zinc-400 text-center py-8">No hay creativos activos en este momento</p>
         )}
 
-        {activeAds.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {activeAds.filter(ad => parseFloat(adInsightsMap[ad.id]?.spend || 0) > 0).map(ad => {
+        {activeAds.length > 0 && (() => {
+          const adsWithSpend = activeAds.filter(ad => parseFloat(adInsightsMap[ad.id]?.spend || 0) > 0);
+          // Group by campaign
+          const grouped: Record<string, { campaignName: string; ads: any[] }> = {};
+          adsWithSpend.forEach(ad => {
+            const cid = ad.campaign_id || 'other';
+            const cname = campaignMap[cid] || 'Sin campaña';
+            if (!grouped[cid]) grouped[cid] = { campaignName: cname, ads: [] };
+            grouped[cid].ads.push(ad);
+          });
+
+          return (
+            <div className="space-y-8">
+              {Object.entries(grouped).map(([cid, group]) => (
+                <div key={cid}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1 h-5 rounded-full bg-blue-500 flex-shrink-0" />
+                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 tracking-tight truncate">{group.campaignName}</h4>
+                    <span className="text-[10px] font-bold text-zinc-400 flex-shrink-0">{group.ads.length} creativos</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {group.ads.map(ad => {
               const insights = adInsightsMap[ad.id];
               const adSpend = parseFloat(insights?.spend || 0);
               const adActions = insights?.actions || [];
@@ -977,9 +1001,13 @@ export default function CaptacionPage() {
                   </div>
                 </div>
               );
-            })}
-          </div>
-        )}
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Lightbox / Modal for Creative Preview */}

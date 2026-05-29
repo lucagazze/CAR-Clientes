@@ -39,6 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     forwardHeaders['Content-Type'] = 'application/vnd.api+json';
   }
 
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
   try {
     const fetchOptions: RequestInit = {
       method: req.method || 'GET',
@@ -55,7 +57,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const klaviyoRes = await fetch(targetUrl, fetchOptions);
+    // Retry up to 3 times on 429 with exponential backoff
+    let klaviyoRes: Response | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      klaviyoRes = await fetch(targetUrl, fetchOptions);
+      if (klaviyoRes.status !== 429) break;
+      const retryAfter = parseInt(klaviyoRes.headers.get('retry-after') || '2');
+      const backoff = Math.min((attempt + 1) * retryAfter * 1000, 8000);
+      if (attempt < 3) await sleep(backoff);
+    }
+    if (!klaviyoRes) throw new Error('No response from Klaviyo');
 
     ['retry-after', 'ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset'].forEach(h => {
       const val = klaviyoRes.headers.get(h);

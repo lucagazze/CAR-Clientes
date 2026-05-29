@@ -452,11 +452,12 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
                 try {
                   const preset = days <= 7 ? 'last_7d' : days <= 14 ? 'last_14d' : days <= 30 ? 'last_30d' : 'last_90d';
                   const base = `https://graph.facebook.com/v21.0`;
+                  const activeFilter = encodeURIComponent('["ACTIVE"]');
 
                   const [insightsRes, campaignsRes, adsRes] = await Promise.all([
                     fetch(`${base}/${adAccountId}/insights?fields=spend,reach,impressions,actions,action_values,purchase_roas&date_preset=${preset}&access_token=${token}`),
-                    fetch(`${base}/${adAccountId}/campaigns?fields=name,status,objective,daily_budget,lifetime_budget&effective_status=["ACTIVE"]&limit=50&access_token=${token}`),
-                    fetch(`${base}/${adAccountId}/ads?fields=id,name&effective_status=["ACTIVE"]&limit=100&access_token=${token}`),
+                    fetch(`${base}/${adAccountId}/campaigns?fields=name,status,objective,daily_budget,lifetime_budget&effective_status=${activeFilter}&limit=50&access_token=${token}`),
+                    fetch(`${base}/${adAccountId}/ads?fields=id,name&effective_status=${activeFilter}&limit=100&access_token=${token}`),
                   ]);
 
                   if (!insightsRes.ok) {
@@ -544,21 +545,28 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
               } else {
                 try {
                   const base = `https://graph.facebook.com/v21.0`;
+                  const activeFilter = encodeURIComponent('["ACTIVE"]');
                   const [adsRes, campsRes] = await Promise.all([
-                    fetch(`${base}/${adAccountId}/ads?fields=id,name,campaign_id&effective_status=["ACTIVE"]&limit=100&access_token=${token2}`),
-                    fetch(`${base}/${adAccountId}/campaigns?fields=id,name&effective_status=["ACTIVE"]&limit=50&access_token=${token2}`),
+                    fetch(`${base}/${adAccountId}/ads?fields=id,name,campaign_id&effective_status=${activeFilter}&limit=100&access_token=${token2}`),
+                    fetch(`${base}/${adAccountId}/campaigns?fields=id,name,objective&effective_status=${activeFilter}&limit=50&access_token=${token2}`).catch(() => null),
                   ]);
-                  if (!adsRes.ok) throw new Error(`Meta ads status ${adsRes.status}`);
-                  const [adsJson, campsJson] = await Promise.all([adsRes.json(), campsRes.json()]);
+                  if (!adsRes.ok) {
+                    const errBody = await adsRes.text().catch(() => '');
+                    throw new Error(`Meta API ${adsRes.status}: ${errBody.slice(0, 200)}`);
+                  }
+                  const adsJson = await adsRes.json();
+                  const campsJson = campsRes?.ok ? await campsRes.json().catch(() => ({ data: [] })) : { data: [] };
                   const ads = adsJson.data || [];
                   const camps = campsJson.data || [];
-                  const campMap = new Map(camps.map((c: any) => [c.id, c.name]));
+                  const campMap = new Map(camps.map((c: any) => [c.id, { name: c.name, objective: c.objective }]));
 
-                  const grouped: Record<string, { campaignName: string; creatives: string[] }> = {};
+                  const grouped: Record<string, { campaignName: string; objective: string; creatives: string[] }> = {};
                   for (const ad of ads) {
                     const cid = ad.campaign_id || 'other';
-                    const cname = campMap.get(cid) || 'Sin campaña';
-                    if (!grouped[cid]) grouped[cid] = { campaignName: cname, creatives: [] };
+                    const camp = campMap.get(cid);
+                    const cname = camp?.name || 'Sin campaña';
+                    const obj = camp?.objective || '';
+                    if (!grouped[cid]) grouped[cid] = { campaignName: cname, objective: obj, creatives: [] };
                     grouped[cid].creatives.push(ad.name);
                   }
 
@@ -567,7 +575,7 @@ NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
                     byCampaign: Object.values(grouped),
                   };
                 } catch (e: any) {
-                  toolResult = { error: e.message };
+                  toolResult = { error: `Error obteniendo creativos: ${e.message}` };
                 }
               }
             }

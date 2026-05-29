@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
 import EmailLoader from '../components/ui/EmailLoader';
+import { TopLoadingBar } from '../components/ui/TopLoadingBar';
 
 const MAIN_COLOR = '#10b981'; // Green (Emerald) for Retention
 
@@ -199,6 +200,7 @@ export default function RetencionPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8">
+      <TopLoadingBar loading={fetchingKlaviyo || fetchingDetailed} color="#10b981" />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
         <div>
