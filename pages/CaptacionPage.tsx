@@ -45,21 +45,38 @@ const fmtVal = (v: number) => {
 
 
 // ── Creative Preview Modal ────────────────────────────────────────────────────
-const CreativePreviewModal = ({ preview, onClose }: { preview: { url: string; isVideo: boolean; name?: string }; onClose: () => void }) => {
-  const [loaded, setLoaded] = React.useState(false);
+const CreativePreviewModal = ({ preview, onClose }: {
+  preview: { url: string; isVideo: boolean; videoId?: string; name?: string };
+  onClose: () => void;
+}) => {
+  const [imgLoaded, setImgLoaded] = React.useState(false);
+  const [videoSrc, setVideoSrc] = React.useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
 
+  // Fetch actual video source URL
   React.useEffect(() => {
-    setLoaded(false);
+    if (!preview.isVideo || !preview.videoId) return;
+    setVideoLoading(true);
+    setVideoSrc(null);
+    fetch(`/api/meta-video?videoId=${preview.videoId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.source) setVideoSrc(d.source); })
+      .catch(() => {})
+      .finally(() => setVideoLoading(false));
+  }, [preview.videoId, preview.isVideo]);
+
+  // Progress bar for images
+  React.useEffect(() => {
+    if (preview.isVideo) return;
+    setImgLoaded(false);
     setProgress(0);
     const start = Date.now();
     const tick = setInterval(() => {
-      const elapsed = Date.now() - start;
-      // Simulate progress: fast to 80%, then slow until image loads
-      setProgress(Math.min(80, (elapsed / 2000) * 80));
+      setProgress(Math.min(80, ((Date.now() - start) / 2000) * 80));
     }, 50);
     return () => clearInterval(tick);
-  }, [preview.url]);
+  }, [preview.url, preview.isVideo]);
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -67,97 +84,91 @@ const CreativePreviewModal = ({ preview, onClose }: { preview: { url: string; is
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const handleLoad = () => {
-    setProgress(100);
-    setTimeout(() => setLoaded(true), 200);
-  };
-
   return (
     <div
       className="fixed inset-0 z-[150] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose}
     >
-      {/* Loading bar */}
-      {!loaded && (
+      {/* Loading bar (images only) */}
+      {!preview.isVideo && !imgLoaded && (
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/5 z-20">
-          <div
-            className="h-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-200 rounded-full"
-            style={{ width: `${progress}%` }}
-          />
+          <div className="h-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-200 rounded-full" style={{ width: `${progress}%` }} />
         </div>
       )}
 
-      {/* Close button */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-20 backdrop-blur-sm"
-      >
+      {/* Close */}
+      <button onClick={onClose} className="absolute top-4 right-4 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-20 backdrop-blur-sm">
         <X className="w-5 h-5" />
       </button>
 
-      {/* Ad name label */}
+      {/* Name + badge */}
       {preview.name && (
         <div className="absolute top-4 left-4 right-16 z-20">
-          <p className="text-white/70 text-[12px] font-bold truncate max-w-[60vw]">{preview.name}</p>
+          <p className="text-white/80 text-[13px] font-bold truncate max-w-[70vw]">{preview.name}</p>
           {preview.isVideo && (
             <div className="inline-flex items-center gap-1 mt-1 bg-white/10 px-2 py-0.5 rounded-full">
               <Film className="w-3 h-3 text-white/60" />
-              <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Vista previa de video</span>
+              <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Video</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Image container */}
+      {/* Content */}
       <div
-        className="relative animate-in zoom-in-95 duration-200"
-        style={{ maxWidth: '88vw', maxHeight: '85vh' }}
+        className="relative animate-in zoom-in-95 duration-200 flex items-center justify-center"
+        style={{ maxWidth: '90vw', maxHeight: '88vh' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Skeleton while loading */}
-        {!loaded && (
-          <div
-            className="absolute inset-0 rounded-2xl bg-zinc-800 animate-pulse flex items-center justify-center"
-            style={{ minWidth: preview.isVideo ? '400px' : '280px', minHeight: preview.isVideo ? '400px' : '280px' }}
-          >
-            <div className="flex flex-col items-center gap-3 text-zinc-600">
-              {preview.isVideo
-                ? <Film className="w-12 h-12 opacity-30" />
-                : <div className="w-12 h-12 rounded-full border-2 border-zinc-600 border-t-violet-500 animate-spin" />
-              }
-              <span className="text-[11px] font-bold opacity-40">Cargando...</span>
+        {preview.isVideo ? (
+          videoLoading ? (
+            /* Loading video */
+            <div className="w-[min(90vw,560px)] h-[min(88vh,420px)] rounded-2xl bg-zinc-900 border border-white/10 flex flex-col items-center justify-center gap-4">
+              <div className="w-12 h-12 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
+              <span className="text-[12px] font-bold text-zinc-500">Cargando video...</span>
             </div>
-          </div>
-        )}
-
-        <img
-          src={preview.url}
-          alt={preview.name || 'Creative Preview'}
-          onLoad={handleLoad}
-          className={`rounded-2xl shadow-2xl border border-white/10 transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          style={{
-            maxWidth: '88vw',
-            maxHeight: '85vh',
-            width: 'auto',
-            height: 'auto',
-            // Scale up small images (like video thumbnails) for better visibility
-            minWidth: preview.isVideo ? 'min(88vw, 500px)' : 'min(88vw, 320px)',
-            minHeight: preview.isVideo ? 'min(85vh, 500px)' : 'auto',
-            objectFit: preview.isVideo ? 'contain' : 'contain',
-            imageRendering: preview.isVideo ? 'auto' : 'auto',
-          }}
-        />
-
-        {/* Video play overlay */}
-        {preview.isVideo && loaded && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center border border-white/20 shadow-2xl">
-              <svg className="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          ) : videoSrc ? (
+            /* Actual video player */
+            <video
+              src={videoSrc}
+              controls
+              autoPlay
+              className="rounded-2xl shadow-2xl border border-white/10 bg-black"
+              style={{ maxWidth: '90vw', maxHeight: '88vh', minWidth: 'min(90vw, 400px)' }}
+            />
+          ) : (
+            /* Fallback: thumbnail with note */
+            <div className="relative">
+              <img
+                src={preview.url}
+                alt={preview.name}
+                className="rounded-2xl shadow-2xl border border-white/10"
+                style={{ maxWidth: '90vw', maxHeight: '88vh', minWidth: 'min(90vw, 420px)', objectFit: 'contain' }}
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="bg-black/70 backdrop-blur-sm px-4 py-2 rounded-xl text-center">
+                  <p className="text-white/70 text-[12px] font-bold">Video no disponible directamente</p>
+                  <p className="text-white/40 text-[11px] mt-0.5">Ver en Meta Ads Manager</p>
+                </div>
+              </div>
             </div>
-            <p className="mt-3 text-white/50 text-[11px] font-bold bg-black/40 backdrop-blur-sm px-3 py-1 rounded-full">
-              Solo disponible en Ads Manager
-            </p>
-          </div>
+          )
+        ) : (
+          /* Image */
+          <>
+            {!imgLoaded && (
+              <div className="absolute inset-0 rounded-2xl bg-zinc-900 animate-pulse flex items-center justify-center" style={{ minWidth: 280, minHeight: 280 }}>
+                <div className="w-10 h-10 rounded-full border-2 border-zinc-700 border-t-violet-500 animate-spin" />
+              </div>
+            )}
+            <img
+              src={preview.url}
+              alt={preview.name || 'Creative'}
+              onLoad={() => { setProgress(100); setTimeout(() => setImgLoaded(true), 150); }}
+              className={`rounded-2xl shadow-2xl border border-white/10 transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+              style={{ maxWidth: '90vw', maxHeight: '88vh', width: 'auto', height: 'auto', minWidth: 'min(90vw, 320px)', objectFit: 'contain' }}
+            />
+          </>
         )}
       </div>
     </div>
@@ -216,7 +227,7 @@ export default function CaptacionPage() {
   const [activeAds, setActiveAds] = useState<any[]>([]);
   const [adInsightsMap, setAdInsightsMap] = useState<Record<string, any>>({});
   const [loadingAds, setLoadingAds] = useState(false);
-  const [activePreview, setActivePreview] = useState<{ url: string; isVideo: boolean; name?: string } | null>(null);
+  const [activePreview, setActivePreview] = useState<{ url: string; isVideo: boolean; videoId?: string; name?: string } | null>(null);
 
   const range = activePreset === 'custom' ? { since: activeSince, until: activeUntil } : presetToRange(activePreset);
   const prevRange = getPrevPeriod(range.since, range.until);
@@ -869,7 +880,7 @@ export default function CaptacionPage() {
                     return (
                       <div
                         className="relative w-full sm:w-36 h-36 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex-shrink-0 group cursor-pointer"
-                        onClick={() => previewUrl && setActivePreview({ url: previewUrl, isVideo, name: ad.name })}
+                        onClick={() => previewUrl && setActivePreview({ url: previewUrl, isVideo, videoId: ad.creative?.video_id, name: ad.name })}
                       >
                         {previewUrl ? (
                           <>

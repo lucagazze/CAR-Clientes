@@ -295,7 +295,21 @@ REGLAS DE TONO, CONTENIDO Y FORMATO (MUY IMPORTANTES):
     ` + "`" + `[Ver Email Marketing](/#/email-marketing)` + "`" + `
   * Para métricas generales, PDFs o reportes mensuales:
     ` + "`" + `[Ver Reportes Mensuales](/#/reportes)` + "`" + `
-- Sé amigable e inteligente. Usa modismos de Argentina (por ejemplo, "tenés", "mirá", "querés", "che", "chequeá").`;
+- Sé amigable e inteligente. Usa modismos de Argentina (por ejemplo, "tenés", "mirá", "querés", "che", "chequeá").
+
+REGLA OBLIGATORIA - CIERRE DE CONVERSACIÓN: Al final de CADA respuesta sin excepción, agregá este bloque con formato exacto:
+[[FOLLOWUP]]Una pregunta de seguimiento relevante y específica al tema que acabás de responder
+[[OPT]]Primera acción concreta que el usuario podría querer
+[[OPT]]Segunda acción concreta que el usuario podría querer
+[[OPT]]Tercera acción concreta que el usuario podría querer
+
+Ejemplo tras responder sobre creativos:
+[[FOLLOWUP]]¿Querés analizar el rendimiento de alguna campaña en particular?
+[[OPT]]Ver resultados de la campaña de ventas
+[[OPT]]¿Cuánto gastamos en total este mes?
+[[OPT]]Ver los emails programados
+
+NUNCA omitir este bloque. SIEMPRE exactamente 3 opciones.`;
 
   try {
     let apiMessages = [
@@ -529,14 +543,28 @@ REGLAS DE TONO, CONTENIDO Y FORMATO (MUY IMPORTANTES):
                 toolResult = { error: 'Meta Ads access token not configured in system.' };
               } else {
                 try {
-                  const res = await fetch(`https://graph.facebook.com/v21.0/${adAccountId}/ads?fields=id,name,status&effective_status=["ACTIVE"]&limit=100&access_token=${token2}`);
-                  if (!res.ok) throw new Error(`Meta status ${res.status}`);
-                  const json = await res.json();
-                  const ads = json.data || [];
+                  const base = `https://graph.facebook.com/v21.0`;
+                  const [adsRes, campsRes] = await Promise.all([
+                    fetch(`${base}/${adAccountId}/ads?fields=id,name,campaign_id&effective_status=["ACTIVE"]&limit=100&access_token=${token2}`),
+                    fetch(`${base}/${adAccountId}/campaigns?fields=id,name&effective_status=["ACTIVE"]&limit=50&access_token=${token2}`),
+                  ]);
+                  if (!adsRes.ok) throw new Error(`Meta ads status ${adsRes.status}`);
+                  const [adsJson, campsJson] = await Promise.all([adsRes.json(), campsRes.json()]);
+                  const ads = adsJson.data || [];
+                  const camps = campsJson.data || [];
+                  const campMap = new Map(camps.map((c: any) => [c.id, c.name]));
+
+                  const grouped: Record<string, { campaignName: string; creatives: string[] }> = {};
+                  for (const ad of ads) {
+                    const cid = ad.campaign_id || 'other';
+                    const cname = campMap.get(cid) || 'Sin campaña';
+                    if (!grouped[cid]) grouped[cid] = { campaignName: cname, creatives: [] };
+                    grouped[cid].creatives.push(ad.name);
+                  }
+
                   toolResult = {
                     totalActive: ads.length,
-                    names: ads.map((a: any) => a.name),
-                    note: 'Para ver los creativos con imágenes, usar el botón de Captación en la plataforma.',
+                    byCampaign: Object.values(grouped),
                   };
                 } catch (e: any) {
                   toolResult = { error: e.message };

@@ -10,7 +10,7 @@ interface Message {
 }
 
 // ── Markdown Renderer Component ───────────────────────────────────────────────
-const MarkdownRenderer = ({ content, onLinkClick }: { content: string; onLinkClick?: () => void }) => {
+const MarkdownRenderer = ({ content, onLinkClick, onSend }: { content: string; onLinkClick?: () => void; onSend?: (text: string) => void }) => {
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
   let currentList: React.ReactNode[] = [];
@@ -172,8 +172,26 @@ const MarkdownRenderer = ({ content, onLinkClick }: { content: string; onLinkCli
     );
   };
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  // Pre-process: extract [[FOLLOWUP]] block from end of content
+  let followupQuestion = '';
+  const followupOptions: string[] = [];
+  const cleanLines: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith('[[FOLLOWUP]]')) {
+      followupQuestion = t.replace('[[FOLLOWUP]]', '').trim();
+    } else if (t.startsWith('[[OPT]]')) {
+      followupOptions.push(t.replace('[[OPT]]', '').trim());
+    } else {
+      cleanLines.push(line);
+    }
+  }
+  // Remove trailing blank lines after stripping followup block
+  while (cleanLines.length > 0 && !cleanLines[cleanLines.length - 1].trim()) cleanLines.pop();
+  const processLines = followupQuestion ? cleanLines : lines;
+
+  for (let i = 0; i < processLines.length; i++) {
+    const line = processLines[i];
 
     // Detect if line is ONLY a markdown link -> render as beautiful CTA Button
     if (line.trim().startsWith('[') && line.trim().endsWith(')')) {
@@ -261,13 +279,36 @@ const MarkdownRenderer = ({ content, onLinkClick }: { content: string; onLinkCli
   }
 
   if (isTable) {
-    elements.push(renderTable(tableRows, lines.length));
+    elements.push(renderTable(tableRows, processLines.length));
   }
   if (currentList.length > 0) {
     elements.push(<ul key={`list-${listKey++}`} className="my-2 space-y-0.5">{currentList}</ul>);
   }
 
-  return <div className="space-y-1">{elements}</div>;
+  return (
+    <div className="space-y-1">
+      {elements}
+      {/* Follow-up question block */}
+      {followupQuestion && (
+        <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800/60 space-y-2.5">
+          <p className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400 leading-snug">{followupQuestion}</p>
+          {followupOptions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {followupOptions.map((opt, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onSend?.(opt)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-[11.5px] font-bold text-zinc-700 dark:text-zinc-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:border-violet-300 dark:hover:border-violet-500/40 hover:text-violet-700 dark:hover:text-violet-300 active:scale-95 transition-all duration-150"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ── Main Floating Chat Component ──────────────────────────────────────────────
@@ -484,7 +525,7 @@ export const AIChatFloat = () => {
                 {msg.role === 'user' ? (
                   msg.content
                 ) : (
-                  <MarkdownRenderer content={msg.content} onLinkClick={() => setIsOpen(false)} />
+                  <MarkdownRenderer content={msg.content} onLinkClick={() => setIsOpen(false)} onSend={(text) => handleSend(text)} />
                 )}
               </div>
             </div>
