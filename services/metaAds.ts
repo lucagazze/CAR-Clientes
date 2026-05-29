@@ -529,10 +529,10 @@ export const metaAds = {
       limit: '25',
     }),
 
-  // Instagram Direct conversations — base node MUST be the IG Business Account ID
-  // (not the FB Page ID). Uses the same page access token.
+  // Instagram Direct conversations — base node is the Facebook Page ID (linked to the IG account).
+  // Uses the same page access token and filters by platform=instagram.
   getInstagramConversations: (fbPageId: string, igUserId: string) =>
-    apiGetPage(fbPageId, `${igUserId}/conversations`, {
+    apiGetPage(fbPageId, `${fbPageId}/conversations`, {
       fields: 'id,participants,unread_count,updated_time,messages.limit(1){id,message,from,created_time}',
       platform: 'instagram',
       limit: '25',
