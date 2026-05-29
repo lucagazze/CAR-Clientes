@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Fetch client settings from Supabase
     const { data: client, error: dbError } = await supabase
       .from('car_clients')
-      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context')
+      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url')
       .eq('id', clientId)
       .maybeSingle();
 
@@ -59,7 +59,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       business_description,
       custom_instructions,
       scraped_content,
-      instagram_context
+      instagram_context,
+      website_url
     } = client;
 
     // Compiled business brain context
@@ -120,7 +121,14 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
     }
 
     // 3. Construct the prompt
+    // Use the exact website_url saved in the brain as the canonical link.
+    // Falls back to constructing from shopify_domain if website_url is not set.
     const cleanDomainForLink = shopify_domain ? shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
+    // The canonical site URL: prefer the manually saved website_url from the brain.
+    const canonicalSiteUrl = website_url
+      ? website_url.replace(/\/$/, '')  // trim trailing slash but keep the URL exactly as saved
+      : (cleanDomainForLink ? `https://${cleanDomainForLink}` : '');
+
     const productsContext = products.length > 0
       ? `Catálogo de productos de la tienda:\n${products.map(p => `- ${p.title} (Link de compra: https://${cleanDomainForLink}/products/${p.handle})`).join('\n')}`
       : 'No hay catálogo de productos de Shopify configurado.';
@@ -151,10 +159,10 @@ ${fewShotContext ? `\n${fewShotContext}\n` : ''}
 Rules:
 1. Be extremely concise (maximum 1 or 2 sentences).
 2. If they ask about a specific product, availability, price, or how to buy, recommend the product from the catalog and include EXACTLY the corresponding link: https://${cleanDomainForLink}/products/[product-handle]. Do not make up handles.
-3. If they ask about shopping, shipping, or general prices and there is no specific matching product in the catalog, always offer the main website link: https://${cleanDomainForLink}.
+3. If they ask about shopping, shipping, or general prices and there is no specific matching product in the catalog, always offer the main website link: ${canonicalSiteUrl}. ALWAYS use this EXACT URL: ${canonicalSiteUrl}. Never modify, shorten, or reconstruct it.
 4. Do not use placeholders like [price] or [link]. The reply must be ready to send.
 5. Output ONLY the final drafted text, without explanations, quotes, or prefixes.
-6. If the user asks about a specific product (its availability, if you sell it, or how to get it) and the product is NOT present in the catalog listed above, you MUST explicitly state that the product is currently not available or not in stock, and invite them to browse the online store at https://${cleanDomainForLink} to see all other products.`;
+6. If the user asks about a specific product (its availability, if you sell it, or how to get it) and the product is NOT present in the catalog listed above, you MUST explicitly state that the product is currently not available or not in stock, and invite them to browse the online store at ${canonicalSiteUrl} to see all other products.`;
 
     // 4. Call OpenAI API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

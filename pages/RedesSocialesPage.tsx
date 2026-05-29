@@ -349,14 +349,19 @@ export default function RedesSocialesPage() {
         setComments(res.data || []);
       } else {
         const res = await metaAds.getFacebookPostComments(postId);
-        // Normalize comments for Facebook to fit same rendering structure
-        const normalized = (res.data || []).map((c: any) => ({
+        // Normalize comments for Facebook to fit same rendering structure.
+        // IMPORTANT: preserve the original `from` object so isCommentPending can
+        // compare from.id against fbPageId to detect page-owned replies.
+        const normalized = (res.data || []).map((c: any, idx: number) => ({
           id: c.id,
-          username: c.from?.name || c.username || 'Usuario de Facebook',
+          // Use from.name if available; fall back to a numbered label so comments are distinguishable
+          username: c.from?.name || c.name || c.username || `Comentarista ${idx + 1}`,
           text: c.text || c.message || '',
           timestamp: c.timestamp || c.created_time,
           like_count: c.like_count || 0,
-          replies: c.replies
+          replies: c.replies,
+          // Preserve original from so isCommentPending can check from.id === fbPageId
+          from: c.from || null,
         }));
         setComments(normalized);
       }
