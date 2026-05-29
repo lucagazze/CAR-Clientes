@@ -555,7 +555,7 @@ export const AIChatFloat = () => {
     >
       {/* ── Chat panel ── */}
       <div className={`absolute bottom-full mb-2 md:mb-3 w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-3xl overflow-hidden transition-all duration-300 origin-bottom flex flex-col ${
-        isOpen ? 'opacity-100 scale-100 h-[calc(100svh-9rem)] md:h-[560px]' : 'opacity-0 scale-95 h-0 pointer-events-none'
+        isOpen ? 'opacity-100 scale-100 h-[calc(100svh-9rem)] md:h-[640px]' : 'opacity-0 scale-95 h-0 pointer-events-none'
       }`}>
 
         {/* Header */}
@@ -593,15 +593,15 @@ export const AIChatFloat = () => {
                   Preguntame sobre tus campañas, creativos, emails o ventas.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-2 w-full max-w-[380px]">
+              <div className="grid grid-cols-2 gap-2.5 w-full max-w-[420px]">
                 {initialPrompts.map((p, i) => (
                   <button
                     key={i}
                     onClick={() => handleSend(p.text)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-500/50 hover:bg-violet-50 dark:hover:bg-violet-500/5 active:scale-[0.97] transition-all text-left"
+                    className="flex items-center gap-2.5 px-4 py-3.5 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-500/50 hover:bg-violet-50 dark:hover:bg-violet-500/5 active:scale-[0.97] transition-all text-left"
                   >
-                    <span className="text-[15px] flex-shrink-0">{p.icon}</span>
-                    <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 leading-snug">{p.text}</span>
+                    <span className="text-[18px] flex-shrink-0">{p.icon}</span>
+                    <span className="text-[12.5px] font-semibold text-zinc-600 dark:text-zinc-400 leading-snug">{p.text}</span>
                   </button>
                 ))}
               </div>
