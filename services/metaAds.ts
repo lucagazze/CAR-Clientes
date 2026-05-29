@@ -523,24 +523,30 @@ export const metaAds = {
   },
 
   // ── CONVERSATIONS (DMs) ──────────────────────────────────
-  // Facebook Messenger conversations — base node is the Page ID
-  getPageConversations: (pageId: string, platform: 'messenger' | 'instagram' = 'messenger') =>
-    apiGetPage(pageId, `${pageId}/conversations`, {
+
+  // Facebook Messenger conversations — full fields including last message preview.
+  // cursor: paging.cursors.after from a previous response (for pagination)
+  getPageConversations: (pageId: string, platform: 'messenger' | 'instagram' = 'messenger', cursor?: string) => {
+    const params: Record<string, string> = {
       fields: 'id,participants,unread_count,updated_time,messages.limit(1){id,message,from,created_time}',
       platform,
-      folder: 'inbox',
-      limit: '50',
-    }),
+      limit: '10',
+    };
+    if (cursor) params.after = cursor;
+    return apiGetPage(pageId, `${pageId}/conversations`, params);
+  },
 
-  // Instagram Direct conversations — base node is the Facebook Page ID (linked to the IG account).
-  // Uses the same page access token and filters by platform=instagram.
-  getInstagramConversations: (fbPageId: string, igUserId: string) =>
-    apiGetPage(fbPageId, `${fbPageId}/conversations`, {
-      fields: 'id,participants,unread_count,updated_time,messages.limit(1){id,message,from,created_time}',
+  // Instagram Direct conversations — minimal fields only (IG rejects nested message fields).
+  // cursor: paging.cursors.after from a previous response (for pagination)
+  getInstagramConversations: (fbPageId: string, igUserId: string, cursor?: string) => {
+    const params: Record<string, string> = {
+      fields: 'id,participants,unread_count,updated_time',
       platform: 'instagram',
-      folder: 'inbox',
-      limit: '50',
-    }),
+      limit: '10',
+    };
+    if (cursor) params.after = cursor;
+    return apiGetPage(fbPageId, `${fbPageId}/conversations`, params);
+  },
 
   // Fetch up to 15 messages for AI draft context
   getConversationMessages: (convId: string, limit = 15) =>
