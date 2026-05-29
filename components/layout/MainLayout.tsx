@@ -1,5 +1,5 @@
 import React, { useState, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Menu, Sun, Moon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -43,6 +43,9 @@ export const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { darkMode, toggleDarkMode } = useTheme();
   const { profile } = useAuth();
+  const location = useLocation();
+
+  const isFixedPage = location.pathname === '/mensajeria';
 
   return (
     <div className="flex min-h-screen bg-[#f5f5f7] dark:bg-[#0a0a0a] text-zinc-900 dark:text-zinc-100 transition-colors duration-300 print:bg-white">
@@ -83,7 +86,11 @@ export const MainLayout = () => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8 lg:p-10 w-full pb-48 md:pb-40 xl:pb-44 print:overflow-visible print:h-auto print:p-6">
+        <div className={`flex-1 w-full print:overflow-visible print:h-auto print:p-6 ${
+          isFixedPage 
+            ? 'overflow-hidden p-4 md:p-6 h-[calc(100vh-56px)] md:h-screen flex flex-col' 
+            : 'overflow-auto p-4 md:p-8 lg:p-10 pb-48 md:pb-40 xl:pb-44'
+        }`}>
           {/* Spacer so content starts below the fixed mobile header */}
           <div className="h-14 md:hidden" />
           <Suspense fallback={<PageSkeleton />}>

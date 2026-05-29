@@ -111,12 +111,13 @@ export const AD_INSIGHT_FIELDS = [
 
 const getPageAccessToken = async (pageId: string): Promise<string> => {
   try {
-    const cacheKey = `fb_pat_${pageId}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) return cached;
-
     const userToken = (import.meta as any).env.VITE_META_ADS_TOKEN || localStorage.getItem('meta_ads_token') || '';
     if (!userToken) return '';
+
+    // Cache key incorporates a signature of the userToken to automatically invalidate when it changes
+    const cacheKey = `fb_pat_${pageId}_${userToken.slice(-10)}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return cached;
 
     const url = new URL(`${BASE}/me/accounts`);
     url.searchParams.set('access_token', userToken);
@@ -133,6 +134,7 @@ const getPageAccessToken = async (pageId: string): Promise<string> => {
   }
   return (import.meta as any).env.VITE_META_ADS_TOKEN || localStorage.getItem('meta_ads_token') || '';
 };
+
 
 const apiGet = async (endpoint: string, params: Record<string, string> = {}): Promise<any> => {
   const url = new URL(`${BASE}/${endpoint}`);
