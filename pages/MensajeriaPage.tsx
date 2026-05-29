@@ -23,8 +23,13 @@ const AutoResizeTextarea = React.forwardRef<HTMLTextAreaElement, AutoResizeTexta
     React.useEffect(() => {
       const textarea = textareaRef.current;
       if (textarea) {
-        textarea.style.height = 'auto';
-        textarea.style.height = `${textarea.scrollHeight}px`;
+        const adjustHeight = () => {
+          textarea.style.height = 'auto';
+          textarea.style.height = `${textarea.scrollHeight}px`;
+        };
+        adjustHeight();
+        const t = setTimeout(adjustHeight, 50);
+        return () => clearTimeout(t);
       }
     }, [value, textareaRef]);
 

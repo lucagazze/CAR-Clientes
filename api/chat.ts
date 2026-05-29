@@ -200,6 +200,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const directKlaviyoKey = klaviyoApiKey || profile?.klaviyo_api_key;
   const directMetaAccountId = metaAccountId || profile?.meta_account_id;
 
+  // Fetch client brain info (description, website, tone guidelines)
+  const clientInfo = fallbackClientId
+    ? await getClientData(fallbackClientId, 'business_name, business_description, custom_instructions, scraped_content, instagram_context').catch(() => null)
+    : null;
+
+  const brainContext = clientInfo
+    ? [
+        clientInfo.business_description ? `INFORMACIÓN DEL NEGOCIO:\n${clientInfo.business_description}` : '',
+        clientInfo.scraped_content ? `CONOCIMIENTO APRENDIDO DE LA WEB:\n${clientInfo.scraped_content}` : '',
+        clientInfo.instagram_context ? `CONOCIMIENTO APRENDIDO DE INSTAGRAM:\n${clientInfo.instagram_context}` : '',
+        clientInfo.custom_instructions ? `INSTRUCCIONES DE TONO Y ESTILO:\n${clientInfo.custom_instructions}` : ''
+      ].filter(Boolean).join('\n\n')
+    : '';
+
   const isAuthorizedForClient = (id: string) => isAdmin || id === userClientId;
 
   const tools = [
@@ -277,6 +291,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const systemMessage = `You are Algor, Algoritmia's AI assistant. Respond in Argentine Spanish (vos, tenés, etc.) — friendly and professional.
 
 ${activeClientText}
+
+${brainContext ? `CONOCIMIENTO ADICIONAL DE ESTE CLIENTE (CEREBRO):\n${brainContext}\n` : ''}
 
 TOOL ROUTING (call the right tool immediately, no clarification needed):
 - Emails/mails/Klaviyo/campaigns/flows → get_klaviyo_data

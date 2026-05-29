@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Fetch client settings from Supabase
     const { data: client, error: dbError } = await supabase
       .from('car_clients')
-      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token')
+      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context')
       .eq('id', clientId)
       .maybeSingle();
 
@@ -51,7 +51,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Client not found or database error' });
     }
 
-    const { business_name, ecommerce_platform, shopify_domain, shopify_access_token } = client;
+    const { 
+      business_name, 
+      ecommerce_platform, 
+      shopify_domain, 
+      shopify_access_token,
+      business_description,
+      custom_instructions,
+      scraped_content,
+      instagram_context
+    } = client;
+
+    // Compiled business brain context
+    const brainContext = [
+      business_description ? `INFORMACIÓN DEL NEGOCIO:\n${business_description}` : '',
+      scraped_content ? `CONOCIMIENTO APRENDIDO DE LA WEB:\n${scraped_content}` : '',
+      instagram_context ? `CONOCIMIENTO APRENDIDO DE INSTAGRAM:\n${instagram_context}` : '',
+      custom_instructions ? `INSTRUCCIONES DE TONO Y ESTILO:\n${custom_instructions}` : ''
+    ].filter(Boolean).join('\n\n');
 
     // Fetch recent successful replies from activity log for few-shot learning
     let fewShotContext = '';
@@ -112,10 +129,12 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
 Your task is to draft a friendly, natural reply to a social media message.
 
 CRITICAL INSTRUCTION - LANGUAGE DETECTION:
-- Closely analyze the language of the customer's message: "${itemText}".
-- You MUST draft the reply in that EXACT same language. If the customer wrote in English, you MUST reply in English. If they wrote in Spanish, you MUST reply in Spanish (using Argentine Spanish voseo: e.g., "vos", "tenés", "consultame"). If they wrote in Portuguese, you MUST reply in Portuguese.
-- NEVER mix languages. If the comment is in English, do NOT output a single word in Spanish (such as "Hola", "Gracias", or "conseguilo"). The entire response must be 100% in English.
-- NEVER reply in Spanish if the customer's message is in English, Portuguese, or any other language.
+- You MUST identify the language of the customer's message: "${itemText}".
+- You MUST draft the reply in that EXACT same language.
+- If the customer wrote in English, the reply MUST be 100% in English. Do NOT use a single word of Spanish.
+- If the customer wrote in Spanish, the reply MUST be 100% in Spanish (using Argentine Spanish voseo: e.g., "vos", "tenés", "consultame", "mirá").
+- If the customer wrote in Portuguese, the reply MUST be 100% in Portuguese.
+- NEVER mix languages. If the comment is in English, do NOT output a single word in Spanish (such as "Hola", "Gracias", or "conseguilo").
 
 Details:
 - Social media user: @${username}
@@ -124,6 +143,8 @@ ${postCaption ? `- Caption/Text of the post (context): "${postCaption}"` : ''}
 ${otherComments && otherComments.length > 0 ? `- Other comments in the same post (context):\n${otherComments.map(c => `  * ${c}`).join('\n')}` : ''}
 
 ${productsContext}
+
+${brainContext ? `Conocimiento adicional del negocio (Cerebro):\n${brainContext}\n` : ''}
 
 ${fewShotContext ? `\n${fewShotContext}\n` : ''}
 
@@ -146,9 +167,9 @@ Rules:
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemMessage },
-          { role: 'user', content: `Customer comment to reply to: "${itemText}"\nGenerate the drafted reply now for user @${username}:` }
+          { role: 'user', content: `Comentario del cliente: "${itemText}"\nGenerá el borrador de respuesta para @${username} en el mismo idioma del comentario:` }
         ],
-        temperature: 0.5,
+        temperature: 0.3,
         max_tokens: 150,
       }),
     });

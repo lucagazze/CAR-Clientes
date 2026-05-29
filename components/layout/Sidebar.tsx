@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag, AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare
+  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag, AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare, Brain
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useViewAs } from '../../contexts/ViewAsContext';
@@ -48,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   ].filter(item => item.condition);
 
   const configItems = [
+    { path: '/cerebro',         icon: Brain,    label: 'Cerebro de IA',    condition: true },
     { path: '/links',           icon: Link2,    label: 'Mis Accesos',      condition: true },
   ].filter(item => item.condition);
 

@@ -21,6 +21,7 @@ import EmailMarketingPage from '../../pages/EmailMarketingPage';
 import EmailMonitorPage from '../../pages/EmailMonitorPage';
 import RedesSocialesPage from '../../pages/RedesSocialesPage';
 import MensajeriaPage from '../../pages/MensajeriaPage';
+import CerebroPage from '../../pages/CerebroPage';
 
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -87,6 +88,7 @@ export const MainLayout = () => {
             <Route path="/admin/emails" element={<EmailLibraryPage />} />
             <Route path="/admin/email-monitor" element={<EmailMonitorPage />} />
             <Route path="/email-marketing" element={<EmailMarketingPage />} />
+            <Route path="/cerebro" element={<CerebroPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
