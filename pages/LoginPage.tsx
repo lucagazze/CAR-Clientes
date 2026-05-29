@@ -49,21 +49,11 @@ export default function LoginPage() {
         : 'border-zinc-200';
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 relative overflow-hidden ${
+    <div className={`min-h-screen h-screen flex flex-col font-sans overflow-hidden ${
       darkMode ? 'bg-[#080808]' : 'bg-[#f2f2f7]'
     }`}>
-      {/* Background decoration */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className={`absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full opacity-[0.06] blur-3xl ${
-          darkMode ? 'bg-violet-500' : 'bg-violet-400'
-        }`} />
-        <div className={`absolute -bottom-60 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.04] blur-3xl ${
-          darkMode ? 'bg-blue-500' : 'bg-indigo-400'
-        }`} />
-      </div>
-
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-5 w-full relative z-10">
+      <header className="flex items-center justify-between px-6 py-5 w-full">
         <div className="flex items-center gap-2.5">
           <img
             src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
@@ -90,20 +80,16 @@ export default function LoginPage() {
       </header>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 pb-16 relative z-10">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 pb-12">
         <div className="w-full max-w-[360px] animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-          {/* Logo card */}
+          {/* Logo + title */}
           <div className="flex flex-col items-center mb-10">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-5 shadow-xl ${
-              darkMode ? 'bg-white/6 border border-white/8' : 'bg-white border border-zinc-100 shadow-lg'
-            }`}>
-              <img
-                src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
-                alt="Algoritmia"
-                className="w-10 h-10 object-contain"
-              />
-            </div>
+            <img
+              src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
+              alt="Algoritmia"
+              className="w-14 h-14 object-contain mb-5"
+            />
             <h1 className={`text-[22px] font-bold tracking-tight mb-1 ${darkMode ? 'text-white' : 'text-zinc-900'}`}>
               Bienvenido
             </h1>
