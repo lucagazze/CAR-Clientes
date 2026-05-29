@@ -545,7 +545,7 @@ export const AIChatFloat = () => {
     >
       {/* ── Chat panel ── */}
       <div className={`absolute bottom-full mb-2 md:mb-3 w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-3xl overflow-hidden transition-all duration-300 origin-bottom flex flex-col ${
-        isOpen ? 'opacity-100 scale-100 h-[60vh] md:h-[560px]' : 'opacity-0 scale-95 h-0 pointer-events-none'
+        isOpen ? 'opacity-100 scale-100 h-[calc(100svh-9rem)] md:h-[560px]' : 'opacity-0 scale-95 h-0 pointer-events-none'
       }`}>
 
         {/* Header */}
