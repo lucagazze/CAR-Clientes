@@ -548,14 +548,35 @@ export const metaAds = {
     return apiGetPage(fbPageId, `${fbPageId}/conversations`, params);
   },
 
-  // Fetch up to 15 messages for AI draft context
-  getConversationMessages: (convId: string, limit = 15) =>
-    apiGetPageActive(`${convId}/messages`, {
+  // Fetch up to 15 messages for AI draft context (accepts optional pageId to avoid localStorage lookup)
+  getConversationMessages: (convId: string, limit = 15, pageId?: string) => {
+    const pId = pageId || localStorage.getItem('active_fb_page_id') || '';
+    if (pId) {
+      return apiGetPage(pId, `${convId}/messages`, {
+        fields: 'id,message,from,created_time',
+        limit: String(limit),
+      });
+    }
+    return apiGetPageActive(`${convId}/messages`, {
       fields: 'id,message,from,created_time',
       limit: String(limit),
-    }),
+    });
+  },
 
-  replyToConversation: async (convId: string, text: string) => {
+  replyToConversation: async (convId: string, text: string, pageId?: string) => {
+    const pId = pageId || localStorage.getItem('active_fb_page_id') || '';
+    if (pId) {
+      const token = await getPageAccessToken(pId);
+      const url = new URL(`${BASE}/${convId}/messages?access_token=${token}`);
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: { text } })
+      });
+      const json = await res.json();
+      if (json?.error) throw new Error(json.error.message || 'Meta API error');
+      return json;
+    }
     return apiPostPageActive(`${convId}/messages`, {}, { message: { text } });
   },
 

@@ -116,7 +116,7 @@ export default function MensajesDMPage() {
     const igItems = items.filter(c => c.platform === 'instagram');
     igItems.forEach(async (conv) => {
       try {
-        const res = await metaAds.getConversationMessages(conv.id, 1);
+        const res = await metaAds.getConversationMessages(conv.id, 1, fbPageId);
         if (!activeSignal.active) return;
         const msg = res?.data?.[0];
         if (msg) {
@@ -257,7 +257,7 @@ export default function MensajesDMPage() {
     setReplyText('');
     setReplyError(null);
     try {
-      const res = await metaAds.getConversationMessages(conv.id);
+      const res = await metaAds.getConversationMessages(conv.id, 15, fbPageId);
       const msgs = (res?.data || []).reverse();
       setConvMessages(msgs);
 
@@ -308,7 +308,7 @@ export default function MensajesDMPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, []);
+  }, [fbPageId]);
 
   // Load older messages (scroll up to reveal)
   const loadOlderMessages = useCallback(async () => {
@@ -318,7 +318,7 @@ export default function MensajesDMPage() {
     const prevScrollHeight = container?.scrollHeight || 0;
     try {
       // Use the before cursor to get older messages
-      const res = await metaAds.getConversationMessages(selectedConv.id, 15);
+      const res = await metaAds.getConversationMessages(selectedConv.id, 15, fbPageId);
       if (res?.data) {
         const older = [...res.data].reverse();
         setConvMessages(prev => [...older, ...prev]);
@@ -336,7 +336,7 @@ export default function MensajesDMPage() {
     } finally {
       setLoadingOlderMsgs(false);
     }
-  }, [loadingOlderMsgs, msgHasMore, selectedConv, msgNextCursor]);
+  }, [loadingOlderMsgs, msgHasMore, selectedConv, msgNextCursor, fbPageId]);
 
   const handleSelect = (conv: ConvItem) => {
     setSelectedConv(conv);
@@ -350,7 +350,7 @@ export default function MensajesDMPage() {
     setSendingReply(true);
     setReplyError(null);
     try {
-      await metaAds.replyToConversation(selectedConv.id, replyText.trim());
+      await metaAds.replyToConversation(selectedConv.id, replyText.trim(), fbPageId);
       if (user?.id && clientId) {
         db.activity.log(user.id, clientId, 'reply_sent', {
           reply_text: replyText.trim(),
