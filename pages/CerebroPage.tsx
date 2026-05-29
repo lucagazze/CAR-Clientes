@@ -5,8 +5,7 @@ import { db } from '../services/db';
 import { useToast } from '../components/Toast';
 import { 
   Brain, Globe, Save, RefreshCw, Sparkles, FileText, CheckCircle2, 
-  HelpCircle, MessageSquare, ArrowRight, ShieldAlert, ArrowUpRight,
-  Instagram
+  ShieldAlert, ArrowUpRight, Instagram, Facebook, Calendar, AlertCircle
 } from 'lucide-react';
 
 export default function CerebroPage() {
@@ -20,12 +19,15 @@ export default function CerebroPage() {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [scrapedContent, setScrapedContent] = useState('');
   const [instagramContext, setInstagramContext] = useState('');
+  const [brainUpdatedAt, setBrainUpdatedAt] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [syncingInstagram, setSyncingInstagram] = useState(false);
-  const [generatingFields, setGeneratingFields] = useState(false);
+  const [scanningAll, setScanningAll] = useState(false);
+  const [activeTab, setActiveTab] = useState<'web' | 'social'>('web');
+
+  // Scanning progress steps for visual premium feedback
+  const [scanStep, setScanStep] = useState<string>('');
 
   useEffect(() => {
     if (!profile) return;
@@ -33,7 +35,8 @@ export default function CerebroPage() {
     setCustomInstructions(profile.custom_instructions || '');
     setWebsiteUrl(profile.website_url || '');
     setScrapedContent(profile.scraped_content || '');
-    setInstagramContext((profile as any).instagram_context || '');
+    setInstagramContext(profile.instagram_context || '');
+    setBrainUpdatedAt(profile.brain_updated_at || null);
     setLoading(false);
   }, [profile]);
 
@@ -43,11 +46,14 @@ export default function CerebroPage() {
 
     setSaving(true);
     try {
+      const nowTimestamp = new Date().toISOString();
       await db.clients.updateField(profile.id, {
         business_description: businessDescription,
         custom_instructions: customInstructions,
         website_url: websiteUrl,
+        brain_updated_at: nowTimestamp,
       });
+      setBrainUpdatedAt(nowTimestamp);
       showToast('Configuración del cerebro guardada exitosamente.', 'success');
     } catch (err: any) {
       console.error(err);
@@ -57,82 +63,36 @@ export default function CerebroPage() {
     }
   };
 
-  const handleSyncInstagram = async () => {
-    if (!profile) return;
-    if (!(profile as any).ig_business_id) {
-      showToast('No se puede sincronizar: Instagram no está configurado (falta vincular cuenta en Ajustes).', 'error');
+  const handleScanAndTrainAll = async () => {
+    if (!profile || !websiteUrl.trim()) {
+      showToast('Por favor, ingresa una URL web válida antes de escanear.', 'warning');
       return;
     }
 
-    setSyncingInstagram(true);
-    showToast('Iniciando sincronización con Instagram... Esto puede demorar unos segundos.', 'info');
+    setScanningAll(true);
+    setScanStep('Iniciando escaneo...');
+    showToast('Iniciando escaneo de Sitio Web y Redes Sociales. Esto puede tardar hasta un minuto...', 'info');
+    
     try {
-      const response = await fetch('/api/sync-instagram', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          clientId: profile.id,
-        }),
-      });
+      // Step feedback animation simulation
+      const steps = [
+        'Escanenado sitio web (Home y páginas de políticas)...',
+        'Conectando con feeds de Instagram y Facebook...',
+        'Consolidando datos extraídos de la marca...',
+        'Optimizando catálogo e instrucciones con Inteligencia Artificial...',
+        'Guardando conocimiento entrenado en el Cerebro...'
+      ];
 
-      const data = await response.json();
+      let stepIndex = 0;
+      setScanStep(steps[0]);
+      const interval = setInterval(() => {
+        if (stepIndex < steps.length - 1) {
+          stepIndex++;
+          setScanStep(steps[stepIndex]);
+        }
+      }, 7000);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Error desconocido al sincronizar Instagram.');
-      }
-
-      setInstagramContext(data.summary || '');
-      showToast('¡Información de Instagram sincronizada exitosamente!', 'success');
-    } catch (err: any) {
-      console.error(err);
-      showToast(err.message, 'error');
-    } finally {
-      setSyncingInstagram(false);
-    }
-  };
-
-  const handleGenerateFields = async () => {
-    if (!profile || !scrapedContent) return;
-
-    setGeneratingFields(true);
-    showToast('Generando catálogo y tono optimizados con IA...', 'info');
-    try {
-      const response = await fetch('/api/generate-cerebro-fields', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          clientId: profile.id,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error desconocido al optimizar campos.');
-      }
-
-      setBusinessDescription(data.business_description || '');
-      setCustomInstructions(data.custom_instructions || '');
-      showToast('¡Catálogo e instrucciones de tono optimizados con éxito!', 'success');
-    } catch (err: any) {
-      console.error(err);
-      showToast(err.message, 'error');
-    } finally {
-      setGeneratingFields(false);
-    }
-  };
-
-  const handleScanWebsite = async () => {
-    if (!profile || !websiteUrl.trim()) return;
-
-    setScanning(true);
-    showToast('Iniciando escaneo de la web... Esto puede demorar unos segundos.', 'info');
-    try {
-      const response = await fetch('/api/scrape-website', {
+      const response = await fetch('/api/scrape-all', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -143,19 +103,43 @@ export default function CerebroPage() {
         }),
       });
 
+      clearInterval(interval);
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error desconocido al escanear la web.');
+        throw new Error(data.error || 'Error desconocido al escanear y entrenar.');
       }
 
-      setScrapedContent(data.summary || '');
-      showToast('¡Web escaneada y consolidada en el cerebro con éxito!', 'success');
+      setScrapedContent(data.scraped_content || '');
+      setInstagramContext(data.instagram_context || '');
+      setBusinessDescription(data.business_description || '');
+      setCustomInstructions(data.custom_instructions || '');
+      setBrainUpdatedAt(data.brain_updated_at || null);
+      
+      showToast('¡Cerebro entrenado completamente! Se actualizaron la web, las redes sociales, el catálogo y las pautas de tono.', 'success');
     } catch (err: any) {
       console.error(err);
-      showToast(err.message, 'error');
+      showToast(err.message || 'Error al entrenar el cerebro', 'error');
     } finally {
-      setScanning(false);
+      setScanningAll(false);
+      setScanStep('');
+    }
+  };
+
+  const formatLastSaved = (dateStr: string | null) => {
+    if (!dateStr) return 'Nunca escaneado';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString('es-AR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) + ' hs';
+    } catch (e) {
+      return dateStr;
     }
   };
 
@@ -198,7 +182,7 @@ export default function CerebroPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Form Settings */}
         <div className="lg:col-span-7 space-y-6">
-          <form onSubmit={handleSaveSettings} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden">
+          <form onSubmit={handleSaveSettings} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden transition-colors duration-300">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
               <div>
                 <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
@@ -206,61 +190,14 @@ export default function CerebroPage() {
                   Contexto Manual del Negocio
                 </h2>
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                  Define las pautas de comportamiento y catálogo manualmente.
+                  Define las pautas de comportamiento y catálogo manualmente si deseas complementarlas.
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={handleGenerateFields}
-                disabled={generatingFields || !scrapedContent}
-                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-violet-50 hover:bg-violet-100 dark:bg-violet-500/10 dark:hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]"
-                title="Genera y optimiza el catálogo y tono de manera automática usando la IA basada en el contenido web escaneado."
-              >
-                {generatingFields ? (
-                  <div className="w-3.5 h-3.5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5" />
-                )}
-                {generatingFields ? 'Optimizando...' : 'Optimizar con IA'}
-              </button>
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Business Description / Catalog */}
+              {/* Website Input first as it is critical */}
               <div className="space-y-2">
-                <label className="block text-[12px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
-                  Catálogo, Ofertas y Preguntas Clave
-                </label>
-                <textarea
-                  value={businessDescription}
-                  onChange={(e) => setBusinessDescription(e.target.value)}
-                  placeholder="Ej: Vendemos calzado de cuero artesanal en Argentina. Ofrecemos 3 cuotas sin interés y envíos gratis a partir de $80.000. Los cambios se realizan dentro de los 30 días en nuestros locales..."
-                  className="w-full min-h-[160px] p-4 text-[13px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 resize-y leading-relaxed"
-                />
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-normal">
-                  Detalla aquí información relevante de tus productos, promociones activas, horarios, ubicaciones y respuestas frecuentes específicas que quieras que el bot use de manera prioritaria.
-                </p>
-              </div>
-
-              {/* Custom Tone Instructions */}
-              <div className="space-y-2">
-                <label className="block text-[12px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
-                  Instrucciones de Tono y Comportamiento (AI System Prompt Additions)
-                </label>
-                <textarea
-                  value={customInstructions}
-                  onChange={(e) => setCustomInstructions(e.target.value)}
-                  placeholder="Ej: Responde siempre con tono alegre, joven e informal. Utiliza el voseo argentino (ej: 'mirá', 'comprá'). Evita sonar robótico. Usa emojis de manera moderada."
-                  className="w-full min-h-[120px] p-4 text-[13px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 resize-y leading-relaxed"
-                />
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-normal">
-                  Define el estilo de redacción, el idioma, restricciones de vocabulario o cómo tratar al cliente.
-                </p>
-              </div>
-
-              {/* Web link input within save form */}
-              <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
                 <label className="block text-[12px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
                   Enlace del Sitio Web / Tienda Shopify
                 </label>
@@ -271,11 +208,57 @@ export default function CerebroPage() {
                       type="text"
                       value={websiteUrl}
                       onChange={(e) => setWebsiteUrl(e.target.value)}
-                      placeholder="https://mitienda.com"
-                      className="w-full pl-10 pr-4 py-2.5 text-[13px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+                      placeholder="https://www.mitienda.com"
+                      className="w-full pl-10 pr-4 py-2.5 text-[13px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 font-medium"
                     />
                   </div>
+                  {websiteUrl && (
+                    <a
+                      href={websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 flex items-center justify-center bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-950 dark:hover:text-zinc-100 transition-all active:scale-95"
+                      title="Visitar sitio"
+                    >
+                      <ArrowUpRight className="w-4 h-4" />
+                    </a>
+                  )}
                 </div>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-normal">
+                  Ingresá la URL principal de tu tienda. Es indispensable para que el escáner web pueda rastrear tus productos y políticas.
+                </p>
+              </div>
+
+              {/* Business Description / Catalog */}
+              <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+                <label className="block text-[12px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                  Catálogo, Ofertas y Preguntas Clave (Contexto Oficial)
+                </label>
+                <textarea
+                  value={businessDescription}
+                  onChange={(e) => setBusinessDescription(e.target.value)}
+                  placeholder="Ej: Vendemos calzado de cuero artesanal en Argentina. Ofrecemos 3 cuotas sin interés y envíos gratis a partir de $80.000. Los cambios se realizan dentro de los 30 días en nuestros locales..."
+                  className="w-full min-h-[160px] p-4 text-[13px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 resize-y leading-relaxed font-medium"
+                />
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-normal">
+                  Detalla aquí información de tus productos, promociones, políticas y respuestas frecuentes específicas que quieras que el bot use de manera prioritaria.
+                </p>
+              </div>
+
+              {/* Custom Tone Instructions */}
+              <div className="space-y-2">
+                <label className="block text-[12px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                  Instrucciones de Tono y Comportamiento (AI System Rules)
+                </label>
+                <textarea
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  placeholder="Ej: Responde siempre con tono alegre, joven e informal. Utiliza el voseo argentino (ej: 'mirá', 'comprá'). Evita sonar robótico. Usa emojis de manera moderada."
+                  className="w-full min-h-[120px] p-4 text-[13px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 resize-y leading-relaxed font-medium"
+                />
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-normal">
+                  Define el estilo de redacción, restricciones de vocabulario o cómo tratar al cliente. El voseo argentino es el tono por defecto altamente recomendado.
+                </p>
               </div>
             </div>
 
@@ -290,185 +273,168 @@ export default function CerebroPage() {
                 ) : (
                   <Save className="w-3.5 h-3.5" />
                 )}
-                {saving ? 'Guardando...' : 'Guardar Configuración'}
+                {saving ? 'Guardando...' : 'Guardar Configuración Manual'}
               </button>
             </div>
           </form>
         </div>
 
-        {/* Right Column: Web Scraper */}
+        {/* Right Column: Scraper & Brain Training Hub */}
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm p-6 space-y-6">
+          
+          {/* Main unified training center */}
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm p-6 space-y-6 transition-colors duration-300">
             <div>
               <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <Globe className="w-[18px] h-[18px] text-zinc-400" />
-                Escanear y Aprender Sitio Web
+                <Sparkles className="w-[18px] h-[18px] text-violet-500" />
+                Entrenamiento Automático Completo
               </h2>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                Extrae información detallada de tu tienda online directamente al cerebro de la IA.
+                Escanea tu tienda y tus redes sociales simultáneamente para entrenar a tu IA.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-violet-50/50 dark:bg-violet-500/5 border border-violet-100 dark:border-violet-500/10 space-y-3">
-              <div className="flex gap-2">
-                <Sparkles className="w-5 h-5 text-violet-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200 leading-normal">
-                  ¿Cómo funciona el escáner IA?
-                </p>
-              </div>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Ingresando la URL de tu Shopify o web, la IA visitará el sitio, analizará tus productos, políticas de envíos y FAQs, y guardará un resumen inteligente del negocio para responder consultas.
+            <div className="p-4 rounded-xl bg-violet-50/50 dark:bg-violet-500/5 border border-violet-100/60 dark:border-violet-500/10 space-y-3">
+              <p className="text-[11.5px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                Este proceso unificado rastrea tu <strong>sitio web</strong> (productos, envíos, FAQs) y tus <strong>redes sociales vinculadas</strong>. Luego, consolida todo en el cerebro y genera las pautas de tono automáticas.
               </p>
+              
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                  <div className={`w-2 h-2 rounded-full ${websiteUrl ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                  <span>Sitio Web: {websiteUrl ? 'Listo para escanear' : 'No configurado'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                  <div className={`w-2 h-2 rounded-full ${(profile as any)?.ig_business_id ? 'bg-pink-500' : 'bg-zinc-300'}`} />
+                  <span>Instagram: {(profile as any)?.ig_username ? `@${(profile as any).ig_username}` : 'No vinculado'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                  <div className={`w-2 h-2 rounded-full ${(profile as any)?.fb_page_id ? 'bg-blue-500' : 'bg-zinc-300'}`} />
+                  <span>Facebook Page: {(profile as any)?.fb_page_name ? (profile as any).fb_page_name : ((profile as any)?.fb_page_id ? 'Vinculada' : 'No vinculada')}</span>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4">
               <button
                 type="button"
-                onClick={handleScanWebsite}
-                disabled={scanning || !websiteUrl.trim()}
-                className="w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-[13px] font-bold shadow-lg shadow-violet-500/10 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]"
+                onClick={handleScanAndTrainAll}
+                disabled={scanningAll || !websiteUrl.trim()}
+                className="w-full py-3.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl text-[13px] font-bold shadow-lg shadow-violet-500/20 flex flex-col items-center justify-center gap-1 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]"
               >
-                {scanning ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Leyendo y Aprendiendo...</span>
-                  </>
+                {scanningAll ? (
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Entrenando Cerebro...</span>
+                  </div>
                 ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Escanear y Aprender Sitio Web</span>
-                  </>
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4" />
+                    <span>⚡ Escanear y Entrenar Todo</span>
+                  </div>
                 )}
               </button>
 
-              {websiteUrl && (
-                <a
-                  href={websiteUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-                >
-                  Ver sitio web actual
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </a>
+              {scanningAll && scanStep && (
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-150 dark:border-zinc-800 text-center animate-pulse">
+                  <p className="text-[11px] font-bold text-violet-600 dark:text-violet-400">
+                    {scanStep}
+                  </p>
+                </div>
               )}
+
+              {/* Last update details */}
+              <div className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-800/80 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Último entrenamiento:</span>
+                <span className="font-bold text-zinc-700 dark:text-zinc-300">
+                  {formatLastSaved(brainUpdatedAt)}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Scraped Content Preview */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden">
+          {/* Consolidate Memory Previews using tabs */}
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden transition-colors duration-300">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
               <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                 <CheckCircle2 className="w-[18px] h-[18px] text-emerald-500" />
-                Conocimiento Extraído de la Web
+                Conocimiento Consolidado en Memoria
               </h2>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                Resumen consolidado actualmente en uso por la IA.
+                Información extraída y resumida que actualmente lee el asistente de IA.
               </p>
             </div>
 
-            <div className="p-6">
-              {scrapedContent ? (
-                <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/50 dark:border-zinc-800/50 rounded-xl p-4 max-h-[300px] overflow-y-auto space-y-4 text-[12px] leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-line scrollbar-hide">
-                  {scrapedContent}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800/80 flex items-center justify-center">
-                    <Brain className="w-6 h-6 text-zinc-300 dark:text-zinc-700" />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Sin contenido escaneado</p>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-xs mt-1 leading-normal">
-                      Ingresa una URL arriba y haz clic en "Escanear" para que la IA complete esta sección con tu información web.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Instagram Scraper Card */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm p-6 space-y-6">
-            <div>
-              <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <Instagram className="w-[18px] h-[18px] text-pink-500 animate-pulse" />
-                Sincronizar Feed de Instagram
-              </h2>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                Lee y aprende de las publicaciones y descripciones recientes de tu marca.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-pink-50/50 dark:bg-pink-500/5 border border-pink-100/60 dark:border-pink-500/10 space-y-3">
-              <div className="flex gap-2">
-                <Sparkles className="w-5 h-5 text-pink-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200 leading-normal">
-                  ¿Por qué sincronizar Instagram?
-                </p>
-              </div>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Al sincronizar el feed, la IA comprenderá el tono con el que te comunicas en redes sociales, los productos que estás promocionando activamente y las últimas ofertas publicadas.
-              </p>
-            </div>
-
-            <div className="space-y-4">
+            {/* Premium Tab Selector */}
+            <div className="flex border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20">
               <button
                 type="button"
-                onClick={handleSyncInstagram}
-                disabled={syncingInstagram || !(profile as any)?.ig_business_id}
-                className="w-full py-3 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white rounded-xl text-[13px] font-bold shadow-lg shadow-pink-500/10 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]"
+                onClick={() => setActiveTab('web')}
+                className={`flex-1 py-3 text-[12px] font-bold transition-all border-b-2 ${
+                  activeTab === 'web'
+                    ? 'border-violet-500 text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900'
+                    : 'border-transparent text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400'
+                }`}
               >
-                {syncingInstagram ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Sincronizando Instagram...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Sincronizar y aprender de Instagram</span>
-                  </>
-                )}
+                <div className="flex items-center justify-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5" />
+                  Sitio Web
+                </div>
               </button>
-
-              {!(profile as any)?.ig_business_id && (
-                <p className="text-[10px] text-red-500 dark:text-red-400 text-center font-medium leading-normal">
-                  ⚠️ Debes vincular tu cuenta de Instagram comercial en la sección de administración para habilitar esta función.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Instagram Content Preview */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
-              <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <CheckCircle2 className="w-[18px] h-[18px] text-emerald-500" />
-                Conocimiento Extraído de Instagram
-              </h2>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                Resumen de publicaciones y estilo consolidado en el cerebro.
-              </p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('social')}
+                className={`flex-1 py-3 text-[12px] font-bold transition-all border-b-2 ${
+                  activeTab === 'social'
+                    ? 'border-violet-500 text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900'
+                    : 'border-transparent text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <Instagram className="w-3.5 h-3.5 text-pink-500" />
+                  Instagram & Facebook
+                </div>
+              </button>
             </div>
 
             <div className="p-6">
-              {instagramContext ? (
-                <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/50 dark:border-zinc-800/50 rounded-xl p-4 max-h-[300px] overflow-y-auto space-y-4 text-[12px] leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-line scrollbar-hide">
-                  {instagramContext}
-                </div>
+              {activeTab === 'web' ? (
+                scrapedContent ? (
+                  <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/50 dark:border-zinc-800/50 rounded-xl p-4 max-h-[300px] overflow-y-auto text-[12px] leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-line font-medium scrollbar-hide">
+                    {scrapedContent}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800/80 flex items-center justify-center">
+                      <Globe className="w-6 h-6 text-zinc-300 dark:text-zinc-700" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Sin contenido web escaneado</p>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-xs mt-1 leading-normal">
+                        Haz clic en "⚡ Escanear y Entrenar Todo" para rastrear tu sitio e importar el conocimiento.
+                      </p>
+                    </div>
+                  </div>
+                )
               ) : (
-                <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800/80 flex items-center justify-center">
-                    <Instagram className="w-6 h-6 text-zinc-300 dark:text-zinc-700" />
+                instagramContext ? (
+                  <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/50 dark:border-zinc-800/50 rounded-xl p-4 max-h-[300px] overflow-y-auto text-[12px] leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-line font-medium scrollbar-hide">
+                    {instagramContext}
                   </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Sin sincronización de Instagram</p>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-xs mt-1 leading-normal">
-                      Haz clic en "Sincronizar y aprender de Instagram" arriba para entrenar la IA con tus últimas publicaciones.
-                    </p>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-800/80 flex items-center justify-center">
+                      <Instagram className="w-6 h-6 text-zinc-300 dark:text-zinc-700" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Sin contenido social sincronizado</p>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-xs mt-1 leading-normal">
+                        La IA no ha cargado el feed de tus redes. Al hacer clic en "⚡ Escanear y Entrenar Todo" se rastrearán tus publicaciones.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )
               )}
             </div>
           </div>

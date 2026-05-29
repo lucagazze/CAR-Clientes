@@ -1,0 +1,741 @@
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import {
+  Instagram, MessageCircle, Loader2, RefreshCw, AlertCircle, MessageSquare,
+  Sparkles, Send, Heart, X, ArrowUpRight, CheckCircle2, ThumbsUp, Play
+} from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useViewAs } from '../contexts/ViewAsContext';
+import { metaAds } from '../services/metaAds';
+import { db } from '../services/db';
+import EmailLoader from '../components/ui/EmailLoader';
+
+interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  value: string;
+}
+const AutoResizeTextarea = React.forwardRef<HTMLTextAreaElement, AutoResizeTextareaProps>(
+  ({ value, className = '', ...props }, ref) => {
+    const localRef = React.useRef<HTMLTextAreaElement>(null);
+    const textareaRef = (ref as React.RefObject<HTMLTextAreaElement>) || localRef;
+    React.useEffect(() => {
+      const ta = textareaRef.current;
+      if (ta) { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; }
+    }, [value, textareaRef]);
+    return <textarea ref={textareaRef} value={value} className={`${className} overflow-hidden resize-none`} rows={1} {...props} />;
+  }
+);
+AutoResizeTextarea.displayName = 'AutoResizeTextarea';
+
+type PostItem = {
+  id: string;
+  platform: 'instagram' | 'facebook';
+  thumbnail: string | null;
+  caption: string;
+  permalink: string | null;
+  timestamp: string;
+  totalComments: number;
+  pendingComments: number;
+  comments: any[];
+  raw: any;
+  mediaType?: string;
+  mediaUrl?: string;
+};
+
+export default function ComentariosPage() {
+  const { isViewingAs, viewAsProfile } = useViewAs();
+  const { profile: authProfile, user } = useAuth();
+  const profile = isViewingAs ? viewAsProfile : authProfile;
+  const clientId = profile?.id;
+
+  const fbPageId = (profile as any)?.fb_page_id;
+  const igId = (profile as any)?.ig_business_id;
+  const igUsername = (profile as any)?.ig_username;
+
+  const [loading, setLoading] = useState(true);
+  const [igError, setIgError] = useState<string | null>(null);
+  const [fbError, setFbError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [platformFilter, setPlatformFilter] = useState<'all' | 'instagram' | 'facebook'>('all');
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('pending');
+
+  // Slide-over state
+  const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
+  const [draftLoading, setDraftLoading] = useState<Record<string, boolean>>({});
+  const [replyErrors, setReplyErrors] = useState<Record<string, string | null>>({});
+  const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
+  const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+
+  // Helper: is comment pending?
+  const isCommentPending = useCallback((comment: any, postPlatform: 'instagram' | 'facebook') => {
+    const isFromPage = comment.username === igUsername || comment.from?.id === fbPageId;
+    if (isFromPage) return false;
+    const replies = comment.replies?.data || [];
+    if (replies.length === 0) return true;
+    const sorted = [...replies].sort((a, b) =>
+      new Date(a.timestamp || a.created_time).getTime() - new Date(b.timestamp || b.created_time).getTime()
+    );
+    const latest = sorted[sorted.length - 1];
+    return !(latest.username === igUsername || latest.from?.id === fbPageId);
+  }, [igUsername, fbPageId]);
+
+  // Track fb page id
+  useEffect(() => {
+    if (fbPageId) localStorage.setItem('active_fb_page_id', fbPageId);
+  }, [fbPageId]);
+
+  // Load data
+  useEffect(() => {
+    if (!clientId) return;
+    let active = true;
+    setLoading(true);
+    setIgError(null);
+    setFbError(null);
+
+    const load = async () => {
+      try {
+        const [igMediaRes, fbMediaRes] = await Promise.all([
+          igId
+            ? metaAds.getInstagramMedia(igId, 50).catch(err => { setIgError(err.message); return []; })
+            : Promise.resolve([]),
+          fbPageId
+            ? metaAds.getFacebookPageFeed(fbPageId, 50).catch(err => { setFbError(err.message); return []; })
+            : Promise.resolve([]),
+        ]);
+
+        if (!active) return;
+
+        const items: PostItem[] = [];
+
+        // Instagram
+        const igMedia = (igMediaRes as any)?.data || igMediaRes || [];
+        igMedia.forEach((post: any) => {
+          const rawComments = post.comments?.data || [];
+          const userComments = rawComments.filter((c: any) => c.username !== igUsername);
+          if (userComments.length === 0) return;
+          const pending = userComments.filter((c: any) => isCommentPending(c, 'instagram'));
+          items.push({
+            id: post.id,
+            platform: 'instagram',
+            thumbnail: post.media_type === 'VIDEO' ? post.thumbnail_url : post.media_url,
+            caption: post.caption || '',
+            permalink: post.permalink,
+            timestamp: post.timestamp,
+            totalComments: userComments.length,
+            pendingComments: pending.length,
+            comments: userComments,
+            raw: post,
+            mediaType: post.media_type,
+            mediaUrl: post.media_url,
+          });
+        });
+
+        // Facebook
+        const fbMedia = (fbMediaRes as any)?.data || fbMediaRes || [];
+        fbMedia.forEach((post: any) => {
+          const rawComments = post.comments?.data || [];
+          const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
+          if (userComments.length === 0) return;
+          // Normalize FB comments
+          const normalized = userComments.map((c: any, i: number) => ({
+            ...c,
+            username: c.from?.name || c.name || c.username || `Comentarista ${i + 1}`,
+            text: c.text || c.message || '',
+            from: c.from || null,
+          }));
+          const pending = normalized.filter((c: any) => isCommentPending(c, 'facebook'));
+          items.push({
+            id: post.id,
+            platform: 'facebook',
+            thumbnail: post.full_picture || null,
+            caption: post.message || '',
+            permalink: post.permalink_url,
+            timestamp: post.created_time || new Date().toISOString(),
+            totalComments: normalized.length,
+            pendingComments: pending.length,
+            comments: normalized,
+            raw: post,
+            mediaType: post.source ? 'VIDEO' : 'IMAGE',
+            mediaUrl: post.full_picture || null,
+          });
+        });
+
+        items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setPosts(items);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { active = false; };
+  }, [clientId, igId, fbPageId, igUsername, refreshKey, isCommentPending]);
+
+  // Open post slide-over — reload comments from API for freshness
+  const openPost = async (post: PostItem) => {
+    setSelectedPost(post);
+    setComments(post.comments);
+    setOpenReplies({});
+    setReplyTexts({});
+    setReplyErrors({});
+    setLikedIds({});
+    setPlayingVideoId(null);
+
+    // Reload fresh comments from API
+    setLoadingComments(true);
+    try {
+      if (post.platform === 'instagram') {
+        const res = await metaAds.getInstagramMediaComments(post.id);
+        const fresh = (res.data || []).filter((c: any) => c.username !== igUsername);
+        setComments(fresh);
+      } else {
+        const res = await metaAds.getFacebookPostComments(post.id);
+        const normalized = (res.data || []).map((c: any, i: number) => ({
+          ...c,
+          username: c.from?.name || `Comentarista ${i + 1}`,
+          text: c.text || c.message || '',
+          from: c.from || null,
+        })).filter((c: any) => c.from?.id !== fbPageId);
+        setComments(normalized);
+      }
+    } catch (err) {
+      console.error('Error refreshing comments:', err);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  // Generate AI draft for one comment
+  const generateDraft = async (comment: any) => {
+    if (!selectedPost || !clientId) return;
+    setDraftLoading(prev => ({ ...prev, [comment.id]: true }));
+    setReplyErrors(prev => ({ ...prev, [comment.id]: null }));
+    try {
+      const postCaption = selectedPost.caption;
+      const others = comments.filter(c => c.id !== comment.id).map(c => `@${c.username}: ${c.text || c.message || ''}`);
+      const res = await fetch('/api/draft-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, itemText: comment.text || comment.message || '', username: comment.username, postCaption, otherComments: others }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.draft) setReplyTexts(prev => ({ ...prev, [comment.id]: data.draft }));
+    } catch {
+      setReplyErrors(prev => ({ ...prev, [comment.id]: 'No se pudo generar el borrador.' }));
+    } finally {
+      setDraftLoading(prev => ({ ...prev, [comment.id]: false }));
+    }
+  };
+
+  // Bulk generate drafts for all pending
+  const bulkGenerateDrafts = async () => {
+    if (!selectedPost || !clientId) return;
+    setBulkLoading(true);
+    const pending = comments.filter(c => isCommentPending(c, selectedPost.platform));
+    await Promise.all(pending.map(c => generateDraft(c)));
+    setBulkLoading(false);
+  };
+
+  // Submit reply to a comment
+  const submitReply = async (e: React.FormEvent, comment: any) => {
+    e.preventDefault();
+    const text = replyTexts[comment.id]?.trim();
+    if (!text || !selectedPost) return;
+    setSubmitting(prev => ({ ...prev, [comment.id]: true }));
+    setReplyErrors(prev => ({ ...prev, [comment.id]: null }));
+    try {
+      if (selectedPost.platform === 'instagram') {
+        await metaAds.replyToInstagramComment(comment.id, text);
+      } else {
+        await metaAds.replyToFacebookComment(comment.id, text);
+      }
+
+      if (user?.id && clientId) {
+        db.activity.log(user.id, clientId, 'reply_sent', {
+          reply_text: text,
+          incoming_text: comment.text || comment.message || '',
+          platform: selectedPost.platform,
+          item_id: comment.id,
+          user_email: user.email || '',
+        }).catch(() => {});
+      }
+
+      // Update comment thread locally
+      const newReply = {
+        id: `local_${Date.now()}`,
+        username: igUsername || 'Yo',
+        text,
+        timestamp: new Date().toISOString(),
+        from: { id: fbPageId, name: 'Yo' },
+      };
+      setComments(prev => prev.map(c => {
+        if (c.id !== comment.id) return c;
+        return { ...c, replies: { data: [...(c.replies?.data || []), newReply] } };
+      }));
+      setReplyTexts(prev => { const copy = { ...prev }; delete copy[comment.id]; return copy; });
+      setOpenReplies(prev => ({ ...prev, [comment.id]: false }));
+
+      // Update post pending count
+      setPosts(prev => prev.map(p => {
+        if (p.id !== selectedPost.id) return p;
+        return { ...p, pendingComments: Math.max(0, p.pendingComments - 1) };
+      }));
+    } catch (err: any) {
+      setReplyErrors(prev => ({ ...prev, [comment.id]: 'Error al enviar la respuesta.' }));
+    } finally {
+      setSubmitting(prev => ({ ...prev, [comment.id]: false }));
+    }
+  };
+
+  // Toggle like
+  const toggleLike = async (commentId: string) => {
+    if (!selectedPost) return;
+    const liked = !!likedIds[commentId];
+    try {
+      if (liked) {
+        await metaAds.unlikeComment(commentId, selectedPost.platform, igId);
+        setLikedIds(prev => ({ ...prev, [commentId]: false }));
+        setComments(prev => prev.map(c => c.id === commentId ? { ...c, like_count: Math.max(0, (c.like_count || 0) - 1) } : c));
+      } else {
+        await metaAds.likeComment(commentId, selectedPost.platform, igId);
+        setLikedIds(prev => ({ ...prev, [commentId]: true }));
+        setComments(prev => prev.map(c => c.id === commentId ? { ...c, like_count: (c.like_count || 0) + 1 } : c));
+      }
+    } catch (err) {
+      console.error('Error toggling like:', err);
+    }
+  };
+
+  const filteredPosts = useMemo(() => {
+    let list = posts;
+    if (platformFilter !== 'all') list = list.filter(p => p.platform === platformFilter);
+    if (statusFilter === 'pending') list = list.filter(p => p.pendingComments > 0);
+    return list;
+  }, [posts, platformFilter, statusFilter]);
+
+  const totalPending = useMemo(() => posts.reduce((s, p) => s + p.pendingComments, 0), [posts]);
+
+  const fmtDate = (ts: string) => {
+    try {
+      return new Date(ts).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+    } catch { return ''; }
+  };
+
+  if (!fbPageId && !igId) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-4 text-center">
+        <MessageSquare className="w-12 h-12 text-zinc-300 dark:text-zinc-700" />
+        <h2 className="text-[18px] font-black text-zinc-700 dark:text-zinc-300">Sin cuentas conectadas</h2>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-4">
+        <div>
+          <h1 className="text-[24px] font-black tracking-tight text-zinc-900 dark:text-white flex items-center gap-2">
+            <MessageSquare className="w-6 h-6 text-violet-500" />
+            Comentarios
+          </h1>
+          <p className="text-[12px] text-zinc-400 font-bold mt-1">
+            {totalPending > 0
+              ? `${totalPending} comentarios pendientes de respuesta en ${posts.filter(p => p.pendingComments > 0).length} publicaciones`
+              : 'Todos los comentarios están respondidos'}
+          </p>
+        </div>
+        <button
+          onClick={() => setRefreshKey(k => k + 1)}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-4 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full text-[12px] font-bold shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all disabled:opacity-50 self-start"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Recargar
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {(['all', 'instagram', 'facebook'] as const).map(p => (
+          <button
+            key={p}
+            onClick={() => setPlatformFilter(p)}
+            className={`px-3 py-1 rounded-full text-[11px] font-black transition-all border ${
+              platformFilter === p
+                ? p === 'instagram' ? 'bg-pink-500 text-white border-pink-500'
+                  : p === 'facebook' ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-violet-600 text-white border-violet-600'
+                : 'bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-350'
+            }`}
+          >
+            {p === 'all' ? 'Todas las plataformas' : p === 'instagram' ? '📷 Instagram' : '💬 Facebook'}
+          </button>
+        ))}
+        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-0.5 rounded-xl ml-auto">
+          <button
+            onClick={() => setStatusFilter('pending')}
+            className={`px-3 py-1 rounded-lg text-[11px] font-black transition-all ${
+              statusFilter === 'pending' ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            Pendientes ({posts.filter(p => p.pendingComments > 0).length})
+          </button>
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1 rounded-lg text-[11px] font-black transition-all ${
+              statusFilter === 'all' ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            Todos ({posts.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Errors */}
+      {(igError || fbError) && (
+        <div className="space-y-2">
+          {igError && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-400">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span><strong>Instagram:</strong> {igError}</span>
+            </div>
+          )}
+          {fbError && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-400">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span><strong>Facebook:</strong> {fbError}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Content */}
+      {loading ? (
+        <EmailLoader loading={loading} color="#8b5cf6" labels={['Cargando publicaciones de Instagram...', 'Cargando publicaciones de Facebook...', 'Analizando comentarios pendientes...']} />
+      ) : filteredPosts.length === 0 ? (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-16 text-center max-w-md mx-auto space-y-4 shadow-sm">
+          <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/20 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+          </div>
+          <h3 className="font-black text-zinc-800 dark:text-zinc-200 text-[18px]">
+            {statusFilter === 'pending' ? '¡Sin comentarios pendientes!' : 'Sin publicaciones con comentarios'}
+          </h3>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
+            {statusFilter === 'pending' ? 'Buen trabajo. Todas las publicaciones están respondidas.' : 'No se encontraron publicaciones con comentarios en este período.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+          {filteredPosts.map(post => (
+            <button
+              key={post.id}
+              onClick={() => openPost(post)}
+              className="group relative bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 text-left flex flex-col"
+            >
+              {/* Thumbnail */}
+              <div className="aspect-square w-full bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
+                {post.thumbnail ? (
+                  <img src={post.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-500" loading="lazy" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <MessageSquare className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
+                  </div>
+                )}
+
+                {/* Platform badge */}
+                <div className={`absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center text-white shadow-md ${
+                  post.platform === 'instagram'
+                    ? 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600'
+                    : 'bg-blue-600'
+                }`}>
+                  {post.platform === 'instagram'
+                    ? <Instagram className="w-3 h-3" />
+                    : <span className="text-[10px] font-black">f</span>
+                  }
+                </div>
+
+                {/* Pending badge */}
+                {post.pendingComments > 0 && (
+                  <div className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-md animate-pulse">
+                    {post.pendingComments} pend.
+                  </div>
+                )}
+
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1 text-white">
+                  <MessageCircle className="w-6 h-6" />
+                  <span className="text-[11px] font-black">{post.totalComments} comentarios</span>
+                  {post.pendingComments > 0 && (
+                    <span className="text-[10px] font-bold text-amber-300">{post.pendingComments} sin responder</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Caption */}
+              <div className="p-2.5 flex-1">
+                <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 font-bold mb-1">{fmtDate(post.timestamp)}</p>
+                {post.caption && (
+                  <p className="text-[11px] text-zinc-700 dark:text-zinc-300 font-medium line-clamp-2 leading-snug">
+                    {post.caption}
+                  </p>
+                )}
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="text-[9px] font-black text-zinc-400">{post.totalComments} com.</span>
+                  {post.pendingComments > 0 && (
+                    <span className="text-[9px] font-black text-amber-600 dark:text-amber-400">· {post.pendingComments} pend.</span>
+                  )}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* === SLIDE-OVER: Comments detail (same as RedesSocialesPage) === */}
+      {selectedPost && (
+        <div className="fixed inset-0 z-[400] flex justify-end animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedPost(null)} />
+
+          <div className="relative w-full max-w-5xl h-full bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 z-10">
+
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
+                  selectedPost.platform === 'instagram'
+                    ? 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600'
+                    : 'bg-blue-600'
+                }`}>
+                  {selectedPost.platform === 'instagram' ? <Instagram className="w-4 h-4" /> : <span className="font-black text-sm">f</span>}
+                </div>
+                <div>
+                  <h3 className="font-black text-zinc-900 dark:text-white text-[15px] leading-tight">
+                    {selectedPost.platform === 'instagram' ? 'Publicación de Instagram' : 'Publicación de Facebook'}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-zinc-400 font-bold">{fmtDate(selectedPost.timestamp)}</span>
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+                      {comments.filter(c => isCommentPending(c, selectedPost.platform)).length} sin responder
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Bulk drafts */}
+                <button
+                  onClick={bulkGenerateDrafts}
+                  disabled={bulkLoading || comments.filter(c => isCommentPending(c, selectedPost.platform)).length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/20 dark:hover:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-xl text-[11px] font-black border border-violet-100/50 dark:border-violet-900/20 transition-all disabled:opacity-50"
+                >
+                  {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  Generar borradores para todos ({comments.filter(c => isCommentPending(c, selectedPost.platform)).length})
+                </button>
+                {selectedPost.permalink && (
+                  <a href={selectedPost.permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl text-[11px] text-zinc-600 dark:text-zinc-300 font-bold border border-zinc-200 dark:border-zinc-700 transition-all">
+                    Ver original <ArrowUpRight className="w-3 h-3" />
+                  </a>
+                )}
+                <button onClick={() => setSelectedPost(null)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body: post preview + comments */}
+            <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+
+              {/* Left: Post media + caption */}
+              <div className="md:w-[300px] flex-shrink-0 border-r border-zinc-100 dark:border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-50/30 dark:bg-zinc-950/10">
+                {/* Media */}
+                {selectedPost.thumbnail || selectedPost.mediaUrl ? (
+                  <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-100 dark:bg-zinc-900">
+                    {selectedPost.mediaType === 'VIDEO' ? (
+                      playingVideoId === selectedPost.id ? (
+                        <video src={selectedPost.mediaUrl || selectedPost.thumbnail || ''} controls autoPlay className="w-full max-h-64 object-contain bg-black" />
+                      ) : (
+                        <div className="relative cursor-pointer" onClick={() => setPlayingVideoId(selectedPost.id)}>
+                          <img src={selectedPost.thumbnail || ''} alt="" className="w-full max-h-64 object-cover" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                              <Play className="w-6 h-6 fill-zinc-900 text-zinc-900 ml-1" />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <img src={selectedPost.thumbnail || selectedPost.mediaUrl || ''} alt="" className="w-full max-h-64 object-cover" loading="lazy" />
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Caption */}
+                {selectedPost.caption && (
+                  <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl">
+                    <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Descripción</p>
+                    <p className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">{selectedPost.caption}</p>
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
+                  <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Comentarios</p>
+                  <div className="flex items-center justify-between text-[12px] font-bold">
+                    <span className="text-zinc-600 dark:text-zinc-400">Total</span>
+                    <span className="text-zinc-900 dark:text-white">{comments.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px] font-bold">
+                    <span className="text-amber-600 dark:text-amber-400">Sin responder</span>
+                    <span className="text-amber-600 dark:text-amber-400">{comments.filter(c => isCommentPending(c, selectedPost.platform)).length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Comments list */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {loadingComments ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3">
+                    <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+                    <p className="text-[12px] text-zinc-400 font-bold">Cargando comentarios...</p>
+                  </div>
+                ) : comments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                    <MessageCircle className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
+                    <p className="text-[13px] font-bold text-zinc-500">Sin comentarios de usuarios</p>
+                  </div>
+                ) : (
+                  comments.map(comment => {
+                    const isPending = isCommentPending(comment, selectedPost.platform);
+                    const liked = !!likedIds[comment.id];
+                    const replyOpen = !!openReplies[comment.id];
+                    const replies = comment.replies?.data || [];
+
+                    return (
+                      <div key={comment.id} className={`bg-white dark:bg-zinc-900 border rounded-2xl overflow-hidden transition-all ${
+                        isPending
+                          ? 'border-amber-200 dark:border-amber-800/40 shadow-sm'
+                          : 'border-zinc-200/60 dark:border-zinc-800/60'
+                      }`}>
+                        <div className="p-4">
+                          {/* Comment header */}
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[11px] font-black text-zinc-500 dark:text-zinc-400 flex-shrink-0">
+                                {(comment.username || 'U')[0].toUpperCase()}
+                              </div>
+                              <div>
+                                <span className="text-[12px] font-black text-zinc-900 dark:text-white">@{comment.username}</span>
+                                <span className="text-[10px] text-zinc-400 ml-2">{comment.timestamp ? new Date(comment.timestamp).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : ''}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {isPending && (
+                                <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 uppercase">
+                                  Pendiente
+                                </span>
+                              )}
+                              {!isPending && (
+                                <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase">
+                                  Respondido
+                                </span>
+                              )}
+                              <button
+                                onClick={() => toggleLike(comment.id)}
+                                className={`flex items-center gap-0.5 text-[11px] font-bold transition-colors ${liked ? 'text-red-500' : 'text-zinc-400 hover:text-red-500'}`}
+                              >
+                                <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-red-500' : ''}`} />
+                                {comment.like_count || 0}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Comment text */}
+                          <p className="text-[13px] text-zinc-800 dark:text-zinc-100 leading-relaxed font-medium ml-9">
+                            {comment.text || comment.message}
+                          </p>
+
+                          {/* Existing replies */}
+                          {replies.length > 0 && (
+                            <div className="ml-9 mt-3 space-y-2 pl-3 border-l-2 border-zinc-100 dark:border-zinc-800">
+                              {replies.map((r: any) => {
+                                const rIsMe = r.username === igUsername || r.from?.id === fbPageId;
+                                return (
+                                  <div key={r.id} className="space-y-0.5">
+                                    <span className={`text-[10px] font-black ${rIsMe ? 'text-violet-600 dark:text-violet-400' : 'text-zinc-500'}`}>
+                                      @{r.username || r.from?.name || 'Yo'}
+                                    </span>
+                                    <p className={`text-[12px] leading-relaxed ${rIsMe ? 'text-violet-700 dark:text-violet-300 font-semibold' : 'text-zinc-600 dark:text-zinc-400 font-medium'}`}>
+                                      {r.text || r.message}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Action buttons */}
+                          <div className="mt-3 ml-9 flex items-center gap-2">
+                            <button
+                              onClick={() => setOpenReplies(prev => ({ ...prev, [comment.id]: !prev[comment.id] }))}
+                              className="text-[11px] font-black text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 transition-colors"
+                            >
+                              {replyOpen ? 'Cancelar' : 'Responder'}
+                            </button>
+                          </div>
+
+                          {/* Reply box */}
+                          {replyOpen && (
+                            <div className="mt-3 ml-9 space-y-2">
+                              {replyErrors[comment.id] && (
+                                <p className="text-[10px] text-red-500 font-bold">{replyErrors[comment.id]}</p>
+                              )}
+                              <form onSubmit={e => submitReply(e, comment)} className="space-y-2">
+                                <AutoResizeTextarea
+                                  placeholder={`Responder a @${comment.username}...`}
+                                  value={replyTexts[comment.id] || ''}
+                                  onChange={e => setReplyTexts(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                                  disabled={submitting[comment.id] || draftLoading[comment.id]}
+                                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-[12.5px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:border-violet-500 outline-none transition-all min-h-[50px] font-medium shadow-inner"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => generateDraft(comment)}
+                                    disabled={submitting[comment.id] || draftLoading[comment.id]}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/20 text-violet-600 dark:text-violet-400 rounded-lg text-[11px] font-black border border-violet-100/50 dark:border-violet-900/20 transition-all"
+                                  >
+                                    {draftLoading[comment.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                    IA
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    disabled={submitting[comment.id] || draftLoading[comment.id] || !(replyTexts[comment.id] || '').trim()}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-black shadow-sm transition-all"
+                                  >
+                                    {submitting[comment.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                                    Enviar
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

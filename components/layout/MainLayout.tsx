@@ -22,7 +22,8 @@ const EmailLibraryPage   = lazy(() => import('../../pages/EmailLibraryPage'));
 const EmailMarketingPage = lazy(() => import('../../pages/EmailMarketingPage'));
 const EmailMonitorPage   = lazy(() => import('../../pages/EmailMonitorPage'));
 const RedesSocialesPage  = lazy(() => import('../../pages/RedesSocialesPage'));
-const MensajeriaPage     = lazy(() => import('../../pages/MensajeriaPage'));
+const MensajesDMPage     = lazy(() => import('../../pages/MensajesDMPage'));
+const ComentariosPage    = lazy(() => import('../../pages/ComentariosPage'));
 const CerebroPage        = lazy(() => import('../../pages/CerebroPage'));
 
 // Minimal skeleton shown while a lazy page chunk is downloading
@@ -90,7 +91,8 @@ export const MainLayout = () => {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/captacion" element={<CaptacionPage />} />
               <Route path="/redes-sociales" element={<RedesSocialesPage />} />
-              <Route path="/mensajeria" element={<MensajeriaPage />} />
+              <Route path="/mensajeria" element={<MensajesDMPage />} />
+              <Route path="/comentarios" element={<ComentariosPage />} />
               <Route path="/atencion" element={<AtencionPage />} />
               <Route path="/retencion" element={<RetencionPage />} />
               <Route path="/tienda" element={<TiendaPage />} />

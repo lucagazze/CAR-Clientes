@@ -41,8 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const interactionItems = [
     { path: '/redes-sociales', icon: Instagram, label: 'Publicaciones', condition: !!activeProfile?.meta_account_id || !!(activeProfile as any)?.ig_business_id || !!(activeProfile as any)?.fb_page_id },
-    { path: '/mensajeria?section=messages', icon: Inbox, label: 'Mensajes Directos', condition: !!activeProfile?.meta_account_id || !!(activeProfile as any)?.ig_business_id || !!(activeProfile as any)?.fb_page_id },
-    { path: '/mensajeria?section=comments', icon: MessageSquare, label: 'Comentarios', condition: !!activeProfile?.meta_account_id || !!(activeProfile as any)?.ig_business_id || !!(activeProfile as any)?.fb_page_id },
+    { path: '/mensajeria', icon: Inbox, label: 'Mensajes Directos', condition: !!activeProfile?.meta_account_id || !!(activeProfile as any)?.ig_business_id || !!(activeProfile as any)?.fb_page_id },
+    { path: '/comentarios', icon: MessageSquare, label: 'Comentarios', condition: !!activeProfile?.meta_account_id || !!(activeProfile as any)?.ig_business_id || !!(activeProfile as any)?.fb_page_id },
     { path: '/email-marketing', icon: Mail,     label: 'Email Marketing',  condition: true },
     { path: '/atencion',  icon: MessageCircle,  label: 'Atención',   condition: !!activeProfile?.chatwoot_token },
   ].filter(item => item.condition);

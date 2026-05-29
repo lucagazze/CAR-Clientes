@@ -27,12 +27,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'OpenAI API key not configured' });
   }
 
-  const { clientId, itemText, username, postCaption, otherComments } = req.body as {
+  const { clientId, itemText, username, postCaption, otherComments, conversationHistory, isDM } = req.body as {
     clientId: string;
     itemText: string;
     username: string;
     postCaption?: string;
     otherComments?: string[];
+    conversationHistory?: string[]; // last N messages of the DM thread
+    isDM?: boolean;
   };
 
   if (!clientId || !itemText) {
@@ -133,8 +135,13 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
       ? `Catálogo de productos de la tienda:\n${products.map(p => `- ${p.title} (Link de compra: https://${cleanDomainForLink}/products/${p.handle})`).join('\n')}`
       : 'No hay catálogo de productos de Shopify configurado.';
 
+    // DM conversation history context (last 15 messages)
+    const conversationHistoryBlock = conversationHistory && conversationHistory.length > 0
+      ? `\nCONTEXTO DE LA CONVERSACIÓN (últimos ${conversationHistory.length} mensajes, del más viejo al más reciente):\n${conversationHistory.map(m => `  ${m}`).join('\n')}\n`
+      : '';
+
     const systemMessage = `You are Algor, the AI assistant for the brand "${business_name}".
-Your task is to draft a friendly, natural reply to a social media message.
+${isDM ? 'Your task is to draft a natural, helpful DM reply to continue a direct message conversation.' : 'Your task is to draft a friendly, natural reply to a social media message.'}
 
 CRITICAL INSTRUCTION - LANGUAGE DETECTION:
 - You MUST identify the language of the customer's message: "${itemText}".
@@ -146,10 +153,10 @@ CRITICAL INSTRUCTION - LANGUAGE DETECTION:
 
 Details:
 - Social media user: @${username}
-- Message sent: "${itemText}"
+- Their latest message: "${itemText}"
 ${postCaption ? `- Caption/Text of the post (context): "${postCaption}"` : ''}
 ${otherComments && otherComments.length > 0 ? `- Other comments in the same post (context):\n${otherComments.map(c => `  * ${c}`).join('\n')}` : ''}
-
+${conversationHistoryBlock}
 ${productsContext}
 
 ${brainContext ? `Conocimiento adicional del negocio (Cerebro):\n${brainContext}\n` : ''}
@@ -157,12 +164,14 @@ ${brainContext ? `Conocimiento adicional del negocio (Cerebro):\n${brainContext}
 ${fewShotContext ? `\n${fewShotContext}\n` : ''}
 
 Rules:
-1. Be extremely concise (maximum 1 or 2 sentences).
+1. ${isDM ? 'Be conversational and helpful. You can use 1-3 sentences for DMs.' : 'Be extremely concise (maximum 1 or 2 sentences).'}
 2. If they ask about a specific product, availability, price, or how to buy, recommend the product from the catalog and include EXACTLY the corresponding link: https://${cleanDomainForLink}/products/[product-handle]. Do not make up handles.
 3. If they ask about shopping, shipping, or general prices and there is no specific matching product in the catalog, always offer the main website link: ${canonicalSiteUrl}. ALWAYS use this EXACT URL: ${canonicalSiteUrl}. Never modify, shorten, or reconstruct it.
 4. Do not use placeholders like [price] or [link]. The reply must be ready to send.
 5. Output ONLY the final drafted text, without explanations, quotes, or prefixes.
-6. If the user asks about a specific product (its availability, if you sell it, or how to get it) and the product is NOT present in the catalog listed above, you MUST explicitly state that the product is currently not available or not in stock, and invite them to browse the online store at ${canonicalSiteUrl} to see all other products.`;
+6. If the user asks about a specific product (its availability, if you sell it, or how to get it) and the product is NOT present in the catalog listed above, you MUST explicitly state that the product is currently not available or not in stock, and invite them to browse the online store at ${canonicalSiteUrl} to see all other products.
+${isDM ? '7. Take into account the full conversation history above to understand the context, what has already been discussed, and what the customer needs next.' : ''}`;
+
 
     // 4. Call OpenAI API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -175,10 +184,10 @@ Rules:
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemMessage },
-          { role: 'user', content: `Comentario del cliente: "${itemText}"\nGenerá el borrador de respuesta para @${username} en el mismo idioma del comentario:` }
+          { role: 'user', content: `${isDM ? 'Mensaje del cliente en el DM' : 'Comentario del cliente'}: "${itemText}"\nGenerá el borrador de respuesta para @${username} en el mismo idioma del mensaje:` }
         ],
         temperature: 0.3,
-        max_tokens: 150,
+        max_tokens: isDM ? 250 : 150,
       }),
     });
 

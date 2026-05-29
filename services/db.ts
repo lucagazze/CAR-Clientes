@@ -29,6 +29,7 @@ export interface ClientProfile {
   website_url?: string;
   scraped_content?: string;
   instagram_context?: string;
+  brain_updated_at?: string;
   created_at: string;
 }
 

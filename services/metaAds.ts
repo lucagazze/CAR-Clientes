@@ -521,17 +521,28 @@ export const metaAds = {
   },
 
   // ── CONVERSATIONS (DMs) ──────────────────────────────────
+  // Facebook Messenger conversations — base node is the Page ID
   getPageConversations: (pageId: string, platform: 'messenger' | 'instagram' = 'messenger') =>
     apiGetPage(pageId, `${pageId}/conversations`, {
       fields: 'id,participants,unread_count,updated_time,messages.limit(1){id,message,from,created_time}',
       platform,
-      limit: '20',
+      limit: '25',
     }),
 
-  getConversationMessages: (convId: string) =>
+  // Instagram Direct conversations — base node MUST be the IG Business Account ID
+  // (not the FB Page ID). Uses the same page access token.
+  getInstagramConversations: (fbPageId: string, igUserId: string) =>
+    apiGetPage(fbPageId, `${igUserId}/conversations`, {
+      fields: 'id,participants,unread_count,updated_time,messages.limit(1){id,message,from,created_time}',
+      platform: 'instagram',
+      limit: '25',
+    }),
+
+  // Fetch up to 15 messages for AI draft context
+  getConversationMessages: (convId: string, limit = 15) =>
     apiGetPageActive(`${convId}/messages`, {
       fields: 'id,message,from,created_time',
-      limit: '30',
+      limit: String(limit),
     }),
 
   replyToConversation: async (convId: string, text: string) => {
