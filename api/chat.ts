@@ -51,8 +51,18 @@ async function getClientData(clientId: string, fields: string): Promise<any> {
   return data;
 }
 
-// ── Optimized Klaviyo fetch ───────────────────────────────────────────────────
+// ── Klaviyo fetch — uses same proxy as the frontend (guaranteed same behavior) ──
 async function fetchKlaviyoData(apiKey: string) {
+  // Route through /api/klaviyo proxy: same path as EmailMarketingPage uses.
+  // The proxy converts Accept: application/json → application/vnd.api+json for Klaviyo.
+  // VERCEL_URL is provided by Vercel at runtime for the current deployment.
+  const deploymentBase = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.VERCEL_BRANCH_URL
+    ? `https://${process.env.VERCEL_BRANCH_URL}`
+    : 'http://localhost:5174';
+
+  const proxyBase = `${deploymentBase}/api/klaviyo`;
   const h = {
     Authorization: `Klaviyo-API-Key ${apiKey}`,
     Revision: '2024-10-15',
@@ -61,15 +71,15 @@ async function fetchKlaviyoData(apiKey: string) {
 
   const kvFetch = async (path: string) => {
     for (let attempt = 0; attempt < 3; attempt++) {
-      const r = await fetch(`https://a.klaviyo.com/api/${path}`, { headers: h });
+      const r = await fetch(`${proxyBase}/${path}`, { headers: h });
       if ((r.status === 429 || r.status >= 500) && attempt < 2) {
-        const wait = r.status === 429 ? parseInt(r.headers.get('retry-after') || '2') * 1000 : 1000 * (attempt + 1);
-        await new Promise(res => setTimeout(res, Math.min(wait, 5000)));
+        const wait = r.status === 429 ? parseInt(r.headers.get('retry-after') || '2') * 1000 : 1200 * (attempt + 1);
+        await new Promise(res => setTimeout(res, Math.min(wait, 6000)));
         continue;
       }
       if (!r.ok) {
         const txt = await r.text().catch(() => '');
-        throw new Error(`Klaviyo ${r.status}: ${txt.slice(0, 150)}`);
+        throw new Error(`Klaviyo ${r.status}: ${txt.slice(0, 200)}`);
       }
       return r.json();
     }
@@ -81,9 +91,10 @@ async function fetchKlaviyoData(apiKey: string) {
     : null;
 
   try {
+    // Exact same URLs as EmailMarketingPage fetchCampaigns + fetchFlows
     const [campsData, flowsData] = await Promise.all([
-      kvFetch(`campaigns?filter=equals(messages.channel,%22email%22)&include=campaign-messages&sort=-created_at&page[size]=30`),
-      kvFetch(`flows?sort=-updated&page[size]=30`),
+      kvFetch(`campaigns?filter=equals(messages.channel,%22email%22)&include=campaign-messages&sort=-created_at`),
+      kvFetch(`flows?sort=-updated`),
     ]);
 
     const msgMap = new Map<string, any>();

@@ -337,9 +337,9 @@ export const AIChatFloat = () => {
   const navigate = useNavigate();
 
   const handleNavigate = (url: string) => {
-    // Convert "/#/email-marketing" → "/email-marketing" for useNavigate
     const path = url.startsWith('/#') ? url.slice(2) : url.startsWith('#/') ? url.slice(1) : url;
     navigate(path);
+    setIsOpen(false); // Close chat so user can see the destination page
   };
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
