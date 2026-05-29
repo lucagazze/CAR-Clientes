@@ -353,7 +353,7 @@ export default function RetencionPage() {
                     const flowOpen = expandedRows.has(flow.id);
                     return (
                       <div key={flow.id}>
-                        <div onClick={() => toggleRow(flow.id)} className="flex items-center justify-between px-4 py-1.5 cursor-pointer sm:cursor-default">
+                        <div onClick={() => toggleRow(flow.id)} className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 active:bg-zinc-100 dark:active:bg-zinc-800 transition-colors duration-100 rounded-xl mx-2">
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200 truncate">{flow.attributes.name}</span>
                             <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">Activo</span>
@@ -423,7 +423,7 @@ export default function RetencionPage() {
                     const isSent = (camp.attributes.status || '').toLowerCase() === 'sent';
                     return (
                       <div key={camp.id}>
-                        <div onClick={() => toggleRow(camp.id)} className="flex items-center justify-between px-4 py-1.5 cursor-pointer sm:cursor-default">
+                        <div onClick={() => toggleRow(camp.id)} className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 active:bg-zinc-100 dark:active:bg-zinc-800 transition-colors duration-100 rounded-xl mx-2">
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200 truncate">{camp.attributes.name}</span>
                             <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide ${isSent ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'}`}>

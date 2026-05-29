@@ -173,17 +173,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
                   key={path}
                   to={path}
                   onClick={() => window.innerWidth < 768 && setIsOpen(false)}
-                  className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 ${
+                  className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-150 active:scale-[0.98] ${
                     isActive
-                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-lg shadow-black/10 dark:shadow-white/5'
-                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-white/[0.04]'
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-lg shadow-black/15 dark:shadow-white/5'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.06] hover:shadow-sm'
                   }`}
                 >
-                  <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-transform group-hover:scale-110 ${
-                    isActive ? 'text-white dark:text-zinc-900' : 'text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-200'
+                  <Icon className={`w-[17px] h-[17px] flex-shrink-0 transition-all duration-150 ${
+                    isActive
+                      ? 'text-white dark:text-zinc-900'
+                      : 'text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-800 dark:group-hover:text-zinc-100 group-hover:scale-110'
                   }`} />
-                  <span className="tracking-tight">{label}</span>
-                  {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />}
+                  <span className="tracking-tight flex-1">{label}</span>
+                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-violet-400 dark:bg-violet-500" />}
                 </Link>
               );
             })}

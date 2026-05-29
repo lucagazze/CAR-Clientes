@@ -2,7 +2,25 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { db, ClientLink } from '../services/db';
-import { ExternalLink, Link2 } from 'lucide-react';
+import { Link2, MessageSquare, Mail, Globe, ArrowUpRight } from 'lucide-react';
+
+const getIcon = (icon?: string) => {
+  if (icon === 'chat') return MessageSquare;
+  if (icon === 'mail') return Mail;
+  if (icon === 'web') return Globe;
+  return Link2;
+};
+
+const GRADIENTS = [
+  'from-violet-500 to-purple-600',
+  'from-blue-500 to-indigo-600',
+  'from-emerald-500 to-teal-600',
+  'from-orange-500 to-amber-600',
+  'from-pink-500 to-rose-600',
+  'from-cyan-500 to-sky-600',
+  'from-violet-600 to-indigo-700',
+  'from-teal-500 to-emerald-600',
+];
 
 export default function LinksPage() {
   const { profile: authProfile } = useAuth();
@@ -20,45 +38,61 @@ export default function LinksPage() {
   }, [profile]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-[-0.03em] text-zinc-900 dark:text-white">
-            Mis Links
-          </h1>
-          <p className="text-[14px] text-zinc-400 dark:text-zinc-500 mt-0.5 font-medium">
-            Accesos directos importantes para tu negocio.
-          </p>
-        </div>
+    <div className="max-w-[1200px] mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-400">
+      <div>
+        <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-white">
+          Mis Accesos
+        </h1>
+        <p className="text-[13px] text-zinc-400 dark:text-zinc-500 mt-1 font-medium">
+          Accesos directos a todas tus herramientas y plataformas.
+        </p>
       </div>
-      
+
       {loading ? (
-        <div className="animate-pulse space-y-4">
-          {[1,2,3].map(i => <div key={i} className="h-16 bg-zinc-100 dark:bg-zinc-800 rounded-2xl" />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-[80px] bg-zinc-100 dark:bg-zinc-800/60 rounded-2xl animate-pulse" />
+          ))}
+        </div>
+      ) : links.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {links.map((link, idx) => {
+            const Icon = getIcon(link.icon);
+            const gradient = GRADIENTS[idx % GRADIENTS.length];
+            return (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+                className="group relative bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-4 flex items-center gap-4 hover:shadow-xl hover:shadow-zinc-200/60 dark:hover:shadow-black/30 hover:-translate-y-1 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 overflow-hidden active:scale-[0.98]"
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-[0.04] dark:group-hover:opacity-[0.06] transition-opacity duration-200 pointer-events-none`} />
+                <div className={`relative w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-110 transition-transform duration-200`}>
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0 relative">
+                  <p className="text-[13.5px] font-bold text-zinc-900 dark:text-white truncate">
+                    {link.label || link.title}
+                  </p>
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
+                    {link.url?.replace(/^https?:\/\//,'').split('/')[0]}
+                  </p>
+                </div>
+                <ArrowUpRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600 group-hover:text-zinc-500 dark:group-hover:text-zinc-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200 flex-shrink-0" />
+              </a>
+            );
+          })}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {links.length > 0 ? links.map(link => (
-            <a 
-              key={link.id}
-              href={link.url}
-              target="_blank"
-              rel="noreferrer"
-              className="card p-5 hover:border-violet-300 dark:hover:border-violet-500/50 hover:bg-violet-50/50 dark:hover:bg-violet-500/10 transition-all group flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center group-hover:bg-violet-100 dark:group-hover:bg-violet-900/50 transition-colors">
-                  <Link2 className="w-5 h-5 text-zinc-500 dark:text-zinc-400 group-hover:text-violet-600 dark:group-hover:text-violet-400" />
-                </div>
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100">{link.label}</span>
-              </div>
-              <ExternalLink className="w-4 h-4 text-zinc-400 group-hover:text-violet-500" />
-            </a>
-          )) : (
-            <div className="col-span-full card p-8 text-center text-zinc-500">
-              No tienes links configurados todavía.
-            </div>
-          )}
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
+            <Link2 className="w-7 h-7 text-zinc-400 dark:text-zinc-500" />
+          </div>
+          <h3 className="text-[15px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">Sin accesos configurados</h3>
+          <p className="text-[13px] text-zinc-400 max-w-xs">
+            Tu gestor de cuenta agregará los accesos directos a tus herramientas aquí.
+          </p>
         </div>
       )}
     </div>

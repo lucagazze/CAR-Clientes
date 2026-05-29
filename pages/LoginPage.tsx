@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useToast } from '../components/Toast';
-import { Loader2, Moon, Sun, EyeOff, Eye } from 'lucide-react';
+import { Loader2, Moon, Sun, EyeOff, Eye, ArrowRight } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 const toAuthEmail = (input: string) =>
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { darkMode, toggleDarkMode } = useTheme();
@@ -32,112 +33,159 @@ export default function LoginPage() {
     }
   };
 
+  const inputBase = `w-full h-12 px-4 rounded-2xl border text-[14px] font-medium outline-none transition-all duration-200 ${
+    darkMode
+      ? 'bg-white/5 text-white placeholder:text-zinc-600'
+      : 'bg-zinc-50 text-zinc-900 placeholder:text-zinc-400'
+  }`;
+
+  const inputFocus = (field: 'email' | 'password') =>
+    focusedField === field
+      ? darkMode
+        ? 'border-violet-500/60 shadow-[0_0_0_3px_rgba(139,92,246,0.12)] bg-white/8'
+        : 'border-violet-400 shadow-[0_0_0_3px_rgba(139,92,246,0.08)]'
+      : darkMode
+        ? 'border-white/8'
+        : 'border-zinc-200';
+
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${darkMode ? 'bg-[#0a0a0a] text-white' : 'bg-[#f5f5f7] text-zinc-900'}`}>
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 relative overflow-hidden ${
+      darkMode ? 'bg-[#080808]' : 'bg-[#f2f2f7]'
+    }`}>
+      {/* Background decoration */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className={`absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full opacity-[0.06] blur-3xl ${
+          darkMode ? 'bg-violet-500' : 'bg-violet-400'
+        }`} />
+        <div className={`absolute -bottom-60 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.04] blur-3xl ${
+          darkMode ? 'bg-blue-500' : 'bg-indigo-400'
+        }`} />
+      </div>
+
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-5 w-full relative z-10">
-        <div className="flex items-center gap-3">
-          <img 
-            src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} 
-            alt="Algoritmia" 
-            className="w-8 h-8 object-contain drop-shadow-sm"
+        <div className="flex items-center gap-2.5">
+          <img
+            src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
+            alt="Algoritmia"
+            className="w-8 h-8 object-contain"
           />
-          <div className="flex flex-col">
-            <span className={`text-[15px] font-black tracking-tighter leading-none uppercase ${darkMode ? 'text-white' : 'text-zinc-900'}`}>ALGORITMIA</span>
-            <span className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] mt-0.5 uppercase">Gestión</span>
+          <div>
+            <span className={`text-[14px] font-black tracking-tighter leading-none uppercase block ${darkMode ? 'text-white' : 'text-zinc-900'}`}>
+              ALGORITMIA
+            </span>
+            <span className="text-[9px] font-bold text-violet-500 tracking-[0.25em] uppercase">Gestión</span>
           </div>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={toggleDarkMode}
-            className={`flex items-center justify-center w-9 h-9 rounded-xl border shadow-sm transition-all duration-300 ${
-              darkMode 
-                ? 'bg-[#111] border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800' 
-                : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-            }`}
-            title="Cambiar apariencia"
-          >
-            {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-          </button>
-        </div>
+        <button
+          onClick={toggleDarkMode}
+          className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 ${
+            darkMode
+              ? 'bg-white/5 border-white/8 text-zinc-400 hover:bg-white/10'
+              : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50 shadow-sm'
+          }`}
+        >
+          {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+        </button>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 pb-20 relative z-10">
-        <div className="w-full max-w-[360px]">
-          <div className="mb-10 text-center">
-            <h1 className={`text-[24px] font-bold mb-2 tracking-tight ${darkMode ? 'text-white' : 'text-zinc-900'}`}>
-              Iniciar Sesión
+      {/* Main */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 pb-16 relative z-10">
+        <div className="w-full max-w-[360px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+          {/* Logo card */}
+          <div className="flex flex-col items-center mb-10">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-5 shadow-xl ${
+              darkMode ? 'bg-white/6 border border-white/8' : 'bg-white border border-zinc-100 shadow-lg'
+            }`}>
+              <img
+                src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
+                alt="Algoritmia"
+                className="w-10 h-10 object-contain"
+              />
+            </div>
+            <h1 className={`text-[22px] font-bold tracking-tight mb-1 ${darkMode ? 'text-white' : 'text-zinc-900'}`}>
+              Bienvenido
             </h1>
-            <p className={`text-[14px] font-medium ${darkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
-              Accede al ecosistema Algoritmia.
+            <p className={`text-[13px] font-medium text-center ${darkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              Ingresá al ecosistema de Algoritmia
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-3">
+          {/* Form card */}
+          <div className={`rounded-3xl p-6 ${
+            darkMode
+              ? 'bg-white/[0.04] border border-white/[0.07] shadow-2xl'
+              : 'bg-white border border-zinc-200/60 shadow-xl shadow-zinc-200/40'
+          }`}>
+            <form onSubmit={handleLogin} className="space-y-3">
               <input
                 type="text"
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
+                onFocus={() => setFocusedField('email')}
+                onBlur={() => setFocusedField(null)}
                 placeholder="Email o usuario"
                 autoCapitalize="none"
                 autoCorrect="off"
-                className={`w-full h-11 px-4 rounded-xl border text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200 ${
-                  darkMode 
-                    ? 'bg-[#111] border-white/10 text-white placeholder:text-zinc-600 focus:border-white/20 focus:bg-[#161618]' 
-                    : 'bg-white border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-zinc-50'
-                }`}
+                className={`${inputBase} ${inputFocus('email')}`}
               />
 
               <div className="relative">
                 <input
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
                   placeholder="Contraseña"
-                  className={`w-full h-11 pl-4 pr-11 rounded-xl border text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200 ${
-                    darkMode 
-                      ? 'bg-[#111] border-white/10 text-white placeholder:text-zinc-600 focus:border-white/20 focus:bg-[#161618]' 
-                      : 'bg-white border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-zinc-50'
-                  }`}
+                  className={`${inputBase} ${inputFocus('password')} pr-11`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors p-1 ${darkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
+                  className={`absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-all ${
+                    darkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'
+                  }`}
                 >
                   {showPassword ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full h-11 flex items-center justify-center rounded-xl text-[14px] font-bold tracking-wide transition-all duration-200 shadow-sm disabled:opacity-50 disabled:pointer-events-none ${
-                darkMode 
-                  ? 'bg-white text-black hover:bg-zinc-200' 
-                  : 'bg-zinc-900 text-white hover:bg-black'
+              <div className="pt-1">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`w-full h-12 flex items-center justify-center gap-2 rounded-2xl text-[14px] font-bold transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none ${
+                    darkMode
+                      ? 'bg-white text-black hover:bg-zinc-100 shadow-lg shadow-white/10'
+                      : 'bg-zinc-900 text-white hover:bg-black shadow-lg shadow-zinc-900/20'
+                  } hover:scale-[1.01] active:scale-[0.99]`}
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>Entrar <ArrowRight className="w-4 h-4" /></>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className="flex justify-center mt-5">
+            <a
+              href="https://wa.me/5493476245523?text=Hola,%20necesito%20ayuda%20para%20recuperar%20mi%20contrase%C3%B1a%20del%20sistema%20Algoritmia."
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-[12px] font-medium transition-all hover:underline ${
+                darkMode ? 'text-zinc-600 hover:text-zinc-400' : 'text-zinc-400 hover:text-zinc-600'
               }`}
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Entrar'}
-            </button>
-            
-            <div className="flex justify-center pt-3">
-              <a 
-                href="https://wa.me/5493476245523?text=Hola,%20necesito%20ayuda%20para%20recuperar%20mi%20contrase%C3%B1a%20del%20sistema%20Algoritmia." 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={`text-[12px] font-medium transition-colors hover:underline ${darkMode ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-              >
-                ¿Olvidaste tu contraseña?
-              </a>
-            </div>
-          </form>
+              ¿Olvidaste tu contraseña?
+            </a>
+          </div>
         </div>
       </main>
     </div>

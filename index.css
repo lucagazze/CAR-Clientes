@@ -49,6 +49,55 @@ body {
   @apply bg-white dark:bg-zinc-900 rounded-2xl border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)];
 }
 
+/* ─── Apple-feel global micro-interactions ─────────────────────────────── */
+
+/* All buttons: satisfying press */
+button:not(:disabled) {
+  transition: transform 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.12s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* All links: smooth */
+a {
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+/* Focus ring — violet glow instead of browser default */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+}
+
+/* Smooth page content */
+.animate-in {
+  animation-fill-mode: both;
+}
+
+/* Scrollbar — thinner and more refined */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
+.dark ::-webkit-scrollbar-thumb { background: #2a2a2a; }
+
+/* Smooth font rendering across all elements */
+* {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Card hover — global lift effect for .card class */
+.card-hover {
+  transition: transform 0.2s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+}
+.dark .card-hover:hover {
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
 /* Metric number animation */
 @keyframes countUp {
   from { opacity: 0; transform: translateY(8px); }
