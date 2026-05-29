@@ -339,6 +339,23 @@ export const metaAds = {
   },
 
   // ── INSTAGRAM ─────────────────────────────────────────────
+  getDiscoverableInstagramAccounts: async () => {
+    const res = await apiGet('me/accounts', {
+      fields: 'name,instagram_business_account{id,username,name,profile_picture_url}',
+      limit: '100',
+    });
+    const accounts = (res?.data || [])
+      .filter((page: any) => page.instagram_business_account)
+      .map((page: any) => ({
+        pageName: page.name,
+        igId: page.instagram_business_account.id,
+        username: page.instagram_business_account.username,
+        name: page.instagram_business_account.name,
+        profilePictureUrl: page.instagram_business_account.profile_picture_url,
+      }));
+    return { data: accounts };
+  },
+
   getInstagramProfile: (igId: string) =>
     apiGet(igId, {
       fields: 'id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website',

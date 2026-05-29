@@ -20,6 +20,7 @@ import {
   Copy,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   AlertTriangle,
   Pencil,
   Globe,
@@ -191,6 +192,9 @@ export default function AdminPage() {
   const [testingKlaviyo, setTestingKlaviyo] = useState(false);
   const [testingMeta, setTestingMeta] = useState(false);
   const [testingChatwoot, setTestingChatwoot] = useState(false);
+  const [testingIg, setTestingIg] = useState(false);
+  const [discoveredIgAccounts, setDiscoveredIgAccounts] = useState<any[]>([]);
+  const [loadingIgAccounts, setLoadingIgAccounts] = useState(false);
 
   // Custom links state
   const [clientLinks, setClientLinks] = useState<ClientLink[]>([]);
@@ -216,11 +220,28 @@ export default function AdminPage() {
     Record<string, "ok" | "error" | null>
   >({});
 
+  const loadDiscoveredIgAccounts = async (quiet = true) => {
+    setLoadingIgAccounts(true);
+    try {
+      const res = await metaAds.getDiscoverableInstagramAccounts();
+      setDiscoveredIgAccounts(res?.data || []);
+      if (!quiet) showToast("¡Cuentas de Instagram sincronizadas! ✓", "success");
+    } catch (err: any) {
+      if (!quiet) {
+        showToast("Error al sincronizar Instagram: " + (err.message || "token inválido"), "error");
+      }
+    } finally {
+      setLoadingIgAccounts(false);
+    }
+  };
+
   useEffect(() => {
     metaAds
       .getAllAdAccounts()
       .then((res) => setMetaAccounts(res?.data || []))
       .catch(() => {});
+
+    loadDiscoveredIgAccounts(true);
   }, []);
 
   const f = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -420,6 +441,7 @@ export default function AdminPage() {
       client_tags: c.client_tags || [],
       new_password: "",
     });
+    setStatuses({});
     setEditingClient(c);
     setLinksToDelete([]);
     setLoadingLinks(true);
@@ -523,6 +545,46 @@ export default function AdminPage() {
       setStatuses((p) => ({ ...p, meta: "error" }));
     } finally {
       setTestingMeta(false);
+    }
+  };
+
+  const testInstagram = async () => {
+    if (!editForm.ig_business_id) {
+      showToast("Ingresá o seleccioná un ID de Instagram para probar", "warning");
+      return;
+    }
+    setTestingIg(true);
+    try {
+      const res = await metaAds.getInstagramProfile(editForm.ig_business_id);
+      if (!res || res.error)
+        throw new Error("No se pudo obtener el perfil (verificá el ID de Instagram y el Token General)");
+      showToast(`¡Conexión con Instagram Exitosa! (@${res.username}) ✓`, "success");
+      setStatuses((p) => ({ ...p, instagram: "ok" }));
+    } catch (err: any) {
+      showToast(
+        "Error Instagram: " + (err.message || "Verificá la cuenta"),
+        "error",
+      );
+      setStatuses((p) => ({ ...p, instagram: "error" }));
+    } finally {
+      setTestingIg(false);
+    }
+  };
+
+  const handleSelectIgAccount = (id: string) => {
+    const selected = discoveredIgAccounts.find(acc => acc.igId === id);
+    if (selected) {
+      setEditForm((p: any) => ({
+        ...p,
+        ig_business_id: selected.igId,
+        ig_username: selected.username
+      }));
+    } else {
+      setEditForm((p: any) => ({
+        ...p,
+        ig_business_id: "",
+        ig_username: ""
+      }));
     }
   };
 
@@ -1414,29 +1476,82 @@ export default function AdminPage() {
                       <span className="text-[10px] bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 px-2 py-0.5 rounded-full font-bold border border-pink-200 dark:border-pink-500/20">Configurado</span>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Field label="Instagram Business ID">
-                      <input
-                        type="text"
-                        value={editForm.ig_business_id}
-                        onChange={(e) => ef("ig_business_id", e.target.value)}
-                        placeholder="17841400000000000"
-                        className={inputCls}
-                      />
+                  <div className="space-y-4">
+                    <Field label="Seleccionar Cuenta de Instagram Vinculada">
+                      <div className="flex gap-2">
+                        <select
+                          value={editForm.ig_business_id || ""}
+                          onChange={(e) => handleSelectIgAccount(e.target.value)}
+                          className={`${inputCls} flex-1`}
+                          disabled={loadingIgAccounts}
+                        >
+                          <option value="">-- Seleccionar cuenta auto-detectada --</option>
+                          {discoveredIgAccounts.map((acc) => (
+                            <option key={acc.igId} value={acc.igId}>
+                              {acc.name || acc.username} (@{acc.username}) — FB Page: {acc.pageName}
+                            </option>
+                          ))}
+                          {editForm.ig_business_id && !discoveredIgAccounts.some(acc => acc.igId === editForm.ig_business_id) && (
+                            <option value={editForm.ig_business_id}>
+                              {editForm.ig_username ? `@${editForm.ig_username}` : "Cuenta actual"} ({editForm.ig_business_id})
+                            </option>
+                          )}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => loadDiscoveredIgAccounts(false)}
+                          disabled={loadingIgAccounts}
+                          title="Sincronizar/Refrescar cuentas desde Meta"
+                          className="px-3 rounded-lg border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center justify-center transition-all"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loadingIgAccounts ? "animate-spin" : ""}`} />
+                        </button>
+                      </div>
                     </Field>
-                    <Field label="Instagram Username (sin @)">
-                      <input
-                        type="text"
-                        value={editForm.ig_username}
-                        onChange={(e) => ef("ig_username", e.target.value.replace('@', ''))}
-                        placeholder="mi_cuenta"
-                        className={inputCls}
-                      />
-                    </Field>
+
+                    <div className="border border-zinc-100 dark:border-zinc-800 rounded-lg p-3 bg-zinc-50/50 dark:bg-zinc-800/20">
+                      <details className="group">
+                        <summary className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 cursor-pointer select-none flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200">
+                          <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+                          Configuración Manual / Detalles del ID
+                        </summary>
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Field label="Instagram Business ID Manual">
+                            <input
+                              type="text"
+                              value={editForm.ig_business_id || ""}
+                              onChange={(e) => ef("ig_business_id", e.target.value)}
+                              placeholder="17841400000000000"
+                              className={inputCls}
+                            />
+                          </Field>
+                          <Field label="Instagram Username Manual (sin @)">
+                            <input
+                              type="text"
+                              value={editForm.ig_username || ""}
+                              onChange={(e) => ef("ig_username", e.target.value.replace('@', ''))}
+                              placeholder="mi_cuenta"
+                              className={inputCls}
+                            />
+                          </Field>
+                        </div>
+                      </details>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={testInstagram}
+                      disabled={testingIg || !editForm.ig_business_id}
+                      className="w-full h-9 rounded-lg border border-pink-200 dark:border-pink-500/30 bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 text-[11px] font-bold hover:bg-pink-100 transition-all flex items-center justify-center gap-2"
+                    >
+                      {testingIg ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                      )}
+                      Probar Conexión Instagram
+                    </button>
                   </div>
-                  <p className="text-[10px] text-zinc-400 mt-2 leading-relaxed">
-                    El Instagram Business ID se obtiene desde la API de Meta. Es el ID numérico de la cuenta de Instagram vinculada a la página de Facebook del cliente.
-                  </p>
                 </div>
               </SectionBox>
 
