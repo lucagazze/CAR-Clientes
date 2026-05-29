@@ -743,20 +743,30 @@ export default function CaptacionPage() {
               return (
                 <div key={ad.id} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 shadow-sm flex flex-col sm:flex-row gap-4 p-4 hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
                   {/* Thumbnail / Image Preview */}
-                  <div className="relative w-full sm:w-32 h-32 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex-shrink-0 group cursor-pointer" onClick={() => ad.creative?.thumbnail_url && setActiveImagePreview(ad.creative.thumbnail_url)}>
-                    {ad.creative?.thumbnail_url ? (
-                      <>
-                        <img src={ad.creative.thumbnail_url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-200" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center transition-colors">
-                          <span className="opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-zinc-900/90 text-zinc-900 dark:text-white text-[10px] font-bold px-2 py-1 rounded shadow transition-opacity">Ampliar</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Film className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+                  {(() => {
+                    const previewUrl = ad.creative?.image_url || ad.creative?.thumbnail_url;
+                    return (
+                      <div
+                        className="relative w-full sm:w-32 h-32 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex-shrink-0 group cursor-pointer"
+                        onClick={() => previewUrl && setActiveImagePreview(previewUrl)}
+                      >
+                        {previewUrl ? (
+                          <>
+                            <img src={ad.creative?.thumbnail_url} alt="" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-200" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all duration-200">
+                              <span className="opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-zinc-900/90 text-zinc-900 dark:text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all duration-200 scale-95 group-hover:scale-100">
+                                Ampliar
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Film className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
 
                   {/* Info and Metrics Grid */}
                   <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -800,12 +810,27 @@ export default function CaptacionPage() {
 
       {/* Lightbox / Modal for Image Preview */}
       {activeImagePreview && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setActiveImagePreview(null)}>
-          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setActiveImagePreview(null)} className="absolute top-3 right-3 p-2 rounded-xl bg-black/60 text-zinc-400 hover:text-white hover:bg-black/80 transition-all z-10">
-              <X className="w-5 h-5" />
-            </button>
-            <img src={activeImagePreview} alt="Ad Creative Preview" className="max-w-full max-h-[85vh] object-contain block bg-zinc-950" />
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => setActiveImagePreview(null)}
+        >
+          <button
+            onClick={() => setActiveImagePreview(null)}
+            className="absolute top-4 right-4 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-10"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div
+            className="relative animate-in zoom-in-95 duration-200 flex items-center justify-center"
+            style={{ maxWidth: '90vw', maxHeight: '90vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <img
+              src={activeImagePreview}
+              alt="Ad Creative Preview"
+              className="rounded-2xl shadow-2xl border border-white/10"
+              style={{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', height: 'auto', minWidth: '300px', objectFit: 'contain' }}
+            />
           </div>
         </div>
       )}

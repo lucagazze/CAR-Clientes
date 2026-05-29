@@ -186,14 +186,14 @@ export const metaAds = {
   // ── ADS with creative thumbnails ──────────────────────────
   getAds: (adsetId: string) =>
     apiGet(`${adsetId}/ads`, {
-      fields: 'id,name,status,creative{id,name,thumbnail_url,object_type}',
+      fields: 'id,name,status,creative{id,name,thumbnail_url,image_url,object_type,video_id}',
       limit: '50',
     }),
 
   // ── ALL ADS FOR ACCOUNT ──────────────────────────────────
   getAccountAds: (accountId = META_AD_ACCOUNT) =>
     apiGet(`${accountId}/ads`, {
-      fields: 'id,name,status,creative{id,name,thumbnail_url,object_type}',
+      fields: 'id,name,status,creative{id,name,thumbnail_url,image_url,object_type,video_id}',
       limit: '150',
     }),
 
