@@ -7,6 +7,15 @@ export const initMetaToken = async (): Promise<void> => {
   try {
     const { data } = await supabase.from('AgencySettings').select('value').eq('key', 'meta_ads_token').maybeSingle();
     if (data?.value) localStorage.setItem('meta_ads_token', data.value);
+    
+    // Clear old expired page access tokens from localStorage
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('fb_pat_')) {
+        localStorage.removeItem(key);
+        i--;
+      }
+    }
   } catch { /* silently ignore */ }
 };
 
@@ -109,15 +118,16 @@ export const AD_INSIGHT_FIELDS = [
   'purchase_roas',
 ].join(',');
 
+const pageTokensCache: Record<string, string> = {};
+
 const getPageAccessToken = async (pageId: string): Promise<string> => {
   try {
     const userToken = (import.meta as any).env.VITE_META_ADS_TOKEN || localStorage.getItem('meta_ads_token') || '';
     if (!userToken) return '';
 
     // Cache key incorporates a signature of the userToken to automatically invalidate when it changes
-    const cacheKey = `fb_pat_${pageId}_${userToken.slice(-10)}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) return cached;
+    const cacheKey = `${pageId}_${userToken.slice(-10)}`;
+    if (pageTokensCache[cacheKey]) return pageTokensCache[cacheKey];
 
     const url = new URL(`${BASE}/me/accounts`);
     url.searchParams.set('access_token', userToken);
@@ -126,7 +136,7 @@ const getPageAccessToken = async (pageId: string): Promise<string> => {
     
     const page = (res?.data || []).find((p: any) => p.id === pageId);
     if (page?.access_token) {
-      localStorage.setItem(cacheKey, page.access_token);
+      pageTokensCache[cacheKey] = page.access_token;
       return page.access_token;
     }
   } catch (e) {
