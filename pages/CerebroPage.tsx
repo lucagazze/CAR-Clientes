@@ -25,6 +25,7 @@ export default function CerebroPage() {
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [syncingInstagram, setSyncingInstagram] = useState(false);
+  const [generatingFields, setGeneratingFields] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -89,6 +90,39 @@ export default function CerebroPage() {
       showToast(err.message, 'error');
     } finally {
       setSyncingInstagram(false);
+    }
+  };
+
+  const handleGenerateFields = async () => {
+    if (!profile || !scrapedContent) return;
+
+    setGeneratingFields(true);
+    showToast('Generando catálogo y tono optimizados con IA...', 'info');
+    try {
+      const response = await fetch('/api/generate-cerebro-fields', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          clientId: profile.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error desconocido al optimizar campos.');
+      }
+
+      setBusinessDescription(data.business_description || '');
+      setCustomInstructions(data.custom_instructions || '');
+      showToast('¡Catálogo e instrucciones de tono optimizados con éxito!', 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message, 'error');
+    } finally {
+      setGeneratingFields(false);
     }
   };
 
@@ -165,14 +199,31 @@ export default function CerebroPage() {
         {/* Left Column: Form Settings */}
         <div className="lg:col-span-7 space-y-6">
           <form onSubmit={handleSaveSettings} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
-              <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <FileText className="w-[18px] h-[18px] text-zinc-400" />
-                Contexto Manual del Negocio
-              </h2>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                Define las pautas de comportamiento y catálogo manualmente.
-              </p>
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                  <FileText className="w-[18px] h-[18px] text-zinc-400" />
+                  Contexto Manual del Negocio
+                </h2>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                  Define las pautas de comportamiento y catálogo manualmente.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGenerateFields}
+                disabled={generatingFields || !scrapedContent}
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-violet-50 hover:bg-violet-100 dark:bg-violet-500/10 dark:hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]"
+                title="Genera y optimiza el catálogo y tono de manera automática usando la IA basada en el contenido web escaneado."
+              >
+                {generatingFields ? (
+                  <div className="w-3.5 h-3.5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                {generatingFields ? 'Optimizando...' : 'Optimizar con IA'}
+              </button>
             </div>
 
             <div className="p-6 space-y-6">
