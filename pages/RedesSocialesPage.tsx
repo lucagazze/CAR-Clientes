@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
-import { metaAds, CLIENT_META_MAP } from '../services/metaAds';
+import { metaAds } from '../services/metaAds';
 import EmailLoader from '../components/ui/EmailLoader';
 
 // Formatting utilities
@@ -50,9 +50,9 @@ export default function RedesSocialesPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittingReply, setSubmittingReply] = useState(false);
 
-  // Resolve IDs
-  const igId = clientId ? CLIENT_META_MAP[clientId]?.igId : undefined;
-  const igUsername = clientId ? CLIENT_META_MAP[clientId]?.username : undefined;
+  // Resolve IDs from client profile (stored in DB)
+  const igId = (profile as any)?.ig_business_id;
+  const igUsername = (profile as any)?.ig_username;
 
   const fetchComments = async (postId: string) => {
     setLoadingComments(true);

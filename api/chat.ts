@@ -10,14 +10,8 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const CLIENT_META_MAP: Record<string, { igId?: string; username?: string; adAccountId?: string }> = {
-  'df57e4cd-6433-4c2f-a42f-4ad7e59d30dc': { adAccountId: 'act_2136106490563351' },
-  '02504445-7e44-4599-8b62-6c44a1af4b24': { igId: '17841460101454399', username: 'atermicos.pinamar' },
-  'e0141716-178d-483b-8c2c-a58d391b83a1': { igId: '17841438390504961', username: 'libreriamayoristaleo' },
-  'b6d2f956-18c2-42d4-af3d-5a55442c234a': { igId: '17841446979077762', username: 'lic.rociofuentes' },
-  '9cc15a64-897f-412f-a048-86791ed04185': { igId: '17841421861661046', username: 'puertasblindasasjack' },
-  '51a050d9-5f32-4f95-8724-8eefff9666d6': { igId: '17841463377689897', username: 'selecta' },
-};
+// Instagram and Meta Ad Account IDs are now stored in car_clients table
+// (columns: ig_business_id, ig_username, meta_account_id)
 
 const TOOL_META: Record<string, { label: string; icon: string }> = {
   'get_meta_ads_live_data':  { label: 'Consultando Meta Ads', icon: '📊' },
@@ -382,7 +376,7 @@ END every response with exactly:
             getClientData(clientId, 'meta_account_id'),
             getMetaToken(),
           ]);
-          let id = clientData?.meta_account_id || CLIENT_META_MAP[clientId]?.adAccountId || (clientId === fallbackClientId ? directMetaAccountId : undefined);
+          let id = clientData?.meta_account_id || (clientId === fallbackClientId ? directMetaAccountId : undefined);
           if (!id) return null;
           if (!id.startsWith('act_')) id = `act_${id}`;
           return token ? { adAccountId: id, token } : null;
@@ -536,7 +530,8 @@ END every response with exactly:
           const { clientId } = args;
           if (!clientId || !isAuthorizedForClient(clientId)) { toolResult = { error: 'Access denied' }; }
           else {
-            const igId = CLIENT_META_MAP[clientId]?.igId;
+            const clientData = await getClientData(clientId, 'ig_business_id');
+            const igId = clientData?.ig_business_id;
             const token = await getMetaToken();
             if (!igId || !token) { toolResult = { error: 'Instagram not configured for this client.' }; }
             else {

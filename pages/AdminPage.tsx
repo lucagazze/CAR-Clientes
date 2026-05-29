@@ -58,6 +58,8 @@ interface ClientRow {
   chatwoot_token?: string;
   meta_account_id?: string;
   meta_pixel_id?: string;
+  ig_business_id?: string;
+  ig_username?: string;
   klaviyo_api_key?: string;
   klaviyo_list_id?: string;
   ecommerce_platform?: string;
@@ -405,6 +407,8 @@ export default function AdminPage() {
   const openEdit = async (c: ClientRow) => {
     setEditForm({
       meta_account_id: c.meta_account_id || "",
+      ig_business_id: c.ig_business_id || "",
+      ig_username: c.ig_username || "",
       klaviyo_api_key: c.klaviyo_api_key || "",
       chatwoot_url: c.chatwoot_url || "",
       chatwoot_token: c.chatwoot_token || "",
@@ -552,6 +556,8 @@ export default function AdminPage() {
         .from("car_clients")
         .update({
           meta_account_id: editForm.meta_account_id || null,
+          ig_business_id: editForm.ig_business_id || null,
+          ig_username: editForm.ig_username || null,
           klaviyo_api_key: editForm.klaviyo_api_key || null,
           chatwoot_url: editForm.chatwoot_url || null,
           chatwoot_token: editForm.chatwoot_token || null,
@@ -980,6 +986,11 @@ export default function AdminPage() {
                             ? "Tiendanube"
                             : "No conf."}
                       </span>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-[5px] border ${(c as any).ig_business_id ? "bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-500/10 dark:to-purple-500/10 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-500/20" : "bg-zinc-50 dark:bg-zinc-800/50 text-zinc-400 border-zinc-200 dark:border-zinc-700"}`}
+                      >
+                        IG: {(c as any).ig_username ? `@${(c as any).ig_username}` : "No conf."}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -995,6 +1006,8 @@ export default function AdminPage() {
                           active: c.active,
                           is_admin: c.is_admin,
                           meta_account_id: c.meta_account_id,
+                          ig_business_id: (c as any).ig_business_id,
+                          ig_username: (c as any).ig_username,
                           klaviyo_api_key: c.klaviyo_api_key,
                           chatwoot_url: c.chatwoot_url,
                           chatwoot_token: c.chatwoot_token,
@@ -1389,6 +1402,42 @@ export default function AdminPage() {
                   )}
                   Probar Conexión Meta
                 </button>
+
+                {/* Instagram fields */}
+                <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-700/60">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                    </div>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.07em] text-zinc-500 dark:text-zinc-400">Instagram Business</span>
+                    {editForm.ig_business_id && (
+                      <span className="text-[10px] bg-pink-50 dark:bg-pink-500/10 text-pink-600 dark:text-pink-400 px-2 py-0.5 rounded-full font-bold border border-pink-200 dark:border-pink-500/20">Configurado</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Field label="Instagram Business ID">
+                      <input
+                        type="text"
+                        value={editForm.ig_business_id}
+                        onChange={(e) => ef("ig_business_id", e.target.value)}
+                        placeholder="17841400000000000"
+                        className={inputCls}
+                      />
+                    </Field>
+                    <Field label="Instagram Username (sin @)">
+                      <input
+                        type="text"
+                        value={editForm.ig_username}
+                        onChange={(e) => ef("ig_username", e.target.value.replace('@', ''))}
+                        placeholder="mi_cuenta"
+                        className={inputCls}
+                      />
+                    </Field>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-2 leading-relaxed">
+                    El Instagram Business ID se obtiene desde la API de Meta. Es el ID numérico de la cuenta de Instagram vinculada a la página de Facebook del cliente.
+                  </p>
+                </div>
               </SectionBox>
 
               {/* Email Marketing */}

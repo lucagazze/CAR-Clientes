@@ -24,14 +24,9 @@ export const INSTAGRAM_ACCOUNTS: Record<string, { igId: string; username: string
   'jackblindadas': { igId: '17841421861661046', username: 'puertasblindasasjack' },
 };
 
-export const CLIENT_META_MAP: Record<string, { igId?: string; username?: string; adAccountId?: string }> = {
-  'df57e4cd-6433-4c2f-a42f-4ad7e59d30dc': { adAccountId: META_AD_ACCOUNT },
-  '02504445-7e44-4599-8b62-6c44a1af4b24': { igId: '17841460101454399', username: 'atermicos.pinamar' },
-  'e0141716-178d-483b-8c2c-a58d391b83a1': { igId: '17841438390504961', username: 'libreriamayoristaleo' },
-  'b6d2f956-18c2-42d4-af3d-5a55442c234a': { igId: '17841446979077762', username: 'lic.rociofuentes' },
-  '9cc15a64-897f-412f-a048-86791ed04185': { igId: '17841421861661046', username: 'puertasblindasasjack' },
-  '51a050d9-5f32-4f95-8724-8eefff9666d6': { igId: '17841463377689897', username: 'selecta' },
-};
+// Instagram and Meta Ad Account IDs are now stored in the car_clients table
+// (columns: ig_business_id, ig_username, meta_account_id)
+// The old CLIENT_META_MAP has been migrated to the database.
 
 export type DatePreset = 'today' | 'yesterday' | 'last_7d' | 'last_14d' | 'last_28d' | 'last_30d' | 'last_90d' | 'last_6months' | 'this_month' | 'last_month' | 'this_year' | 'last_year';
 export type TimeRange = { since: string; until: string };
