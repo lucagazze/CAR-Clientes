@@ -1,29 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Menu, Sun, Moon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { AIChatFloat } from '../AIChatFloat';
-
-// Pages
-import DashboardPage from '../../pages/DashboardPage';
-import CaptacionPage from '../../pages/CaptacionPage';
-import AtencionPage from '../../pages/AtencionPage';
-import RetencionPage from '../../pages/RetencionPage';
-import TiendaPage from '../../pages/TiendaPage';
-import LinksPage from '../../pages/LinksPage';
-import ReportsPage from '../../pages/ReportsPage';
-import AdminPage from '../../pages/AdminPage';
-import MetaAdsPage from '../../pages/MetaAdsPage';
-import ActivityPage from '../../pages/ActivityPage';
-import EmailLibraryPage from '../../pages/EmailLibraryPage';
-import EmailMarketingPage from '../../pages/EmailMarketingPage';
-import EmailMonitorPage from '../../pages/EmailMonitorPage';
-import RedesSocialesPage from '../../pages/RedesSocialesPage';
-import MensajeriaPage from '../../pages/MensajeriaPage';
-import CerebroPage from '../../pages/CerebroPage';
-
 import { useTheme } from '../../contexts/ThemeContext';
+
+// Lazy-loaded pages — each becomes a separate JS chunk (code splitting)
+// Only the page the user navigates to gets downloaded
+const DashboardPage      = lazy(() => import('../../pages/DashboardPage'));
+const CaptacionPage      = lazy(() => import('../../pages/CaptacionPage'));
+const AtencionPage       = lazy(() => import('../../pages/AtencionPage'));
+const RetencionPage      = lazy(() => import('../../pages/RetencionPage'));
+const TiendaPage         = lazy(() => import('../../pages/TiendaPage'));
+const LinksPage          = lazy(() => import('../../pages/LinksPage'));
+const ReportsPage        = lazy(() => import('../../pages/ReportsPage'));
+const AdminPage          = lazy(() => import('../../pages/AdminPage'));
+const MetaAdsPage        = lazy(() => import('../../pages/MetaAdsPage'));
+const ActivityPage       = lazy(() => import('../../pages/ActivityPage'));
+const EmailLibraryPage   = lazy(() => import('../../pages/EmailLibraryPage'));
+const EmailMarketingPage = lazy(() => import('../../pages/EmailMarketingPage'));
+const EmailMonitorPage   = lazy(() => import('../../pages/EmailMonitorPage'));
+const RedesSocialesPage  = lazy(() => import('../../pages/RedesSocialesPage'));
+const MensajeriaPage     = lazy(() => import('../../pages/MensajeriaPage'));
+const CerebroPage        = lazy(() => import('../../pages/CerebroPage'));
+
+// Minimal skeleton shown while a lazy page chunk is downloading
+const PageSkeleton = () => (
+  <div className="space-y-6 animate-pulse">
+    <div className="h-8 w-48 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {[1,2,3,4].map(n => (
+        <div key={n} className="h-28 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl" />
+      ))}
+    </div>
+    <div className="h-64 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl" />
+  </div>
+);
 
 export const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -72,25 +85,27 @@ export const MainLayout = () => {
         <div className="flex-1 overflow-auto p-4 md:p-8 lg:p-10 w-full pb-48 md:pb-40 xl:pb-44 print:overflow-visible print:h-auto print:p-6">
           {/* Spacer so content starts below the fixed mobile header */}
           <div className="h-14 md:hidden" />
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/captacion" element={<CaptacionPage />} />
-            <Route path="/redes-sociales" element={<RedesSocialesPage />} />
-            <Route path="/mensajeria" element={<MensajeriaPage />} />
-            <Route path="/atencion" element={<AtencionPage />} />
-            <Route path="/retencion" element={<RetencionPage />} />
-            <Route path="/tienda" element={<TiendaPage />} />
-            <Route path="/links" element={<LinksPage />} />
-            <Route path="/reportes" element={<ReportsPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/admin/actividad" element={<ActivityPage />} />
-            <Route path="/admin/meta" element={<MetaAdsPage />} />
-            <Route path="/admin/emails" element={<EmailLibraryPage />} />
-            <Route path="/admin/email-monitor" element={<EmailMonitorPage />} />
-            <Route path="/email-marketing" element={<EmailMarketingPage />} />
-            <Route path="/cerebro" element={<CerebroPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<PageSkeleton />}>
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/captacion" element={<CaptacionPage />} />
+              <Route path="/redes-sociales" element={<RedesSocialesPage />} />
+              <Route path="/mensajeria" element={<MensajeriaPage />} />
+              <Route path="/atencion" element={<AtencionPage />} />
+              <Route path="/retencion" element={<RetencionPage />} />
+              <Route path="/tienda" element={<TiendaPage />} />
+              <Route path="/links" element={<LinksPage />} />
+              <Route path="/reportes" element={<ReportsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin/actividad" element={<ActivityPage />} />
+              <Route path="/admin/meta" element={<MetaAdsPage />} />
+              <Route path="/admin/emails" element={<EmailLibraryPage />} />
+              <Route path="/admin/email-monitor" element={<EmailMonitorPage />} />
+              <Route path="/email-marketing" element={<EmailMarketingPage />} />
+              <Route path="/cerebro" element={<CerebroPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </div>
         <AIChatFloat />
       </main>

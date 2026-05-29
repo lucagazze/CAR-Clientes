@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { 
   Instagram, Heart, MessageCircle, Image as ImageIcon, Video, Layers, Loader2, RefreshCw, X, 
   ArrowUpRight, AlertCircle, ThumbsUp, MessageSquare, Sparkles, Play
@@ -87,9 +87,18 @@ export default function RedesSocialesPage() {
   const [expandedCaptions, setExpandedCaptions] = useState<Record<string, boolean>>({});
   const [expandedFbCaptions, setExpandedFbCaptions] = useState<Record<string, boolean>>({});
 
-  // Video Playing & AI Draft Suggestion States
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(false);
+
+  // Infinite scroll: how many posts to show in each feed
+  const [visibleIgCount, setVisibleIgCount] = useState(12);
+  const [visibleFbCount, setVisibleFbCount] = useState(12);
+  const igSentinelRef = useRef<HTMLDivElement>(null);
+  const fbSentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when filters change
+  useEffect(() => { setVisibleIgCount(12); }, [mediaFilter]);
+  useEffect(() => { setVisibleFbCount(12); }, [fbMediaFilter]);
 
   // Comments modal/side-sheet state
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -538,7 +547,37 @@ export default function RedesSocialesPage() {
     return fbMedia.filter(post => !post.full_picture);
   }, [fbMedia, fbMediaFilter]);
 
-  // IG Engagement Rate
+  // IntersectionObserver for Instagram feed sentinel (must be after filteredMedia useMemo)
+  useEffect(() => {
+    if (!igSentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleIgCount(prev => prev + 12);
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(igSentinelRef.current);
+    return () => observer.disconnect();
+  }, [filteredMedia]);
+
+  // IntersectionObserver for Facebook feed sentinel (must be after filteredFbMedia useMemo)
+  useEffect(() => {
+    if (!fbSentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleFbCount(prev => prev + 12);
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(fbSentinelRef.current);
+    return () => observer.disconnect();
+  }, [filteredFbMedia]);
+
+
   const igEngagementRate = useMemo(() => {
     if (!igProfile || !igProfile.followers_count || !igMedia.length) return 0;
     const totalInteractions = igMedia.reduce((sum, item) => sum + (item.like_count || 0) + (item.comments_count || 0), 0);
@@ -747,7 +786,7 @@ export default function RedesSocialesPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {filteredMedia.map((m: any) => {
+                      {filteredMedia.slice(0, visibleIgCount).map((m: any) => {
                         const hasLongCaption = m.caption && m.caption.length > 80;
                         const isExpanded = !!expandedCaptions[m.id];
                         const dateStr = m.timestamp 
@@ -1015,7 +1054,7 @@ export default function RedesSocialesPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {filteredFbMedia.map((m: any) => {
+                      {filteredFbMedia.slice(0, visibleFbCount).map((m: any) => {
                         const hasLongCaption = m.message && m.message.length > 80;
                         const isExpanded = !!expandedFbCaptions[m.id];
                         const dateStr = m.created_time 
@@ -1139,6 +1178,12 @@ export default function RedesSocialesPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                  {/* Sentinel: triggers loading more FB posts as user scrolls */}
+                  {visibleFbCount < filteredFbMedia.length && (
+                    <div ref={fbSentinelRef} className="flex justify-center py-4">
+                      <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
                     </div>
                   )}
 

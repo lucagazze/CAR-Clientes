@@ -3,6 +3,37 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Warn when a chunk exceeds 1000kb
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        // Split vendor libraries into separate cacheable chunks
+        manualChunks: (id) => {
+          // React core — smallest, most cached
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react';
+          }
+          // React Router
+          if (id.includes('node_modules/react-router')) {
+            return 'vendor-router';
+          }
+          // Supabase client
+          if (id.includes('node_modules/@supabase')) {
+            return 'vendor-supabase';
+          }
+          // Lucide icons (large — isolate so pages don't pay for unused icons)
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-lucide';
+          }
+          // Recharts / charting libs
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
+            return 'vendor-charts';
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 5174,
     host: true,
@@ -46,3 +77,4 @@ export default defineConfig({
     },
   },
 });
+
