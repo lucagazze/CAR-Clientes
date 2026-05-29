@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { metaAds } from '../services/metaAds';
 import EmailLoader from '../components/ui/EmailLoader';
+import { db } from '../services/db';
 
 // Formatting utilities
 const fmtNumber = (v: any) => {
@@ -22,9 +23,39 @@ const fmtPercent = (v: any) => {
   return isNaN(n) ? '—' : `${n.toFixed(2)}%`;
 };
 
+interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  value: string;
+}
+
+const AutoResizeTextarea = React.forwardRef<HTMLTextAreaElement, AutoResizeTextareaProps>(
+  ({ value, className = '', ...props }, ref) => {
+    const localRef = React.useRef<HTMLTextAreaElement>(null);
+    const textareaRef = (ref as React.RefObject<HTMLTextAreaElement>) || localRef;
+
+    React.useEffect(() => {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+      }
+    }, [value, textareaRef]);
+
+    return (
+      <textarea
+        ref={textareaRef}
+        value={value}
+        className={`${className} overflow-hidden resize-none`}
+        rows={1}
+        {...props}
+      />
+    );
+  }
+);
+AutoResizeTextarea.displayName = 'AutoResizeTextarea';
+
 export default function RedesSocialesPage() {
   const { isViewingAs, viewAsProfile } = useViewAs();
-  const { profile: authProfile } = useAuth();
+  const { profile: authProfile, user } = useAuth();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   const clientId = profile?.id;
 
@@ -162,6 +193,19 @@ export default function RedesSocialesPage() {
       } else {
         await metaAds.replyToFacebookComment(commentId, replyText);
       }
+
+      // Log the reply action in car_user_activity for few-shot learning
+      if (user?.id && clientId) {
+        const parentComment = comments.find(c => c.id === commentId);
+        const incomingText = parentComment ? (parentComment.text || parentComment.message || '') : '';
+        db.activity.log(user.id, clientId, 'reply_sent', {
+          reply_text: replyText,
+          incoming_text: incomingText,
+          platform: selectedPostType,
+          item_id: commentId,
+          user_email: user.email || 'Desconocido'
+        }).catch(err => console.error('Error logging inline comment reply activity:', err));
+      }
       
       // Clear input and reload comments
       setCommentReplies(prev => {
@@ -257,6 +301,13 @@ export default function RedesSocialesPage() {
     setLoadingDraft(true);
     setSubmitError(null);
     try {
+      // Build context: post caption + all other comments in the thread
+      const postCaptionContext = igMedia.find(m => m.id === selectedPostId)?.caption
+        || fbMedia.find(m => m.id === selectedPostId)?.message || '';
+      const otherCommentsList = comments
+        .filter(c => c.id !== commentToReply.id)
+        .map(c => `@${c.username || c.from?.name || 'usuario'}: ${c.text || c.message || ''}`);
+
       const res = await fetch('/api/draft-reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -264,6 +315,8 @@ export default function RedesSocialesPage() {
           clientId,
           itemText: commentToReply.text || commentToReply.message || '',
           username: replyingTo.username,
+          postCaption: postCaptionContext,
+          otherComments: otherCommentsList,
         }),
       });
       if (!res.ok) throw new Error(`Draft reply error: ${res.status}`);
@@ -353,6 +406,25 @@ export default function RedesSocialesPage() {
           await metaAds.replyToFacebookComment(selectedPostId, commentInput.trim());
         }
       }
+
+      // Log the reply action in car_user_activity for few-shot learning
+      if (user?.id && clientId) {
+        let incomingText = '';
+        if (replyingTo) {
+          const parentComment = comments.find(c => c.id === replyingTo.id);
+          incomingText = parentComment ? (parentComment.text || parentComment.message || '') : '';
+        } else {
+          incomingText = '[Top-Level Comment on Post]';
+        }
+        db.activity.log(user.id, clientId, 'reply_sent', {
+          reply_text: commentInput.trim(),
+          incoming_text: incomingText,
+          platform: selectedPostType,
+          item_id: replyingTo?.id || selectedPostId,
+          user_email: user.email || 'Desconocido'
+        }).catch(err => console.error('Error logging comment/reply activity:', err));
+      }
+
       setCommentInput('');
       setReplyingTo(null);
       await fetchComments(selectedPostId, selectedPostType);
@@ -1156,12 +1228,11 @@ export default function RedesSocialesPage() {
                         {showInlineForm && (
                           <form onSubmit={(e) => handleSubmitPerComment(e, comment.id)} className="mt-3 space-y-2 pt-2.5 border-t border-zinc-100 dark:border-zinc-850/50">
                             <div className="flex gap-2">
-                              <input
-                                type="text"
+                              <AutoResizeTextarea
                                 placeholder={`Responder a @${comment.username}...`}
                                 value={commentReplies[comment.id] || ''}
                                 onChange={(e) => setCommentReplies(prev => ({ ...prev, [comment.id]: e.target.value }))}
-                                className="flex-1 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[12px] text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                className="flex-1 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[12px] text-zinc-850 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-violet-500 leading-normal"
                                 disabled={commentRepliesSubmitting[comment.id] || commentRepliesLoadingDraft[comment.id]}
                               />
                               <button
@@ -1283,13 +1354,12 @@ export default function RedesSocialesPage() {
 
               {/* Input form */}
               <form onSubmit={handleSubmitComment} className="flex gap-2">
-                <input 
-                  type="text"
+                <AutoResizeTextarea 
                   value={commentInput}
                   onChange={(e) => setCommentInput(e.target.value)}
                   placeholder={replyingTo ? `Escribí tu respuesta...` : `Escribí tu comentario...`}
                   disabled={submittingReply}
-                  className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-250 dark:border-zinc-800 rounded-xl px-3.5 py-2 text-[13px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-violet-500 dark:focus:border-violet-500 transition-colors shadow-inner font-medium"
+                  className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-250 dark:border-zinc-800 rounded-xl px-3.5 py-2 text-[13px] text-zinc-850 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-violet-500 dark:focus:border-violet-500 transition-colors shadow-inner font-medium leading-normal"
                 />
                 <button
                   type="submit"

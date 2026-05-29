@@ -9,10 +9,41 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { metaAds } from '../services/metaAds';
 import EmailLoader from '../components/ui/EmailLoader';
+import { db } from '../services/db';
+
+interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  value: string;
+}
+
+const AutoResizeTextarea = React.forwardRef<HTMLTextAreaElement, AutoResizeTextareaProps>(
+  ({ value, className = '', ...props }, ref) => {
+    const localRef = React.useRef<HTMLTextAreaElement>(null);
+    const textareaRef = (ref as React.RefObject<HTMLTextAreaElement>) || localRef;
+
+    React.useEffect(() => {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+      }
+    }, [value, textareaRef]);
+
+    return (
+      <textarea
+        ref={textareaRef}
+        value={value}
+        className={`${className} overflow-hidden resize-none`}
+        rows={1}
+        {...props}
+      />
+    );
+  }
+);
+AutoResizeTextarea.displayName = 'AutoResizeTextarea';
 
 export default function MensajeriaPage() {
   const { isViewingAs, viewAsProfile } = useViewAs();
-  const { profile: authProfile } = useAuth();
+  const { profile: authProfile, user } = useAuth();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   const clientId = profile?.id;
 
@@ -123,6 +154,17 @@ export default function MensajeriaPage() {
         await metaAds.replyToInstagramComment(item.id, replyText);
       } else if (item.type === 'fb_comment' || item.type === 'ad_comment') {
         await metaAds.replyToFacebookComment(item.id, replyText);
+      }
+
+      // Log the reply action in car_user_activity for few-shot learning
+      if (user?.id && clientId) {
+        db.activity.log(user.id, clientId, 'reply_sent', {
+          reply_text: replyText,
+          incoming_text: item.text || item.message || '',
+          platform: item.type || 'unknown',
+          item_id: item.id,
+          user_email: user.email || 'Desconocido'
+        }).catch(err => console.error('Error logging reply activity:', err));
       }
 
       // Resolve and remove item from list
@@ -297,6 +339,19 @@ export default function MensajeriaPage() {
         await metaAds.replyToInstagramComment(commentId, replyText);
       } else {
         await metaAds.replyToFacebookComment(commentId, replyText);
+      }
+
+      // Log the reply action in car_user_activity for few-shot learning
+      if (user?.id && clientId) {
+        const targetComment = selectedItem?.comments?.find((c: any) => c.id === commentId);
+        const incomingText = targetComment ? (targetComment.text || targetComment.message || '') : '';
+        db.activity.log(user.id, clientId, 'reply_sent', {
+          reply_text: replyText,
+          incoming_text: incomingText,
+          platform: commentPlatform,
+          item_id: commentId,
+          user_email: user.email || 'Desconocido'
+        }).catch(err => console.error('Error logging slide-over reply activity:', err));
       }
 
       // Add reply locally to the UI
@@ -1276,13 +1331,12 @@ export default function MensajeriaPage() {
                   )}
 
                   <form onSubmit={(e) => handleInboxReply(e, selectedItem)} className="space-y-3">
-                    <textarea
+                    <AutoResizeTextarea
                       placeholder={`Escribí una respuesta para @${selectedItem.username}...`}
                       value={inboxReplies[selectedItem.id] || ''}
                       onChange={(e) => setInboxReplies(prev => ({ ...prev, [selectedItem.id]: e.target.value }))}
                       disabled={submittingInboxReply[selectedItem.id] || loadingDraft[selectedItem.id]}
-                      rows={3}
-                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-250 dark:border-zinc-800 rounded-2xl px-4 py-3 text-[13px] text-zinc-850 dark:text-zinc-100 placeholder:text-zinc-400 focus:bg-white dark:focus:bg-zinc-950 focus:border-violet-500 outline-none transition-all shadow-inner font-medium resize-none leading-relaxed"
+                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-250 dark:border-zinc-800 rounded-2xl px-4 py-3 text-[13px] text-zinc-850 dark:text-zinc-100 placeholder:text-zinc-400 focus:bg-white dark:focus:bg-zinc-950 focus:border-violet-500 outline-none transition-all shadow-inner font-medium leading-relaxed min-h-[70px]"
                     />
                     
                     <div className="flex items-center justify-between gap-3">

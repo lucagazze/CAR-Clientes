@@ -53,6 +53,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { business_name, ecommerce_platform, shopify_domain, shopify_access_token } = client;
 
+    // Fetch recent successful replies from activity log for few-shot learning
+    let fewShotContext = '';
+    try {
+      const { data: recentActivities } = await supabase
+        .from('car_user_activity')
+        .select('metadata')
+        .eq('client_id', clientId)
+        .eq('action', 'reply_sent')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (recentActivities && recentActivities.length > 0) {
+        const fewShotExamples = recentActivities
+          .map(act => act.metadata)
+          .filter(meta => meta && meta.incoming_text && meta.reply_text)
+          .slice(0, 5); // Take up to 5 examples
+
+        if (fewShotExamples.length > 0) {
+          fewShotContext = `Here are some historical examples of replies previously sent by the brand to other customers. Use them as reference for the preferred tone, style, and structure:
+${fewShotExamples.map((ex, i) => `Example ${i + 1}:
+- Customer wrote: "${ex.incoming_text}"
+- Brand reply: "${ex.reply_text}"`).join('\n\n')}`;
+        }
+      }
+    } catch (err) {
+      console.error('[Draft Reply] Error fetching historical replies:', err);
+    }
+
     // 2. Fetch Shopify products if platform is Shopify
     let products: any[] = [];
     if (ecommerce_platform === 'shopify' && shopify_domain && shopify_access_token) {
@@ -96,6 +124,8 @@ ${postCaption ? `- Caption/Text of the post (context): "${postCaption}"` : ''}
 ${otherComments && otherComments.length > 0 ? `- Other comments in the same post (context):\n${otherComments.map(c => `  * ${c}`).join('\n')}` : ''}
 
 ${productsContext}
+
+${fewShotContext ? `\n${fewShotContext}\n` : ''}
 
 Rules:
 1. Be extremely concise (maximum 1 or 2 sentences).
