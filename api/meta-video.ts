@@ -32,7 +32,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const base = 'https://graph.facebook.com/v21.0';
 
-    // Strategy 1: Use Meta Ad Previews API on the Creative ID (most reliable)
+    // Strategy 1: Try video source URL first (allows direct HTML5 video player and download)
+    if (videoId && typeof videoId === 'string') {
+      const videoRes = await fetch(
+        `${base}/${videoId}?fields=source,picture,format&access_token=${token}`
+      );
+
+      if (videoRes.ok) {
+        const data = await videoRes.json();
+        let bestThumbnail = data.picture || null;
+        if (Array.isArray(data.format)) {
+          const sorted = [...data.format].sort((a: any, b: any) => (b.width || 0) - (a.width || 0));
+          if (sorted[0]?.picture) bestThumbnail = sorted[0].picture;
+        }
+
+        if (data.source) {
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          return res.status(200).json({
+            source: data.source,
+            picture: bestThumbnail,
+            embed_html: null,
+            type: 'video_source',
+          });
+        }
+      }
+    }
+
+    // Strategy 2: Use Meta Ad Previews API on the Creative ID (fallback)
     if (creativeId && typeof creativeId === 'string') {
       const previewRes = await fetch(
         `${base}/${creativeId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${token}`
@@ -52,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Strategy 1b: Use Meta Ad Previews API on the Ad ID
+    // Strategy 2b: Use Meta Ad Previews API on the Ad ID (fallback)
     if (adId && typeof adId === 'string') {
       const previewRes = await fetch(
         `${base}/${adId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${token}`
@@ -69,30 +95,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             type: 'ad_preview',
           });
         }
-      }
-    }
-
-    // Strategy 2: Try video source URL (may 403 on some tokens)
-    if (videoId && typeof videoId === 'string') {
-      const videoRes = await fetch(
-        `${base}/${videoId}?fields=source,picture,format&access_token=${token}`
-      );
-
-      if (videoRes.ok) {
-        const data = await videoRes.json();
-        let bestThumbnail = data.picture || null;
-        if (Array.isArray(data.format)) {
-          const sorted = [...data.format].sort((a: any, b: any) => (b.width || 0) - (a.width || 0));
-          if (sorted[0]?.picture) bestThumbnail = sorted[0].picture;
-        }
-
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        return res.status(200).json({
-          source: data.source || null,
-          picture: bestThumbnail,
-          embed_html: null,
-          type: 'video_source',
-        });
       }
     }
 

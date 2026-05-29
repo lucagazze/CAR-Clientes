@@ -147,15 +147,26 @@ const CreativePreviewModal = ({ preview, onClose }: {
             </div>
           ) : videoSrc ? (
             /* Direct MP4 player */
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-4">
               <video
                 src={videoSrc}
                 controls
                 autoPlay
                 playsInline
                 className="rounded-2xl shadow-2xl border border-white/10 bg-black"
-                style={{ maxWidth: '90vw', maxHeight: '80vh', minWidth: 'min(90vw, 400px)' }}
+                style={{ maxWidth: '90vw', maxHeight: '70vh', minWidth: 'min(90vw, 400px)' }}
               />
+              <a
+                href={videoSrc}
+                download={`video-${preview.videoId || 'creative'}.mp4`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-[12.5px] font-bold rounded-full transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                onClick={e => e.stopPropagation()}
+              >
+                <Download className="w-4 h-4" />
+                Descargar Video
+              </a>
             </div>
           ) : embedHtml ? (
             /* Meta Ad Preview iframe — resized to fit screen */
