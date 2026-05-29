@@ -214,8 +214,13 @@ const MarkdownRenderer = ({ content, onLinkClick }: { content: string; onLinkCli
       isTable = false;
     }
 
-    if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-      const contentStr = line.trim().substring(2);
+    const trimmed = line.trim();
+    const h3match = /^###\s+(.+)$/.exec(trimmed);
+    const h2match = /^##\s+(.+)$/.exec(trimmed);
+    const h1match = /^#\s+(.+)$/.exec(trimmed);
+
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      const contentStr = trimmed.substring(2);
       currentList.push(
         <li key={currentList.length} className="ml-4 list-disc text-zinc-700 dark:text-zinc-300 my-0.5">
           {parseInline(contentStr)}
@@ -227,7 +232,25 @@ const MarkdownRenderer = ({ content, onLinkClick }: { content: string; onLinkCli
         currentList = [];
       }
 
-      if (line.trim()) {
+      if (h3match) {
+        elements.push(
+          <p key={i} className="mt-3 mb-1 text-[12px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+            {parseInline(h3match[1])}
+          </p>
+        );
+      } else if (h2match) {
+        elements.push(
+          <p key={i} className="mt-3 mb-1 text-[13px] font-black text-zinc-700 dark:text-zinc-200 tracking-tight">
+            {parseInline(h2match[1])}
+          </p>
+        );
+      } else if (h1match) {
+        elements.push(
+          <p key={i} className="mt-3 mb-1 text-[14px] font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
+            {parseInline(h1match[1])}
+          </p>
+        );
+      } else if (trimmed) {
         elements.push(
           <p key={i} className="my-1.5 text-zinc-700 dark:text-zinc-300 leading-relaxed">
             {parseInline(line)}
