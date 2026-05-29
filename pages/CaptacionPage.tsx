@@ -719,7 +719,7 @@ export default function CaptacionPage() {
 
         {activeAds.length > 0 && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {activeAds.map(ad => {
+            {activeAds.filter(ad => parseFloat(adInsightsMap[ad.id]?.spend || 0) > 0).map(ad => {
               const insights = adInsightsMap[ad.id];
               const adSpend = parseFloat(insights?.spend || 0);
               const adActions = insights?.actions || [];
