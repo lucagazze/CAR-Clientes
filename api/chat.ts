@@ -312,9 +312,14 @@ NAVIGATION LINKS (use on its own line when helpful):
 
 END every response with exactly:
 [[FOLLOWUP]]One specific follow-up question relevant to the answer
-[[OPT]]First concrete action
-[[OPT]]Second concrete action
-CRITICAL: You MUST output EXACTLY TWO follow-up actions (using [[OPT]]). Never output more than two, and never output less than two. This is a strict constraint for a clean and optimized display across all devices (both desktop and mobile).`;
+[[OPT]]First concrete action (must be a direct follow-up action or query related to the specific entity/campaign/metric just discussed, e.g., "Ver rendimiento de esta campaña" or "Ver el ROAS de esta campaña")
+[[OPT]]Second concrete action (must be an alternative, different, or opposite action to compare or look at other things, e.g., "Ver rendimiento de otras campañas" or "Ver métricas de la tienda")
+
+CRITICAL RULES FOR FOLLOWUPS AND OPTIONS:
+1. They MUST be highly intelligent, contextually relevant, and tailored to the specific topic/entity discussed in your response. If you just mentioned a specific campaign, the options MUST focus on that specific campaign or comparing it. Never output generic options like "Ver campañas" or "Hacer otra pregunta".
+2. Option 1 must be a direct continuation query (e.g. "Ver rendimiento de esta campaña").
+3. Option 3/Option 2 must be an alternative, opposite, or comparative action (e.g. "Ver el rendimiento de otras campañas").
+4. You MUST output EXACTLY TWO follow-up actions (using [[OPT]]). Never output more than two, and never output less than two. This is a strict constraint for a clean and optimized display across all devices (both desktop and mobile).`;
 
   try {
     // ── Speculative pre-fetching ─────────────────────────────────────────────
