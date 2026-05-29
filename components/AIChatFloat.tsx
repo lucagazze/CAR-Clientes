@@ -586,11 +586,17 @@ export const AIChatFloat = () => {
   return (
     <div
       ref={containerRef}
-      className="fixed z-[250] bottom-2 md:bottom-6 print:hidden w-[96%] left-1/2 -translate-x-1/2 md:w-[820px] md:left-[calc(50%+120px)]"
+      className={`fixed print:hidden transition-all duration-300 ${
+        isOpen
+          ? 'inset-0 w-full h-[100dvh] bg-white dark:bg-zinc-950 flex flex-col justify-start p-0 left-0 top-0 translate-x-0 z-[350] md:inset-auto md:bg-transparent md:backdrop-blur-none md:p-0 md:fixed md:z-[250] md:bottom-6 md:w-[820px] md:left-[calc(50%+120px)] md:-translate-x-1/2'
+          : 'bottom-2 w-[96%] left-1/2 -translate-x-1/2 md:bottom-6 md:w-[820px] md:left-[calc(50%+120px)] z-[250]'
+      }`}
     >
       {/* ── Chat panel ── */}
-      <div className={`absolute bottom-full mb-2 md:mb-3 w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-3xl overflow-hidden spring-transition origin-bottom flex flex-col ${
-        isOpen ? 'opacity-100 scale-100 h-[calc(100svh-9rem)] md:h-[640px]' : 'opacity-0 scale-95 h-0 pointer-events-none'
+      <div className={`w-full bg-white dark:bg-zinc-950 md:dark:bg-zinc-900 border-none md:border md:border-zinc-200 md:dark:border-zinc-800 shadow-none md:shadow-2xl rounded-none md:rounded-3xl overflow-hidden spring-transition flex flex-col ${
+        isOpen 
+          ? 'opacity-100 scale-100 flex-1 relative bottom-auto mb-0 w-full h-auto md:absolute md:bottom-full md:mb-3 md:w-full md:h-[640px] md:flex-none' 
+          : 'opacity-0 scale-95 h-0 pointer-events-none absolute bottom-full w-full'
       } ${isThinking ? 'siri-glow border-violet-500/50' : ''}`}>
 
         {/* Header */}
@@ -603,14 +609,18 @@ export const AIChatFloat = () => {
               <p className="text-[14.5px] font-black text-zinc-800 dark:text-zinc-200 leading-none">Algor IA</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {messages.length > 0 && (
               <button onClick={clearChat} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-xl text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" title="Limpiar chat">
                 <RotateCcw className="w-4 h-4" />
               </button>
             )}
-            <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-xl text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
-              <X className="w-4 h-4" />
+            <button 
+              onClick={() => setIsOpen(false)} 
+              className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-850 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer flex items-center justify-center flex-shrink-0"
+              title="Cerrar chat"
+            >
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -726,8 +736,10 @@ export const AIChatFloat = () => {
       {/* ── Pill input bar ── */}
       <div
         onClick={() => { setIsOpen(true); setTimeout(() => inputRef.current?.focus(), 100); }}
-        className={`relative group bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 shadow-xl rounded-full spring-transition cursor-text flex items-center px-2 py-2 md:px-3 ${
-          isOpen ? 'ring-2 ring-violet-500/30' : 'hover:scale-105 hover:bg-white dark:hover:bg-zinc-700'
+        className={`relative group spring-transition cursor-text flex items-center ${
+          isOpen
+            ? 'w-full rounded-none border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 md:rounded-full md:border md:border-zinc-300 md:dark:border-zinc-700 md:shadow-xl md:px-3 md:py-2 ring-2 ring-violet-500/30'
+            : 'w-full rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800/90 shadow-xl px-2 py-2 hover:scale-105 hover:bg-white dark:hover:bg-zinc-750 md:px-3'
         } ${isThinking ? 'siri-glow border-violet-500/50' : ''}`}
       >
         <div
