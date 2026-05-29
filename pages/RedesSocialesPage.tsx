@@ -262,11 +262,11 @@ export default function RedesSocialesPage() {
 
         // Save Results
         setIgProfile(igProfileRes);
-        const resolvedIgMedia = igMediaRes?.data || igMediaRes || [];
+        const resolvedIgMedia = (igMediaRes as any)?.data || igMediaRes || [];
         setIgMedia(resolvedIgMedia);
 
         setFbProfile(fbProfileRes);
-        const resolvedFbMedia = fbMediaRes?.data || fbMediaRes || [];
+        const resolvedFbMedia = (fbMediaRes as any)?.data || fbMediaRes || [];
         setFbMedia(resolvedFbMedia);
 
         // Process unified pending inbox

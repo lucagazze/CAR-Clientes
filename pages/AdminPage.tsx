@@ -76,9 +76,9 @@ interface ClientRow {
 }
 
 const CLIENT_TAGS = [
-  { id: 'tienda_online', label: 'Tienda Online (E-commerce)', color: 'bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-400' },
-  { id: 'lead_gen', label: 'Clientes Potenciales (Leads)', color: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' },
-  { id: 'whatsapp', label: 'Conversaciones (WhatsApp)', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' },
+  { id: 'tienda_online', label: 'Tienda Online (E-commerce)', color: 'bg-pink-100 text-pink-700 dark:bg-pink-500/20 dark:text-pink-400', desc: 'Sincroniza y monitorea datos de ventas y conversión' },
+  { id: 'lead_gen', label: 'Clientes Potenciales (Leads)', color: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400', desc: 'Seguimiento de conversiones y captación de prospectos' },
+  { id: 'whatsapp', label: 'Conversaciones (WhatsApp)', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400', desc: 'Atención a clientes y embudo por canales de mensajería' },
 ];
 
 const blank = () => ({
@@ -478,7 +478,7 @@ export default function AdminPage() {
     ]);
   };
 
-  const ef = (k: string, v: string | string[]) =>
+  const ef = (k: string, v: any) =>
     setEditForm((p: any) => ({ ...p, [k]: v }));
 
   const testShopify = async () => {
