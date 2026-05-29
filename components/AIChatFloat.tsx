@@ -240,37 +240,37 @@ const MarkdownRenderer = ({ content, onLinkClick, onSend }: { content: string; o
     if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       const contentStr = trimmed.substring(2);
       currentList.push(
-        <li key={currentList.length} className="ml-4 list-disc text-zinc-700 dark:text-zinc-300 my-0.5">
+        <li key={currentList.length} className="ml-3.5 list-disc text-zinc-700 dark:text-zinc-300 my-0.5 leading-snug">
           {parseInline(contentStr)}
         </li>
       );
     } else {
       if (currentList.length > 0) {
-        elements.push(<ul key={`list-${listKey++}`} className="my-2 space-y-0.5">{currentList}</ul>);
+        elements.push(<ul key={`list-${listKey++}`} className="my-1.5 space-y-0.5">{currentList}</ul>);
         currentList = [];
       }
 
       if (h3match) {
         elements.push(
-          <p key={i} className="mt-3 mb-1 text-[12px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+          <p key={i} className="mt-2.5 mb-0.5 text-[10.5px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
             {parseInline(h3match[1])}
           </p>
         );
       } else if (h2match) {
         elements.push(
-          <p key={i} className="mt-3 mb-1 text-[13px] font-black text-zinc-700 dark:text-zinc-200 tracking-tight">
+          <p key={i} className="mt-2.5 mb-0.5 text-[12px] font-black text-zinc-700 dark:text-zinc-200 tracking-tight">
             {parseInline(h2match[1])}
           </p>
         );
       } else if (h1match) {
         elements.push(
-          <p key={i} className="mt-3 mb-1 text-[14px] font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
+          <p key={i} className="mt-2.5 mb-0.5 text-[13px] font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
             {parseInline(h1match[1])}
           </p>
         );
       } else if (trimmed) {
         elements.push(
-          <p key={i} className="my-1.5 text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          <p key={i} className="my-1 text-zinc-700 dark:text-zinc-300 leading-snug">
             {parseInline(line)}
           </p>
         );
@@ -290,15 +290,15 @@ const MarkdownRenderer = ({ content, onLinkClick, onSend }: { content: string; o
       {elements}
       {/* Follow-up question block */}
       {followupQuestion && (
-        <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800/60 space-y-2.5">
-          <p className="text-[12px] font-semibold text-zinc-500 dark:text-zinc-400 leading-snug">{followupQuestion}</p>
+        <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/60 space-y-2">
+          <p className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 leading-snug">{followupQuestion}</p>
           {followupOptions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {followupOptions.map((opt, idx) => (
                 <button
                   key={idx}
                   onClick={() => onSend?.(opt)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-[11.5px] font-bold text-zinc-700 dark:text-zinc-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:border-violet-300 dark:hover:border-violet-500/40 hover:text-violet-700 dark:hover:text-violet-300 active:scale-95 transition-all duration-150"
+                  className="inline-flex items-center px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:border-violet-300 dark:hover:border-violet-500/40 hover:text-violet-700 dark:hover:text-violet-300 active:scale-95 transition-all duration-150"
                 >
                   {opt}
                 </button>
@@ -517,9 +517,9 @@ export const AIChatFloat = () => {
                   <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="" className="w-5 h-5 object-contain" />
                 </div>
               )}
-              <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-[14px] md:text-[15px] leading-relaxed shadow-sm ${
+              <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13px] md:text-[13.5px] leading-[1.55] shadow-sm ${
                 msg.role === 'user'
-                  ? 'bg-black dark:bg-zinc-100 text-white dark:text-zinc-950 rounded-br-sm whitespace-pre-wrap font-bold'
+                  ? 'bg-black dark:bg-zinc-100 text-white dark:text-zinc-950 rounded-br-sm whitespace-pre-wrap font-semibold'
                   : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-bl-sm'
               }`}>
                 {msg.role === 'user' ? (
@@ -561,12 +561,12 @@ export const AIChatFloat = () => {
         </div>
 
         {/* ── Always-visible Quick Prompts Bar (Minimal wrapped tag chips) ── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 px-5 py-2.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex-shrink-0">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 px-4 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex-shrink-0">
           {quickPrompts.map((q, i) => (
             <button
               key={i}
               onClick={() => handleSend(q)}
-              className="text-[11px] md:text-[12px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-zinc-800 dark:hover:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-800 px-2 py-2 md:px-3 md:py-2 rounded-xl transition-all active:scale-95 shadow-none text-center flex items-center justify-center leading-tight"
+              className="text-[10.5px] md:text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100 bg-white dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-800 px-2 py-1.5 rounded-lg transition-all active:scale-95 text-center flex items-center justify-center leading-tight"
             >
               {q}
             </button>
@@ -616,7 +616,7 @@ export const AIChatFloat = () => {
             : '¿En qué te ayudo hoy?'
           }
           disabled={isRecording || isTranscribing || isThinking}
-          className="flex-1 bg-transparent border-none outline-none text-[14px] md:text-[15.5px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 font-bold px-2.5 md:px-4 h-full min-w-0"
+          className="flex-1 bg-transparent border-none outline-none text-[13px] md:text-[14px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 font-semibold px-2.5 md:px-4 h-full min-w-0"
           autoComplete="off"
         />
 
