@@ -1367,8 +1367,9 @@ export default function MensajeriaPage() {
           )}
 
           {/* List */}
-          <div 
+          <div
             className="flex-1 overflow-y-auto py-2 space-y-1 pb-20 md:pb-2"
+            style={{ overflowAnchor: 'none' }}
             onScroll={(e) => {
               const target = e.currentTarget;
               if (target.scrollHeight - target.scrollTop - target.clientHeight < 100) {
