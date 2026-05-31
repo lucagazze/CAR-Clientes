@@ -193,6 +193,57 @@ export default function CostosPage() {
     ]
   });
 
+  // Shopify/Tiendanube Product Catalog Fetching
+  const loadProductCatalog = useCallback(async () => {
+    const isShopify = profile?.ecommerce_platform === 'shopify' && profile?.shopify_domain && profile?.shopify_access_token;
+    if (!isShopify) {
+      setCatalogProducts(MOCK_CATALOG);
+      return;
+    }
+
+    setLoadingProducts(true);
+    try {
+      const cleanDomain = profile.shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const url = `/api/shopify/products.json?limit=100`;
+      const response = await fetch(url, {
+        headers: {
+          'x-shopify-domain': cleanDomain,
+          'x-shopify-access-token': profile.shopify_access_token
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const apiProds = data?.products || [];
+        const mapped: CatalogProduct[] = apiProds.map((p: any) => {
+          const variants = p.variants && p.variants.length > 0
+            ? p.variants.map((v: any) => ({
+                id: String(v.id),
+                title: v.title,
+                price: parseFloat(v.price) || 0
+              }))
+            : [{
+                id: String(p.id),
+                title: 'Único',
+                price: parseFloat(p.price) || 0
+              }];
+          return {
+            id: String(p.id),
+            title: p.title,
+            variants
+          };
+        });
+        setCatalogProducts(mapped);
+      } else {
+        setCatalogProducts(MOCK_CATALOG);
+      }
+    } catch (err) {
+      console.error('Error fetching shopify products:', err);
+      setCatalogProducts(MOCK_CATALOG);
+    } finally {
+      setLoadingProducts(false);
+    }
+  }, [profile?.shopify_domain, profile?.shopify_access_token, profile?.ecommerce_platform]);
+
   // Load from localStorage and Supabase
   useEffect(() => {
     if (!profileId) return;
@@ -316,57 +367,6 @@ export default function CostosPage() {
     };
     localStorage.setItem(`car_costs_${profileId}`, JSON.stringify(currentData));
   };
-
-  // Shopify/Tiendanube Product Catalog Fetching
-  const loadProductCatalog = useCallback(async () => {
-    const isShopify = profile?.ecommerce_platform === 'shopify' && profile?.shopify_domain && profile?.shopify_access_token;
-    if (!isShopify) {
-      setCatalogProducts(MOCK_CATALOG);
-      return;
-    }
-    
-    setLoadingProducts(true);
-    try {
-      const cleanDomain = profile.shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      const url = `/api/shopify/products.json?limit=100`;
-      const response = await fetch(url, {
-        headers: {
-          'x-shopify-domain': cleanDomain,
-          'x-shopify-access-token': profile.shopify_access_token
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const apiProds = data?.products || [];
-        const mapped: CatalogProduct[] = apiProds.map((p: any) => {
-          const variants = p.variants && p.variants.length > 0
-            ? p.variants.map((v: any) => ({
-                id: String(v.id),
-                title: v.title,
-                price: parseFloat(v.price) || 0
-              }))
-            : [{
-                id: String(p.id),
-                title: 'Único',
-                price: parseFloat(p.price) || 0
-              }];
-          return {
-            id: String(p.id),
-            title: p.title,
-            variants
-          };
-        });
-        setCatalogProducts(mapped);
-      } else {
-        setCatalogProducts(MOCK_CATALOG);
-      }
-    } catch (err) {
-      console.error('Error fetching shopify products:', err);
-      setCatalogProducts(MOCK_CATALOG);
-    } finally {
-      setLoadingProducts(false);
-    }
-  }, [profile?.shopify_domain, profile?.shopify_access_token, profile?.ecommerce_platform]);
 
   useEffect(() => {
     loadProductCatalog();
