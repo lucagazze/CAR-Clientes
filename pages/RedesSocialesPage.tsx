@@ -211,8 +211,8 @@ export default function RedesSocialesPage() {
     setPendingReplied({});
     const newCache: Record<string, any[]> = {};
     try {
-      const igPosts = igMedia.slice(0, 24);
-      const fbPosts = fbMedia.slice(0, 24);
+      const igPosts = igMedia.slice(0, 12);
+      const fbPosts = fbMedia.slice(0, 12);
 
       const [igResults, fbResults] = await Promise.all([
         Promise.all(igPosts.map(async (post) => {
@@ -473,8 +473,17 @@ export default function RedesSocialesPage() {
     setSubmitError(null);
     try {
       if (type === 'instagram') {
-        const res = await metaAds.getInstagramMediaComments(postId);
-        setComments(res.data || []);
+        let commentsData: any[] = [];
+        try {
+          const res = await metaAds.getInstagramMediaComments(postId);
+          commentsData = res?.data || [];
+        } catch (apiErr) {
+          // Fallback: use inline comments already fetched with the media
+          const cachedMedia = igMedia.find(m => m.id === postId);
+          commentsData = cachedMedia?.comments?.data || [];
+          console.warn('Using cached inline comments (API fetch failed):', apiErr);
+        }
+        setComments(commentsData);
       } else {
         const res = await metaAds.getFacebookPostComments(postId);
         // Normalize comments for Facebook to fit same rendering structure.
@@ -732,7 +741,7 @@ export default function RedesSocialesPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
         <div>
           <h1 className="text-[26px] md:text-[30px] font-black tracking-tight text-zinc-900 dark:text-white leading-none flex items-center gap-2">
-            Rendimiento Orgánico
+            Contenido Orgánico
           </h1>
           <p className="text-[12.5px] text-zinc-400 font-bold mt-1.5 flex items-center gap-1.5">
             Publicaciones, interacciones y métricas clave de tus perfiles sociales en tiempo real.
@@ -800,7 +809,7 @@ export default function RedesSocialesPage() {
             color="#ec4899" 
             labels={['Cargando perfil de Instagram...', 'Obteniendo posts orgánicos...', 'Sincronizando feed de Facebook...']} 
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
             {[1, 2, 3, 4].map(n => (
               <div key={n} className="aspect-square bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl animate-pulse" />
             ))}
@@ -918,7 +927,7 @@ export default function RedesSocialesPage() {
                       <p className="text-[12px] text-zinc-400 mt-1">Intentá cambiando el filtro o cargando más adelante.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
                       {filteredMedia.slice(0, visibleIgCount).map((m: any) => {
                         const hasLongCaption = m.caption && m.caption.length > 80;
                         const isExpanded = !!expandedCaptions[m.id];
@@ -1186,7 +1195,7 @@ export default function RedesSocialesPage() {
                       <p className="text-[12px] text-zinc-400 mt-1">Intentá cambiando el filtro o cargando más adelante.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
                       {filteredFbMedia.slice(0, visibleFbCount).map((m: any) => {
                         const hasLongCaption = m.message && m.message.length > 80;
                         const isExpanded = !!expandedFbCaptions[m.id];
