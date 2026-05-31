@@ -1074,7 +1074,9 @@ export default function MensajeriaPage() {
       return timeX - timeY;
     });
     const lastRealMsg = [...sortedMsgs].reverse().find((m: any) => m?.message_type !== 2) || c?.last_non_activity_message;
-    const ts = c?.last_activity_at || lastRealMsg?.created_at || c?.created_at;
+    // Use last real message time first — ignores Chatwoot activity events (auto-assign, policy changes, etc.)
+    // that update last_activity_at and bubble up old conversations
+    const ts = lastRealMsg?.created_at || c?.last_non_activity_message?.created_at || c?.last_activity_at || c?.created_at;
     if (!ts) return 0;
     if (typeof ts === 'number') {
       return ts > 10000000000 ? ts / 1000 : ts;
@@ -1395,7 +1397,7 @@ export default function MensajeriaPage() {
               const isManualUnread = manuallyUnread.has(conv?.id);
               const unread = isManualUnread ? Math.max(1, conv?.unread_count || 0) : (conv?.unread_count || 0);
               const isUnread = unread > 0 || isManualUnread;
-              const activityTimestamp = conv?.last_activity_at || lastRealMsg?.created_at || conv?.created_at;
+              const activityTimestamp = lastRealMsg?.created_at || conv?.last_non_activity_message?.created_at || conv?.last_activity_at || conv?.created_at;
               return (
                 <div key={conv.id}
                   onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, conv }); }}
