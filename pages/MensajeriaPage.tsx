@@ -362,9 +362,12 @@ export default function MensajeriaPage() {
 
       let allConvs = [...firstPayload];
       setConversations(allConvs);
+      // Show first page immediately — stop spinner here
+      setLoading(false);
 
-      // Auto-load all remaining pages (max 20 pages = 500 conversations)
+      // Load remaining pages in background using loadingMore indicator
       if (firstHasMore) {
+        setLoadingMore(true);
         let page = 2;
         let more = true;
         while (more && page <= 20) {
@@ -377,12 +380,12 @@ export default function MensajeriaPage() {
           page++;
         }
         setCurrentPage(page - 1);
+        setLoadingMore(false);
       }
 
       setHasMore(false);
     } catch (e: any) {
       setError(e.message);
-    } finally {
       setLoading(false);
     }
   }, [cwUrl, cwToken, statusFilter, channelFilter, getInboxIdForChannel]);
