@@ -92,6 +92,28 @@ export default function AtencionPage() {
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
+  // Poll conversations list every 20s
+  useEffect(() => {
+    if (!cwUrl || !cwToken) return;
+    const refreshConvList = async () => {
+      try {
+        const { payload } = await chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1);
+        setConversations(prev => {
+          // Merge: update existing + prepend new ones
+          const prevIds = new Set(prev.map((c: any) => c.id));
+          const newOnes = payload.filter((c: any) => !prevIds.has(c.id));
+          const updated = prev.map((c: any) => payload.find((p: any) => p.id === c.id) || c);
+          return [...newOnes, ...updated];
+        });
+      } catch {}
+    };
+    const interval = setInterval(refreshConvList, 20000);
+    return () => clearInterval(interval);
+  }, [cwUrl, cwToken, statusFilter]);
+
+  const selectedRef = useRef<any>(null);
+  selectedRef.current = selected;
+
   const loadMessages = useCallback(async (conv: any) => {
     if (!cwUrl || !cwToken) return;
     setSelected(conv);
@@ -109,9 +131,29 @@ export default function AtencionPage() {
     }
   }, [cwUrl, cwToken]);
 
+  // Poll messages of selected conversation every 5s
+  useEffect(() => {
+    if (!cwUrl || !cwToken || !selected) return;
+    const pollMessages = async () => {
+      try {
+        const msgs = await chatwoot.getMessages(cwUrl, cwToken, selected.id);
+        const sorted = msgs.sort((a: any, b: any) => a.created_at - b.created_at);
+        setMessages(prev => {
+          if (sorted.length === prev.length && sorted[sorted.length - 1]?.id === prev[prev.length - 1]?.id) return prev;
+          return sorted;
+        });
+      } catch {}
+    };
+    const interval = setInterval(pollMessages, 5000);
+    return () => clearInterval(interval);
+  }, [cwUrl, cwToken, selected?.id]);
+
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (container) container.scrollTop = container.scrollHeight;
+    if (container) {
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+      if (isAtBottom) container.scrollTop = container.scrollHeight;
+    }
   }, [messages]);
 
   const handleSend = async (e: React.FormEvent) => {
