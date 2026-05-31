@@ -223,7 +223,7 @@ export default function MensajeriaPage() {
   const [error, setError] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; conv: any } | null>(null);
   const ctxRef = useRef<HTMLDivElement>(null);
-  const [statusFilter, setStatusFilter] = useState<'open' | 'resolved' | 'pending'>('open');
+  const [statusFilter, setStatusFilter] = useState<'open' | 'all'>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -916,7 +916,7 @@ export default function MensajeriaPage() {
     if (action === 'resolved' || action === 'open' || action === 'pending') {
       const newStatus = action;
       // Optimistic: remove or update in list
-      const shouldRemove = statusFilter !== newStatus;
+      const shouldRemove = statusFilter !== 'all' && statusFilter !== newStatus;
       setConversations(prev => shouldRemove
         ? prev.filter(c => c.id !== conv.id)
         : prev.map(c => c.id === conv.id ? { ...c, status: newStatus } : c)
@@ -1228,14 +1228,14 @@ export default function MensajeriaPage() {
         <div className="hidden md:flex items-center gap-2 overflow-x-auto no-scrollbar flex-1">
           {/* Status filter — always leftmost */}
           <button
-            onClick={() => setStatusFilter(s => s === 'open' ? 'resolved' : 'open')}
+            onClick={() => setStatusFilter(s => s === 'open' ? 'all' : 'open')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 whitespace-nowrap border flex-shrink-0 ${
               statusFilter === 'open'
                 ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
-                : 'bg-zinc-500 border-zinc-500 text-white shadow-sm'
+                : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
             }`}
           >
-            {statusFilter === 'open' ? '● Abiertos' : '✓ Resueltos'}
+            {statusFilter === 'open' ? '● Abiertos' : '○ Abiertos'}
           </button>
 
           <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0" />
