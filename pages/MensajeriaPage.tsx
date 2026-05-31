@@ -1459,12 +1459,6 @@ export default function MensajeriaPage() {
               );
             })}
 
-            {/* Background loading indicator */}
-            {loadingMore && (
-              <div className="flex items-center justify-center gap-1.5 py-2 text-[10px] text-zinc-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando más...
-              </div>
-            )}
           </div>
 
           {/* Mobile Floating Bottom Bar */}
