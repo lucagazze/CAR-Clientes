@@ -123,6 +123,17 @@ export default function RedesSocialesPage() {
   const [likedCommentIds, setLikedCommentIds] = useState<Record<string, boolean>>({});
   const [likingCommentIds, setLikingCommentIds] = useState<Record<string, boolean>>({});
 
+  // ── Pending Comments Panel ────────────────────────────────────────────
+  const [showPendingPanel, setShowPendingPanel] = useState(false);
+  const [pendingItems, setPendingItems] = useState<Array<{ network: 'instagram' | 'facebook'; postId: string; postCaption: string; postThumb?: string; comment: any }>>([]);
+  const [loadingPending, setLoadingPending] = useState(false);
+  const [pendingLoaded, setPendingLoaded] = useState(false);
+  const [pendingReplies, setPendingReplies] = useState<Record<string, string>>({});
+  const [pendingRepliesSubmitting, setPendingRepliesSubmitting] = useState<Record<string, boolean>>({});
+  const [pendingReplied, setPendingReplied] = useState<Record<string, boolean>>({});
+  const [pendingDraftLoading, setPendingDraftLoading] = useState<Record<string, boolean>>({});
+  const [pendingNetworkFilter, setPendingNetworkFilter] = useState<'all' | 'instagram' | 'facebook'>('all');
+
   // Resolve IDs from client profile
   const igId = (profile as any)?.ig_business_id;
   const igUsername = (profile as any)?.ig_username;
@@ -191,6 +202,102 @@ export default function RedesSocialesPage() {
     
     await Promise.all(promises);
     setBulkDraftsLoading(false);
+  };
+
+  // ── Fetch all pending comments across all recent posts ────────────────
+  const fetchAllPendingComments = async () => {
+    setLoadingPending(true);
+    setPendingReplied({});
+    try {
+      const igPosts = igMedia.slice(0, 24);
+      const fbPosts = fbMedia.slice(0, 24);
+
+      const [igResults, fbResults] = await Promise.all([
+        Promise.all(igPosts.map(async (post) => {
+          try {
+            const res = await metaAds.getInstagramMediaComments(post.id);
+            const cs = res?.data || [];
+            return cs.filter(isCommentPending).map((c: any) => ({
+              network: 'instagram' as const,
+              postId: post.id,
+              postCaption: post.caption || '',
+              postThumb: post.thumbnail_url || post.media_url,
+              comment: c,
+            }));
+          } catch { return []; }
+        })),
+        Promise.all(fbPosts.map(async (post) => {
+          try {
+            const res = await metaAds.getFacebookPostComments(post.id);
+            const cs = res?.data || [];
+            return cs.filter(isCommentPending).map((c: any) => ({
+              network: 'facebook' as const,
+              postId: post.id,
+              postCaption: post.message || '',
+              postThumb: post.full_picture,
+              comment: c,
+            }));
+          } catch { return []; }
+        })),
+      ]);
+
+      setPendingItems([...igResults.flat(), ...fbResults.flat()]);
+      setPendingLoaded(true);
+    } catch (err) {
+      console.error('Error fetching pending comments:', err);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
+  const handleOpenPendingPanel = () => {
+    setShowPendingPanel(true);
+    if (!pendingLoaded) fetchAllPendingComments();
+  };
+
+  const handlePendingReply = async (item: { network: 'instagram' | 'facebook'; comment: any }) => {
+    const text = pendingReplies[item.comment.id]?.trim();
+    if (!text) return;
+    setPendingRepliesSubmitting(prev => ({ ...prev, [item.comment.id]: true }));
+    try {
+      if (item.network === 'instagram') {
+        await metaAds.replyToInstagramComment(item.comment.id, text);
+      } else {
+        await metaAds.replyToFacebookComment(item.comment.id, text);
+      }
+      setPendingReplied(prev => ({ ...prev, [item.comment.id]: true }));
+      setPendingReplies(prev => { const c = { ...prev }; delete c[item.comment.id]; return c; });
+    } catch (err) {
+      console.error('Error submitting pending reply:', err);
+    } finally {
+      setPendingRepliesSubmitting(prev => ({ ...prev, [item.comment.id]: false }));
+    }
+  };
+
+  const handlePendingDraft = async (item: { postCaption: string; comment: any }) => {
+    const commentId = item.comment.id;
+    setPendingDraftLoading(prev => ({ ...prev, [commentId]: true }));
+    try {
+      const res = await fetch('/api/draft-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          itemText: item.comment.text || item.comment.message || '',
+          username: item.comment.username || item.comment.from?.name || 'usuario',
+          postCaption: item.postCaption,
+          otherComments: [],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.draft) setPendingReplies(prev => ({ ...prev, [commentId]: data.draft }));
+      }
+    } catch (err) {
+      console.error('Error generating draft:', err);
+    } finally {
+      setPendingDraftLoading(prev => ({ ...prev, [commentId]: false }));
+    }
   };
 
   // Submit response for a specific comment (inline)
@@ -647,10 +754,24 @@ export default function RedesSocialesPage() {
             </button>
           </div>
 
+          {/* Pending comments button */}
+          <button
+            onClick={handleOpenPendingPanel}
+            className="relative flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[13px] font-black shadow-md shadow-amber-500/20 transition-all active:scale-95"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Pendientes
+            {pendingLoaded && (
+              <span className="absolute -top-1.5 -right-1.5 bg-white text-amber-600 text-[9px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1 border border-amber-200 shadow-sm">
+                {pendingItems.filter(i => !pendingReplied[i.comment.id]).length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => setRefreshKey(k => k + 1)}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-250/60 dark:border-zinc-800 rounded-full text-[12px] font-black shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-850 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full text-[12px] font-black shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
             title="Recargar datos"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -1569,6 +1690,184 @@ export default function RedesSocialesPage() {
           </div>
         );
       })()}
+
+      {/* ── Pending Comments Drawer ───────────────────────────────────── */}
+      {showPendingPanel && (
+        <div className="fixed inset-0 z-[200] flex">
+          {/* Backdrop */}
+          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => setShowPendingPanel(false)} />
+
+          {/* Panel */}
+          <div className="w-full max-w-[520px] bg-white dark:bg-zinc-950 flex flex-col h-full shadow-2xl border-l border-zinc-200 dark:border-zinc-800 animate-in slide-in-from-right duration-250">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                  <MessageCircle className="w-4 h-4 text-amber-500" />
+                </div>
+                <div>
+                  <h2 className="text-[15px] font-black text-zinc-900 dark:text-white">Comentarios Pendientes</h2>
+                  {pendingLoaded && !loadingPending && (
+                    <p className="text-[11px] text-zinc-400">
+                      {pendingItems.filter(i => !pendingReplied[i.comment.id]).length} sin responder
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setPendingLoaded(false); fetchAllPendingComments(); }}
+                  disabled={loadingPending}
+                  className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                  title="Recargar"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingPending ? 'animate-spin' : ''}`} />
+                </button>
+                <button onClick={() => setShowPendingPanel(false)} className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Network filter */}
+            <div className="px-5 py-3 border-b border-zinc-100 dark:border-zinc-800 flex gap-2 flex-shrink-0">
+              {(['all', 'instagram', 'facebook'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setPendingNetworkFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all ${
+                    pendingNetworkFilter === f
+                      ? f === 'instagram' ? 'bg-pink-500 text-white' : f === 'facebook' ? 'bg-blue-600 text-white' : 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  {f === 'all' ? 'Todos' : f === 'instagram' ? 'Instagram' : 'Facebook'}
+                  {pendingLoaded && (
+                    <span className="ml-1.5 opacity-70">
+                      ({pendingItems.filter(i => !pendingReplied[i.comment.id] && (f === 'all' || i.network === f)).length})
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {loadingPending ? (
+                <div className="flex flex-col items-center justify-center h-48 gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                  <p className="text-[13px] text-zinc-400 font-semibold">Cargando comentarios...</p>
+                  <p className="text-[11px] text-zinc-300 dark:text-zinc-600">Revisando los últimos 24 posts de cada red</p>
+                </div>
+              ) : (() => {
+                const filtered = pendingItems.filter(i =>
+                  (pendingNetworkFilter === 'all' || i.network === pendingNetworkFilter) &&
+                  !pendingReplied[i.comment.id]
+                );
+                const replied = pendingItems.filter(i => pendingReplied[i.comment.id] && (pendingNetworkFilter === 'all' || i.network === pendingNetworkFilter));
+
+                if (filtered.length === 0 && replied.length === 0) return (
+                  <div className="flex flex-col items-center justify-center h-48 gap-3 text-center px-6">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-2xl">✅</div>
+                    <p className="text-[14px] font-black text-zinc-700 dark:text-zinc-300">Todo al día</p>
+                    <p className="text-[12px] text-zinc-400">No hay comentarios pendientes de respuesta en los últimos posts.</p>
+                  </div>
+                );
+
+                return (
+                  <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    {filtered.map(item => {
+                      const c = item.comment;
+                      const username = c.username || c.from?.name || 'Usuario';
+                      const text = c.text || c.message || '';
+                      const isSubmitting = pendingRepliesSubmitting[c.id];
+                      const isDraftLoading = pendingDraftLoading[c.id];
+                      const replyText = pendingReplies[c.id] || '';
+
+                      return (
+                        <div key={c.id} className="px-5 py-4 hover:bg-zinc-50/60 dark:hover:bg-white/[0.01] transition-colors">
+                          {/* Network + post context */}
+                          <div className="flex items-center gap-2 mb-3">
+                            {item.network === 'instagram' ? (
+                              <span className="flex items-center gap-1 bg-gradient-to-r from-pink-500 to-violet-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                                <Instagram className="w-2.5 h-2.5" /> Instagram
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                                <span className="font-black text-[10px]">f</span> Facebook
+                              </span>
+                            )}
+                            {item.postCaption && (
+                              <p className="text-[10px] text-zinc-400 truncate flex-1">{item.postCaption.slice(0, 60)}{item.postCaption.length > 60 ? '…' : ''}</p>
+                            )}
+                          </div>
+
+                          {/* Comment */}
+                          <div className="flex gap-2.5 mb-3">
+                            <div className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[11px] font-black text-zinc-600 dark:text-zinc-300 flex-shrink-0 uppercase">
+                              {username[0]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 mb-0.5">@{username}</p>
+                              <p className="text-[13px] text-zinc-800 dark:text-zinc-200 leading-snug">{text}</p>
+                            </div>
+                          </div>
+
+                          {/* Reply area */}
+                          <div className="ml-9">
+                            <textarea
+                              value={replyText}
+                              onChange={e => setPendingReplies(prev => ({ ...prev, [c.id]: e.target.value }))}
+                              placeholder="Escribí tu respuesta..."
+                              rows={2}
+                              className="w-full text-[12px] px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl resize-none focus:outline-none focus:ring-1 focus:ring-amber-400 dark:focus:ring-amber-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+                            />
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => handlePendingDraft(item)}
+                                disabled={isDraftLoading}
+                                className="flex items-center gap-1 px-3 h-8 rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 text-[11px] font-black transition-all disabled:opacity-50"
+                              >
+                                {isDraftLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                IA
+                              </button>
+                              <button
+                                onClick={() => handlePendingReply(item)}
+                                disabled={isSubmitting || !replyText.trim()}
+                                className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-[11px] font-black transition-all"
+                              >
+                                {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                {isSubmitting ? 'Enviando...' : 'Responder'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Already replied section */}
+                    {replied.length > 0 && (
+                      <div className="px-5 py-3 bg-emerald-50/50 dark:bg-emerald-500/5">
+                        <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                          Respondidos en esta sesión ({replied.length})
+                        </p>
+                        {replied.map(item => (
+                          <div key={item.comment.id} className="mt-2 flex items-center gap-2 text-[12px] text-zinc-400 line-through">
+                            <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            </span>
+                            <span className="truncate">{item.comment.username || item.comment.from?.name} — {(item.comment.text || item.comment.message || '').slice(0, 50)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
