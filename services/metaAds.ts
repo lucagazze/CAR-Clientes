@@ -538,6 +538,22 @@ export const metaAds = {
     return apiPostPageActive(`${commentId}/comments`, { message });
   },
 
+  getIgFollowerInsights: (igId: string, since: number, until: number) =>
+    apiGetPageActive(`${igId}/insights`, {
+      metric: 'follower_count',
+      period: 'day',
+      since: String(since),
+      until: String(until),
+    }).catch(() => null),
+
+  getFbPageInsights: (pageId: string, since: number, until: number) =>
+    apiGetPage(pageId, `${pageId}/insights`, {
+      metric: 'page_fans',
+      period: 'day',
+      since: String(since),
+      until: String(until),
+    }).catch(() => null),
+
   // ── CONVERSATIONS (DMs) ──────────────────────────────────
 
   // Facebook Messenger conversations — full fields including last message preview.
