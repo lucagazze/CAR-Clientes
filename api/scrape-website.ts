@@ -97,6 +97,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // ── Chatwoot proxy branch ──────────────────────────────────────────────
+  if (req.body?.chatwoot_url) {
+    const { chatwoot_url, chatwoot_token, path, body: cwBody } = req.body;
+    if (!chatwoot_url || !chatwoot_token || !path) {
+      return res.status(400).json({ error: 'Missing chatwoot params' });
+    }
+    try {
+      const upstream = await fetch(`${String(chatwoot_url).replace(/\/$/, '')}${path}`, {
+        method: cwBody ? 'POST' : 'GET',
+        headers: { 'api_access_token': chatwoot_token, 'Content-Type': 'application/json' },
+        ...(cwBody ? { body: JSON.stringify(cwBody) } : {}),
+      });
+      const data = await upstream.json();
+      return res.status(upstream.status).json(data);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+  // ── End Chatwoot proxy ─────────────────────────────────────────────────
+
   const openAiKey = process.env.OPENAI_API_KEY;
   if (!openAiKey) {
     return res.status(500).json({ error: 'OpenAI API key not configured' });

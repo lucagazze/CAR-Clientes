@@ -1,5 +1,5 @@
 const proxy = async (chatwoot_url: string, chatwoot_token: string, path: string, body?: any) => {
-  const res = await fetch('/api/chatwoot', {
+  const res = await fetch('/api/scrape-website', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chatwoot_url, chatwoot_token, path, ...(body ? { body } : {}) }),
