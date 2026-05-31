@@ -110,9 +110,13 @@ export default function AtencionPage() {
 
   const filtered = conversations.filter(c => {
     if (!search.trim()) return true;
-    const name = c.meta?.sender?.name || c.contact_inbox?.contact?.name || '';
+    const s = search.toLowerCase();
+    const name = (c.meta?.sender?.name || c.contact_inbox?.contact?.name || '').toLowerCase();
     const phone = c.meta?.sender?.phone_number || '';
-    return name.toLowerCase().includes(search.toLowerCase()) || phone.includes(search);
+    const email = (c.meta?.sender?.email || '').toLowerCase();
+    const id = String(c.id);
+    const lastMsg = (c.messages?.[0]?.content || '').toLowerCase();
+    return name.includes(s) || phone.includes(s) || email.includes(s) || id.includes(s) || lastMsg.includes(s);
   });
 
   const contact = (c: any) => c.meta?.sender || c.contact_inbox?.contact || {};
@@ -191,8 +195,9 @@ export default function AtencionPage() {
           {/* List */}
           <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800/60">
             {loading ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                <p className="text-[11px] text-zinc-400">Cargando todos los chats...</p>
               </div>
             ) : error ? (
               <div className="p-4 text-[11px] text-red-500">{error}</div>
