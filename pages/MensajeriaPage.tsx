@@ -1422,15 +1422,13 @@ export default function MensajeriaPage() {
                     
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        {/* Network name as primary label */}
-                        <span className={`text-[12.5px] truncate font-black ${
-                          isSelected ? 'text-white'
-                          : getChannelLabel(conv) === 'WhatsApp' ? 'text-[#25D366]'
-                          : getChannelLabel(conv) === 'Instagram' ? 'text-pink-500'
-                          : getChannelLabel(conv) === 'Facebook' ? 'text-[#1877F2]'
-                          : 'text-zinc-700 dark:text-zinc-300'
+                        {/* Contact name as primary */}
+                        <span className={`text-[12.5px] truncate ${
+                          isSelected ? 'font-bold text-white'
+                          : isUnread ? 'font-black text-zinc-900 dark:text-white'
+                          : 'font-semibold text-zinc-700 dark:text-zinc-300'
                         }`}>
-                          {getChannelLabel(conv)}
+                          {c.name || `#${conv.id}`}
                         </span>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <span className={`text-[10px] ${isSelected ? 'text-blue-200' : 'text-zinc-400'}`}>
@@ -1444,14 +1442,12 @@ export default function MensajeriaPage() {
                         </div>
                       </div>
 
-                      {/* Contact name — secondary, no phone */}
-                      {c.name && (
-                        <p className={`text-[10.5px] truncate mt-0.5 font-semibold ${
-                          isSelected ? 'text-blue-200' : 'text-zinc-500 dark:text-zinc-400'
-                        }`}>
-                          {c.name}
-                        </p>
-                      )}
+                      {/* Channel badge — no phone number */}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className={`text-[8.5px] px-1.5 py-0.5 rounded-full uppercase font-black tracking-wider ${getChannelBadgeClass(conv, isSelected)}`}>
+                          {getChannelLabel(conv)}
+                        </span>
+                      </div>
                       
                       {(lastMsg?.content || lastMsg?.attachments?.length > 0) && (
                         <p className={`text-[11px] truncate mt-0.5 ${
