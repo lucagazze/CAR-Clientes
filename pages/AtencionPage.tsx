@@ -55,6 +55,8 @@ export default function AtencionPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [summary, setSummary] = useState<any>(null);
+  const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'priority'>('latest');
+  const [expanded, setExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -128,6 +130,11 @@ export default function AtencionPage() {
     try {
       const msgs = await chatwoot.getMessages(cwUrl, cwToken, conv.id);
       setMessages(msgs.sort((a: any, b: any) => a.created_at - b.created_at));
+      // Auto mark as read
+      if (conv.unread_count > 0) {
+        chatwoot.markAsRead(cwUrl, cwToken, conv.id).catch(() => {});
+        setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
+      }
     } catch (e: any) {
       setMessages([]);
     } finally {
@@ -236,7 +243,7 @@ export default function AtencionPage() {
   const CHANNEL_ICON: Record<string, string> = { whatsapp: '📱', instagram: '📸', facebook: '📘', email: '📧', other: '💬' };
   const CHANNEL_COLOR: Record<string, string> = { whatsapp: 'bg-emerald-500', instagram: 'bg-pink-500', facebook: 'bg-blue-600', email: 'bg-violet-500', other: 'bg-zinc-500' };
 
-  const assignFiltered = conversations.filter(c => {
+  const assignFiltered = sortedConversations.filter(c => {
     if (assignFilter === 'unassigned') return !c.meta?.assignee;
     if (assignFilter === 'mine') return !!c.meta?.assignee;
     return true;
@@ -250,6 +257,15 @@ export default function AtencionPage() {
     const email = (c.meta?.sender?.email || '').toLowerCase();
     const lastMsg = (c.messages?.[0]?.content || '').toLowerCase();
     return name.includes(s) || phone.includes(s) || email.includes(s) || String(c.id).includes(s) || lastMsg.includes(s);
+  });
+
+  const sortedConversations = [...conversations].sort((a, b) => {
+    if (sortBy === 'oldest') return a.last_activity_at - b.last_activity_at;
+    if (sortBy === 'priority') {
+      const p: any = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+      return (p[a.priority] ?? 4) - (p[b.priority] ?? 4);
+    }
+    return b.last_activity_at - a.last_activity_at;
   });
 
   const totalCount = convMeta?.all_count ?? conversations.length;
@@ -304,15 +320,47 @@ export default function AtencionPage() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT: conversation list */}
-        <div className="w-[300px] flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+        <div className={`${expanded ? 'w-full' : 'w-[320px]'} flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-200`}>
 
-          {/* Search */}
-          <div className="p-3 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
-              <input type="text" placeholder="Buscar contacto, teléfono..." value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-400 text-zinc-700 dark:text-zinc-300" />
+          {/* Search + controls */}
+          <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                <input type="text" placeholder="Buscar contacto, teléfono..." value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-400 text-zinc-700 dark:text-zinc-300" />
+              </div>
+              {/* Sort button */}
+              <div className="relative group">
+                <button className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors" title="Ordenar">
+                  <svg className="w-3.5 h-3.5 text-zinc-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2 4h12M4 8h8M6 12h4" strokeLinecap="round"/>
+                  </svg>
+                </button>
+                <div className="absolute right-0 top-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl py-1 min-w-[150px] z-50 hidden group-hover:block">
+                  {[
+                    { value: 'latest', label: '↓ Más reciente' },
+                    { value: 'oldest', label: '↑ Más antiguo' },
+                    { value: 'priority', label: '🔴 Por prioridad' },
+                  ].map(s => (
+                    <button key={s.value} onClick={() => setSortBy(s.value as any)}
+                      className={`w-full text-left px-3 py-2 text-[12px] transition-colors ${sortBy === s.value ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Expand button */}
+              <button onClick={() => setExpanded(e => !e)}
+                className="p-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors" title={expanded ? 'Contraer' : 'Expandir lista'}>
+                <svg className="w-3.5 h-3.5 text-zinc-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  {expanded
+                    ? <path d="M10 6L6 6M10 10L6 10" strokeLinecap="round"/>
+                    : <path d="M6 2L10 8L6 14" strokeLinecap="round" strokeLinejoin="round"/>
+                  }
+                </svg>
+              </button>
             </div>
           </div>
 
