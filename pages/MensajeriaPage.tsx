@@ -1151,20 +1151,27 @@ export default function MensajeriaPage() {
 
   const handleBulkAction = async (action: string) => {
     if (!cwUrl || !cwToken || selectedIds.size === 0) return;
+    if (action === 'delete') {
+      if (!window.confirm(`¿Eliminar ${selectedIds.size} conversación${selectedIds.size > 1 ? 'es' : ''}? Esta acción no se puede deshacer.`)) return;
+    }
     setBulkLoading(true);
     try {
       await Promise.all([...selectedIds].map(id => {
-        if (action === 'resolved') return chatwoot.updateStatus(cwUrl, cwToken, id, 'resolved');
-        if (action === 'open') return chatwoot.updateStatus(cwUrl, cwToken, id, 'open');
+        if (action === 'delete') return chatwoot.deleteConversation(cwUrl, cwToken, id);
+        if (action === 'unread') return chatwoot.markAsUnread(cwUrl, cwToken, id);
         if (action === 'pending') return chatwoot.updateStatus(cwUrl, cwToken, id, 'pending');
         if (action === 'read') return chatwoot.markAsRead(cwUrl, cwToken, id);
         return Promise.resolve();
       }));
-      if (['resolved','open','pending'].includes(action)) {
-        setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, status: action } : c));
+      if (action === 'delete') {
+        setConversations(prev => prev.filter(c => !selectedIds.has(c.id)));
+        if (selected && selectedIds.has(selected.id)) { setSelected(null); setMessages([]); }
       }
       if (action === 'read') {
         setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 0 } : c));
+      }
+      if (action === 'unread') {
+        setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 1 } : c));
       }
       clearSelection();
     } catch (e: any) {
@@ -1335,12 +1342,11 @@ export default function MensajeriaPage() {
               <div className="flex gap-1 ml-auto">
                 {[
                   { action: 'read', label: '✓ Leído' },
-                  { action: 'resolved', label: '✅ Resolver' },
-                  { action: 'pending', label: '⏳ Pendiente' },
-                  { action: 'open', label: '📂 Abrir' },
+                  { action: 'unread', label: '● No leído' },
+                  { action: 'delete', label: '🗑 Eliminar' },
                 ].map(b => (
                   <button key={b.action} onClick={() => handleBulkAction(b.action)} disabled={bulkLoading}
-                    className="px-2 py-1 text-[10px] font-bold bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50">
+                    className={`px-2 py-1 text-[10px] font-bold bg-white dark:bg-zinc-800 border rounded-lg transition-colors disabled:opacity-50 ${b.action === 'delete' ? 'border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30' : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}>
                     {b.label}
                   </button>
                 ))}

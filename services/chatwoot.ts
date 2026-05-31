@@ -108,6 +108,11 @@ export const chatwoot = {
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}`, { priority }, 'PATCH');
   },
 
+  async markAsUnread(url: string, token: string, conversationId: number) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/unread`, {}, 'POST').catch(() => null);
+  },
+
   // Mark conversation as read — tries update_last_seen (v3+), falls back to /read (v2)
   async markAsRead(url: string, token: string, conversationId: number) {
     const accountId = await chatwoot.getAccountId(url, token);
