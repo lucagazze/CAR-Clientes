@@ -74,6 +74,7 @@ interface ClientRow {
   created_at: string;
   fb_page_id?: string;
   fb_page_name?: string;
+  fb_page_access_token?: string;
 }
 
 const CLIENT_TAGS = [
@@ -752,10 +753,33 @@ export default function AdminPage() {
     }
     setTestingFbPage(true);
     try {
+      // Temporarily cache the new token if provided, so the test uses it
+      if (editForm.fb_page_access_token) {
+        metaAds.setClientPageToken(editForm.fb_page_id, editForm.fb_page_access_token);
+      }
+
       const res = await metaAds.getFacebookPageInfo(editForm.fb_page_id);
       if (!res || res.error)
-        throw new Error("No se pudo obtener la Página (verificá el ID de la Página y el Token General)");
-      showToast(`¡Conexión con Facebook Exitosa! (${res.name}) ✓`, "success");
+        throw new Error("No se pudo obtener la Página (verificá el ID de la Página y el Token)");
+      
+      // Fetch permissions to show the user what's enabled
+      let permissionsMsg = "";
+      try {
+        const tokenToTest = editForm.fb_page_access_token || localStorage.getItem(`fb_pat_${editForm.fb_page_id}`) || "";
+        if (tokenToTest) {
+          const permRes = await fetch(`https://graph.facebook.com/v21.0/me/permissions?access_token=${tokenToTest}`).then(r => r.json());
+          if (permRes?.data) {
+            const granted = permRes.data.filter((p: any) => p.status === 'granted').map((p: any) => p.permission);
+            const keyPerms = ['instagram_manage_messages', 'instagram_manage_comments', 'pages_messaging', 'pages_show_list'];
+            const active = keyPerms.filter(p => granted.includes(p));
+            permissionsMsg = ` | Permisos activos: ${active.join(', ') || 'ninguno'}`;
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching permissions:", e);
+      }
+
+      showToast(`¡Conexión con Facebook Exitosa! (${res.name})${permissionsMsg} ✓`, "success");
       setStatuses((p) => ({ ...p, facebook: "ok" }));
     } catch (err: any) {
       showToast(
@@ -1798,10 +1822,10 @@ export default function AdminPage() {
                           </Field>
 
                           <div className="border border-zinc-100 dark:border-zinc-800 rounded-lg p-3 bg-zinc-50/50 dark:bg-zinc-800/20">
-                            <details className="group">
+                            <details className="group" open={!!editForm.fb_page_access_token}>
                               <summary className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 cursor-pointer select-none flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200">
                                 <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
-                                Configuración Manual / Detalles del ID
+                                Configuración Manual / Detalles del ID y Token
                               </summary>
                               <div className="mt-3 space-y-3">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1824,19 +1848,17 @@ export default function AdminPage() {
                                     />
                                   </Field>
                                 </div>
-                                <Field label="Page Access Token (pegar desde Graph API Explorer)">
-                                  <input
-                                    type="password"
-                                    value={editForm.fb_page_access_token || ""}
-                                    onChange={(e) => ef("fb_page_access_token", e.target.value)}
-                                    placeholder="EAAxxxxxxxxxxxxxxxx"
-                                    className={inputCls}
-                                  />
-                                </Field>
-                                <p className="text-[9px] text-zinc-400 dark:text-zinc-500">
-                                  Obtenelo en developers.facebook.com → Graph API Explorer → seleccioná la página → copiá el Access Token.
-                                  Guardá el formulario para aplicarlo.
-                                </p>
+                                <div className="md:col-span-2">
+                                  <Field label="Token de Acceso de Página de Facebook (Cliente)">
+                                    <input
+                                      type="text"
+                                      value={editForm.fb_page_access_token || ""}
+                                      onChange={(e) => ef("fb_page_access_token", e.target.value)}
+                                      placeholder="Pega el Token de Acceso aquí (ej: EAARv...)"
+                                      className={`${inputCls} font-mono`}
+                                    />
+                                  </Field>
+                                </div>
                               </div>
                             </details>
                           </div>

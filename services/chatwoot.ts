@@ -88,4 +88,23 @@ export const chatwoot = {
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}`, undefined, 'DELETE');
   },
+
+  // GET inboxes
+  async getInboxes(url: string, token: string) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    return proxy(url, token, `/api/v1/accounts/${accountId}/inboxes`);
+  },
+
+  // POST inbox
+  async createInbox(url: string, token: string, payload: any) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    return proxy(url, token, `/api/v1/accounts/${accountId}/inboxes`, payload, 'POST');
+  },
+
+  // DELETE inbox
+  async deleteInbox(url: string, token: string, inboxId: number) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    return proxy(url, token, `/api/v1/accounts/${accountId}/inboxes/${inboxId}`, undefined, 'DELETE');
+  },
 };
+

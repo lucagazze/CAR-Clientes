@@ -45,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     { path: '/comentarios', icon: MessageSquare, label: 'Comentarios', condition: !!activeProfile?.meta_account_id || !!(activeProfile as any)?.ig_business_id || !!(activeProfile as any)?.fb_page_id },
     { path: '/email-marketing', icon: Mail,     label: 'Email Marketing',  condition: true },
     { path: '/atencion',  icon: MessageCircle,  label: 'Atención',   condition: !!activeProfile?.chatwoot_token },
+    { path: '/entradas',  icon: Inbox,          label: 'Bandejas',   condition: !!activeProfile?.chatwoot_token },
   ].filter(item => item.condition);
 
   const configItems = [

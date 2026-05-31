@@ -208,6 +208,7 @@ export default function AtencionPage() {
 
   const loadMessages = useCallback(async (conv: any) => {
     if (!cwUrl || !cwToken) return;
+    setExpanded(false);
     setSelected(conv);
     setMessages([]);
     setReply('');
@@ -482,7 +483,7 @@ export default function AtencionPage() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT: conversation list */}
-        <div className={`${expanded ? 'w-full' : 'w-[320px]'} flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-200`}>
+        <div className={`${expanded ? 'w-full' : selected ? 'hidden md:flex md:w-[260px]' : 'w-full md:w-[320px]'} flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-300`}>
 
           {/* Search + controls */}
           <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 space-y-2">
@@ -657,7 +658,7 @@ export default function AtencionPage() {
         </div>
 
         {/* RIGHT: chat panel */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950">
+        <div className={`${selected ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-900/30`}>
           {!selected ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
               <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-3xl">💬</div>
@@ -667,6 +668,12 @@ export default function AtencionPage() {
             <>
               {/* Chat header */}
               <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center gap-3 flex-shrink-0">
+                <button
+                  onClick={() => setSelected(null)}
+                  className="md:hidden p-1.5 -ml-1 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                </button>
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-[14px] font-black flex-shrink-0 ${CHANNEL_COLOR[getChannel(selected)]}`}>
                   {CHANNEL_ICON[getChannel(selected)]}
                 </div>
