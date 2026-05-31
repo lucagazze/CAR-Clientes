@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { chatwoot } from '../services/chatwoot';
 import { supabase } from '../services/supabase';
+import { useToast } from '../components/Toast';
 import {
   RefreshCw, AlertCircle, Loader2, Send, Sparkles,
   Search, CheckCircle, Clock, Inbox, ExternalLink, Bot,
@@ -181,6 +182,7 @@ export default function MensajeriaPage() {
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   const isAdmin = authProfile?.is_admin;
+  const { showToast } = useToast();
 
   const cwUrl = (profile as any)?.chatwoot_url;
   const cwToken = (profile as any)?.chatwoot_token;
@@ -237,6 +239,7 @@ export default function MensajeriaPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [manuallyUnread, setManuallyUnread] = useState<Set<number>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -520,6 +523,8 @@ export default function MensajeriaPage() {
     if (!cwUrl || !cwToken) return;
     setExpanded(false);
     setSelected(conv);
+    // Clear "manually unread" when opening
+    setManuallyUnread(prev => { const s = new Set(prev); s.delete(conv.id); return s; });
     setMessages([]);
     setReply('');
     setSendError(null);
@@ -853,37 +858,65 @@ export default function MensajeriaPage() {
   const handleCtxAction = async (action: string, conv: any) => {
     setCtxMenu(null);
     if (!cwUrl || !cwToken) return;
+
+    // Mark as unread — local state only (no API needed)
+    if (action === 'unread') {
+      setManuallyUnread(prev => new Set([...prev, conv.id]));
+      showToast('Marcado como no leído', 'success');
+      return;
+    }
+
     try {
       if (action === 'read') {
         await chatwoot.markAsRead(cwUrl, cwToken, conv.id);
         setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
-      } else if (['resolved','open','pending','snoozed'].includes(action)) {
-        const extra = action === 'snoozed' ? { snoozed_until: Math.floor(Date.now()/1000) + 3600 } : {};
-        const status = action === 'snooze' ? 'snoozed' : action;
-        await chatwoot.updateStatus(cwUrl, cwToken, conv.id, status, extra);
-        setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, status } : c));
-        if (selected?.id === conv.id) setSelected((s: any) => s ? { ...s, status } : s);
+        setManuallyUnread(prev => { const s = new Set(prev); s.delete(conv.id); return s; });
+        showToast('Marcado como leído', 'success');
+
+      } else if (action === 'resolved') {
+        await chatwoot.updateStatus(cwUrl, cwToken, conv.id, 'resolved');
+        setConversations(prev => statusFilter !== 'resolved' ? prev.filter(c => c.id !== conv.id) : prev.map(c => c.id === conv.id ? { ...c, status: 'resolved' } : c));
+        if (selected?.id === conv.id) { setSelected(null); setMessages([]); }
+        showToast('Conversación resuelta ✅', 'success');
+
+      } else if (action === 'open') {
+        await chatwoot.updateStatus(cwUrl, cwToken, conv.id, 'open');
+        setConversations(prev => statusFilter !== 'open' ? prev.filter(c => c.id !== conv.id) : prev.map(c => c.id === conv.id ? { ...c, status: 'open' } : c));
+        if (selected?.id === conv.id) setSelected((s: any) => s ? { ...s, status: 'open' } : s);
+        showToast('Conversación abierta 📂', 'success');
+
+      } else if (action === 'pending') {
+        await chatwoot.updateStatus(cwUrl, cwToken, conv.id, 'pending');
+        setConversations(prev => statusFilter !== 'pending' ? prev.filter(c => c.id !== conv.id) : prev.map(c => c.id === conv.id ? { ...c, status: 'pending' } : c));
+        if (selected?.id === conv.id) setSelected((s: any) => s ? { ...s, status: 'pending' } : s);
+        showToast('Marcado como pendiente ⏳', 'success');
+
       } else if (action === 'snooze') {
-        const snoozed_until = Math.floor(Date.now()/1000) + 3600;
+        const snoozed_until = Math.floor(Date.now() / 1000) + 3600;
         await chatwoot.updateStatus(cwUrl, cwToken, conv.id, 'snoozed', { snoozed_until });
-        setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, status: 'snoozed' } : c));
+        setConversations(prev => prev.filter(c => c.id !== conv.id));
+        if (selected?.id === conv.id) { setSelected(null); setMessages([]); }
+        showToast('Pospuesto 1 hora ⏰', 'success');
+
       } else if (action === 'priority_high') {
         await chatwoot.updatePriority(cwUrl, cwToken, conv.id, 'high');
         setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, priority: 'high' } : c));
+        showToast('Prioridad alta 🔴', 'success');
+
       } else if (action === 'priority_none') {
         await chatwoot.updatePriority(cwUrl, cwToken, conv.id, 'none');
         setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, priority: 'none' } : c));
-      } else if (action === 'copy') {
-        const accountId = await chatwoot.getAccountId(cwUrl, cwToken);
-        navigator.clipboard.writeText(`${cwUrl}/app/accounts/${accountId}/conversations/${conv.id}`);
+        showToast('Sin prioridad ⚪', 'success');
+
       } else if (action === 'delete') {
         if (!window.confirm('¿Eliminar esta conversación? Esta acción no se puede deshacer.')) return;
         await chatwoot.deleteConversation(cwUrl, cwToken, conv.id);
         setConversations(prev => prev.filter(c => c.id !== conv.id));
         if (selected?.id === conv.id) { setSelected(null); setMessages([]); }
+        showToast('Conversación eliminada', 'success');
       }
     } catch (e: any) {
-      alert(`Error al ejecutar acción: ${e.message}`);
+      showToast(`Error: ${e.message}`, 'error');
     }
   };
 
@@ -1333,8 +1366,9 @@ export default function MensajeriaPage() {
                                   (sortedMsgs.length > 0 ? sortedMsgs[sortedMsgs.length - 1] : null);
               const lastMsg = lastRealMsg;
               const isSelected = selected?.id === conv?.id;
-              const unread = conv?.unread_count || 0;
-              const isUnread = unread > 0;
+              const isManualUnread = manuallyUnread.has(conv?.id);
+              const unread = isManualUnread ? Math.max(1, conv?.unread_count || 0) : (conv?.unread_count || 0);
+              const isUnread = unread > 0 || isManualUnread;
               const activityTimestamp = conv?.last_activity_at || lastRealMsg?.created_at || conv?.created_at;
               return (
                 <div key={conv.id}
@@ -1686,6 +1720,8 @@ export default function MensajeriaPage() {
           className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl py-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-100">
           {[
             { action: 'read',         label: 'Marcar como leído',            icon: '✓' },
+            { action: 'unread',       label: 'Marcar como no leído',         icon: '●' },
+            null,
             { action: 'resolved',     label: 'Marcar como resuelto',         icon: '✅' },
             { action: 'open',         label: 'Marcar como abierto',          icon: '📂' },
             { action: 'pending',      label: 'Marcar como pendiente',        icon: '⏳' },
@@ -1693,8 +1729,6 @@ export default function MensajeriaPage() {
             null,
             { action: 'priority_high',label: 'Prioridad alta',               icon: '🔴' },
             { action: 'priority_none',label: 'Sin prioridad',                icon: '⚪' },
-            null,
-            { action: 'copy',         label: 'Copiar enlace',                icon: '🔗' },
             null,
             { action: 'delete',       label: 'Eliminar conversación',        icon: '🗑️', danger: true },
           ].map((item, i) =>
