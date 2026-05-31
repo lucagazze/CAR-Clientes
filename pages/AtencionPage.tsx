@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { chatwoot } from '../services/chatwoot';
@@ -53,6 +54,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AtencionPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { profile: authProfile } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
@@ -134,6 +137,23 @@ export default function AtencionPage() {
   }, [cwUrl, cwToken, currentPage, loadingMore, hasMore, statusFilter]);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  // Load conversation from URL search parameter convId if present
+  useEffect(() => {
+    if (conversations.length > 0 && !selected) {
+      const params = new URLSearchParams(location.search);
+      const convIdParam = params.get('convId');
+      if (convIdParam) {
+        const convId = parseInt(convIdParam, 10);
+        const found = conversations.find(c => c.id === convId);
+        if (found) {
+          loadMessages(found);
+          // Clear query param so it doesn't re-trigger on subsequent updates
+          navigate('/atencion', { replace: true });
+        }
+      }
+    }
+  }, [conversations, location.search, selected, loadMessages, navigate]);
 
   // WebSocket real-time connection to Chatwoot
   useEffect(() => {

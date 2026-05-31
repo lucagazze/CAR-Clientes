@@ -108,5 +108,32 @@ export const chatwoot = {
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/inboxes/${inboxId}`, undefined, 'DELETE');
   },
+
+  // GET contacts
+  async getContacts(url: string, token: string, page = 1) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    const data = await proxy(url, token, `/api/v1/accounts/${accountId}/contacts?page=${page}`);
+    return data || {};
+  },
+
+  // GET search contacts
+  async searchContacts(url: string, token: string, query: string, page = 1) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    const data = await proxy(url, token, `/api/v1/accounts/${accountId}/contacts/search?q=${encodeURIComponent(query)}&page=${page}`);
+    return data || {};
+  },
+
+  // GET contact conversations
+  async getContactConversations(url: string, token: string, contactId: number) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    const data = await proxy(url, token, `/api/v1/accounts/${accountId}/contacts/${contactId}/conversations`);
+    return data?.payload || data || [];
+  },
+
+  // PUT contact update
+  async updateContact(url: string, token: string, contactId: number, payload: any) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    return proxy(url, token, `/api/v1/accounts/${accountId}/contacts/${contactId}`, payload, 'PUT');
+  },
 };
 

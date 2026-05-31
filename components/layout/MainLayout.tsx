@@ -27,6 +27,7 @@ const MensajesDMPage     = lazy(() => import('../../pages/MensajesDMPage'));
 const ComentariosPage    = lazy(() => import('../../pages/ComentariosPage'));
 const CerebroPage        = lazy(() => import('../../pages/CerebroPage'));
 const EntradasPage       = lazy(() => import('../../pages/EntradasPage'));
+const ContactosPage      = lazy(() => import('../../pages/ContactosPage'));
 
 // Minimal skeleton shown while a lazy page chunk is downloading
 const PageSkeleton = () => (
@@ -98,7 +99,7 @@ export const MainLayout = () => {
         </div>
 
         <div className={`flex-1 w-full print:overflow-visible print:h-auto print:p-6 ${
-          location.pathname === '/atencion'
+          location.pathname === '/atencion' || location.pathname === '/contactos'
             ? 'overflow-hidden p-0 h-[calc(100vh-56px)] md:h-screen flex flex-col'
             : isFixedPage 
               ? 'overflow-hidden p-4 md:p-6 h-[calc(100vh-56px)] md:h-screen flex flex-col' 
@@ -126,11 +127,12 @@ export const MainLayout = () => {
               <Route path="/email-marketing" element={<EmailMarketingPage />} />
               <Route path="/entradas" element={<EntradasPage />} />
               <Route path="/cerebro" element={<CerebroPage />} />
+              <Route path="/contactos" element={<ContactosPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </div>
-        {location.pathname !== '/atencion' && <AIChatFloat />}
+        {location.pathname !== '/atencion' && location.pathname !== '/contactos' && <AIChatFloat />}
       </main>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag, AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare, Brain
+  Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag, AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare, Brain, Users
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useViewAs } from '../../contexts/ViewAsContext';
@@ -56,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     { path: '/comentarios', icon: MessageSquare, label: 'Comentarios', condition: !!activeProfile?.meta_account_id || !!(activeProfile as any)?.ig_business_id || !!(activeProfile as any)?.fb_page_id },
     { path: '/email-marketing', icon: Mail,     label: 'Email Marketing',  condition: true },
     { path: '/atencion',  icon: MessageCircle,  label: 'Atención',   condition: !!activeProfile?.chatwoot_token },
+    { path: '/contactos', icon: Users,          label: 'Contactos',  condition: !!activeProfile?.chatwoot_token },
   ].filter(item => item.condition);
 
   const configItems = [
