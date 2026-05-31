@@ -125,6 +125,7 @@ export default function RedesSocialesPage() {
 
   // ── Pending Comments Panel ────────────────────────────────────────────
   const [showPendingPanel, setShowPendingPanel] = useState(false);
+  const [allCommentsCache, setAllCommentsCache] = useState<Record<string, any[]>>({});
   const [pendingItems, setPendingItems] = useState<Array<{ network: 'instagram' | 'facebook'; postId: string; postCaption: string; postThumb?: string; comment: any }>>([]);
   const [loadingPending, setLoadingPending] = useState(false);
   const [pendingLoaded, setPendingLoaded] = useState(false);
@@ -208,6 +209,7 @@ export default function RedesSocialesPage() {
   const fetchAllPendingComments = async () => {
     setLoadingPending(true);
     setPendingReplied({});
+    const newCache: Record<string, any[]> = {};
     try {
       const igPosts = igMedia.slice(0, 24);
       const fbPosts = fbMedia.slice(0, 24);
@@ -217,6 +219,7 @@ export default function RedesSocialesPage() {
           try {
             const res = await metaAds.getInstagramMediaComments(post.id);
             const cs = res?.data || [];
+            newCache[post.id] = cs; // cache ALL comments for AI context
             return cs.filter(isCommentPending).map((c: any) => ({
               network: 'instagram' as const,
               postId: post.id,
@@ -230,6 +233,7 @@ export default function RedesSocialesPage() {
           try {
             const res = await metaAds.getFacebookPostComments(post.id);
             const cs = res?.data || [];
+            newCache[post.id] = cs; // cache ALL comments for AI context
             return cs.filter(isCommentPending).map((c: any) => ({
               network: 'facebook' as const,
               postId: post.id,
@@ -241,6 +245,7 @@ export default function RedesSocialesPage() {
         })),
       ]);
 
+      setAllCommentsCache(newCache);
       setPendingItems([...igResults.flat(), ...fbResults.flat()]);
       setPendingLoaded(true);
     } catch (err) {
@@ -274,10 +279,17 @@ export default function RedesSocialesPage() {
     }
   };
 
-  const handlePendingDraft = async (item: { postCaption: string; comment: any }) => {
+  const handlePendingDraft = async (item: { postCaption: string; postId: string; network: string; comment: any }) => {
     const commentId = item.comment.id;
     setPendingDraftLoading(prev => ({ ...prev, [commentId]: true }));
     try {
+      // All other comments in the post = context for the AI
+      const allPostComments = allCommentsCache[item.postId] || [];
+      const otherComments = allPostComments
+        .filter(c => c.id !== commentId)
+        .map(c => `@${c.username || c.from?.name || 'usuario'}: ${c.text || c.message || ''}`)
+        .slice(0, 25);
+
       const res = await fetch('/api/draft-reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -286,7 +298,7 @@ export default function RedesSocialesPage() {
           itemText: item.comment.text || item.comment.message || '',
           username: item.comment.username || item.comment.from?.name || 'usuario',
           postCaption: item.postCaption,
-          otherComments: [],
+          otherComments,
         }),
       });
       if (res.ok) {
@@ -1786,24 +1798,42 @@ export default function RedesSocialesPage() {
 
                       return (
                         <div key={c.id} className="px-5 py-4 hover:bg-zinc-50/60 dark:hover:bg-white/[0.01] transition-colors">
-                          {/* Network + post context */}
-                          <div className="flex items-center gap-2 mb-3">
-                            {item.network === 'instagram' ? (
-                              <span className="flex items-center gap-1 bg-gradient-to-r from-pink-500 to-violet-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
-                                <Instagram className="w-2.5 h-2.5" /> Instagram
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1 bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
-                                <span className="font-black text-[10px]">f</span> Facebook
-                              </span>
+                          {/* Network badge + post thumbnail + caption */}
+                          <div className="flex gap-3 mb-3">
+                            {/* Thumbnail */}
+                            {item.postThumb && (
+                              <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800">
+                                <img src={item.postThumb} alt="" className="w-full h-full object-cover" />
+                              </div>
                             )}
-                            {item.postCaption && (
-                              <p className="text-[10px] text-zinc-400 truncate flex-1">{item.postCaption.slice(0, 60)}{item.postCaption.length > 60 ? '…' : ''}</p>
-                            )}
+                            <div className="flex-1 min-w-0">
+                              {/* Network */}
+                              <div className="mb-1.5">
+                                {item.network === 'instagram' ? (
+                                  <span className="inline-flex items-center gap-1 bg-gradient-to-r from-pink-500 to-violet-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                                    <Instagram className="w-2.5 h-2.5" /> Instagram
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                                    <span className="font-black text-[10px]">f</span> Facebook
+                                  </span>
+                                )}
+                              </div>
+                              {/* Caption */}
+                              {item.postCaption && (
+                                <p className="text-[10px] text-zinc-400 leading-snug line-clamp-2">{item.postCaption}</p>
+                              )}
+                              {/* Comment count context */}
+                              {allCommentsCache[item.postId] && (
+                                <p className="text-[9px] text-zinc-300 dark:text-zinc-600 mt-1">
+                                  {allCommentsCache[item.postId].length} comentarios en esta publicación
+                                </p>
+                              )}
+                            </div>
                           </div>
 
                           {/* Comment */}
-                          <div className="flex gap-2.5 mb-3">
+                          <div className="flex gap-2.5 mb-3 pl-1">
                             <div className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[11px] font-black text-zinc-600 dark:text-zinc-300 flex-shrink-0 uppercase">
                               {username[0]}
                             </div>
@@ -1814,7 +1844,7 @@ export default function RedesSocialesPage() {
                           </div>
 
                           {/* Reply area */}
-                          <div className="ml-9">
+                          <div className="ml-1">
                             <textarea
                               value={replyText}
                               onChange={e => setPendingReplies(prev => ({ ...prev, [c.id]: e.target.value }))}
@@ -1826,10 +1856,11 @@ export default function RedesSocialesPage() {
                               <button
                                 onClick={() => handlePendingDraft(item)}
                                 disabled={isDraftLoading}
-                                className="flex items-center gap-1 px-3 h-8 rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 text-[11px] font-black transition-all disabled:opacity-50"
+                                title={allCommentsCache[item.postId] ? `Leerá ${allCommentsCache[item.postId].length} comentarios + publicación + catálogo de productos` : 'Generar borrador con IA'}
+                                className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 text-[11px] font-black transition-all disabled:opacity-50"
                               >
                                 {isDraftLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                IA
+                                {isDraftLoading ? 'Generando...' : 'IA'}
                               </button>
                               <button
                                 onClick={() => handlePendingReply(item)}

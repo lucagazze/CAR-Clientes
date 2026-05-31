@@ -224,13 +224,13 @@ ${isDM ? '6. Take into account the full conversation history above to understand
         'Authorization': `Bearer ${openAiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemMessage },
           { role: 'user', content: `${isDM ? 'Mensaje del cliente en el DM' : 'Comentario del cliente'}: "${itemText}"\nGenerá el borrador de respuesta para @${username} en el mismo idioma del mensaje:` }
         ],
         temperature: 0.3,
-        max_tokens: isDM ? 250 : 150,
+        max_tokens: isDM ? 300 : 200,
       }),
     });
 
