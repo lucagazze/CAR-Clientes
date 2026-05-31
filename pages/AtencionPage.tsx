@@ -39,6 +39,9 @@ export default function AtencionPage() {
 
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'open' | 'resolved' | 'pending'>('open');
   const [search, setSearch] = useState('');
@@ -55,12 +58,16 @@ export default function AtencionPage() {
     if (!cwUrl || !cwToken) return;
     setLoading(true);
     setError(null);
+    setConversations([]);
+    setCurrentPage(1);
+    setHasMore(false);
     try {
-      const [convs, sm] = await Promise.all([
-        chatwoot.getConversations(cwUrl, cwToken, statusFilter),
+      const [{ payload, hasMore: more }, sm] = await Promise.all([
+        chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1),
         chatwoot.getSummary(cwUrl, cwToken, Math.floor(new Date().setHours(0,0,0,0)/1000), Math.floor(Date.now()/1000)).catch(() => null),
       ]);
-      setConversations(convs);
+      setConversations(payload);
+      setHasMore(more);
       setSummary(sm);
     } catch (e: any) {
       setError(e.message);
@@ -68,6 +75,22 @@ export default function AtencionPage() {
       setLoading(false);
     }
   }, [cwUrl, cwToken, statusFilter]);
+
+  const loadMore = useCallback(async () => {
+    if (!cwUrl || !cwToken || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const { payload, hasMore: more } = await chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, nextPage);
+      setConversations(prev => [...prev, ...payload]);
+      setCurrentPage(nextPage);
+      setHasMore(more);
+    } catch (e) {
+      // silently fail on pagination
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [cwUrl, cwToken, statusFilter, currentPage, loadingMore, hasMore]);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
@@ -192,12 +215,21 @@ export default function AtencionPage() {
             </div>
           </div>
 
+          {/* Count */}
+          {!loading && conversations.length > 0 && (
+            <div className="px-3 py-1.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+              <p className="text-[10px] text-zinc-400 font-medium">
+                {filtered.length} de {conversations.length} chats{search ? ' (filtrados)' : ''}
+              </p>
+            </div>
+          )}
+
           {/* List */}
           <div className="flex-1 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800/60">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                <p className="text-[11px] text-zinc-400">Cargando todos los chats...</p>
+                <p className="text-[11px] text-zinc-400">Cargando chats...</p>
               </div>
             ) : error ? (
               <div className="p-4 text-[11px] text-red-500">{error}</div>
@@ -235,6 +267,15 @@ export default function AtencionPage() {
                 </button>
               );
             })}
+          </div>
+            {/* Load more button */}
+            {hasMore && !loading && (
+              <button onClick={loadMore} disabled={loadingMore}
+                className="w-full py-3 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                {loadingMore ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                {loadingMore ? 'Cargando más...' : `Cargar más (${conversations.length} cargados)`}
+              </button>
+            )}
           </div>
         </div>
 

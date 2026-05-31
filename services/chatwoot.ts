@@ -21,19 +21,17 @@ export const chatwoot = {
     return accountId;
   },
 
-  async getConversations(url: string, token: string, status = 'open') {
+  async getConversationsPage(url: string, token: string, status = 'open', page = 1) {
     const accountId = await chatwoot.getAccountId(url, token);
-    const all: any[] = [];
-    let page = 1;
-    while (true) {
-      const data = await proxy(url, token, `/api/v1/accounts/${accountId}/conversations?status=${status}&page=${page}`);
-      const payload = data?.data?.payload || data?.payload || [];
-      all.push(...payload);
-      if (payload.length < 25) break; // last page
-      page++;
-      if (page > 20) break; // safety cap at 500 conversations
-    }
-    return all;
+    const data = await proxy(url, token, `/api/v1/accounts/${accountId}/conversations?status=${status}&page=${page}`);
+    const payload = data?.data?.payload || data?.payload || [];
+    const meta = data?.data?.meta || data?.meta || {};
+    return { payload, hasMore: payload.length === 25, meta };
+  },
+
+  async getConversations(url: string, token: string, status = 'open') {
+    const { payload } = await chatwoot.getConversationsPage(url, token, status, 1);
+    return payload;
   },
 
   async getOverview(url: string, token: string) {
