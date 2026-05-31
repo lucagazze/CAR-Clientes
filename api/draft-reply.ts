@@ -232,7 +232,7 @@ ${isDM ? '6. Take into account the full conversation history above to understand
             contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
             generationConfig: {
               temperature: 0.3,
-              maxOutputTokens: isDM ? 600 : 400,
+              maxOutputTokens: 1024,
             },
             thinkingConfig: { thinkingBudget: 0 },
           }),
@@ -259,7 +259,7 @@ ${isDM ? '6. Take into account the full conversation history above to understand
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.3,
-          max_tokens: isDM ? 300 : 200,
+          max_tokens: 1024,
         }),
       });
       if (openAiRes.ok) {
