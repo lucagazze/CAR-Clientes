@@ -893,10 +893,12 @@ export default function MensajeriaPage() {
     setCtxMenu(null);
     if (!cwUrl || !cwToken) return;
 
-    // ── Mark as unread — local + localStorage only ────────────────────
+    // ── Mark as unread ────────────────────────────────────────────────
     if (action === 'unread') {
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 1 } : c));
       setManuallyUnread(prev => new Set([...prev, conv.id]));
       showToast('Marcado como no leído', 'success');
+      chatwoot.markAsUnread(cwUrl, cwToken, conv.id).catch(() => {});
       return;
     }
 
@@ -1154,28 +1156,33 @@ export default function MensajeriaPage() {
     if (action === 'delete') {
       if (!window.confirm(`¿Eliminar ${selectedIds.size} conversación${selectedIds.size > 1 ? 'es' : ''}? Esta acción no se puede deshacer.`)) return;
     }
+    const ids = [...selectedIds];
+    // Optimistic UI update immediately
+    if (action === 'delete') {
+      setConversations(prev => prev.filter(c => !selectedIds.has(c.id)));
+      if (selected && selectedIds.has(selected.id)) { setSelected(null); setMessages([]); }
+    }
+    if (action === 'read') {
+      setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 0 } : c));
+      setManuallyUnread(prev => { const s = new Set(prev); ids.forEach(id => s.delete(id)); return s; });
+    }
+    if (action === 'unread') {
+      setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 1 } : c));
+      setManuallyUnread(prev => new Set([...prev, ...ids]));
+    }
+    clearSelection();
     setBulkLoading(true);
     try {
-      await Promise.all([...selectedIds].map(id => {
+      await Promise.all(ids.map(id => {
         if (action === 'delete') return chatwoot.deleteConversation(cwUrl, cwToken, id);
         if (action === 'unread') return chatwoot.markAsUnread(cwUrl, cwToken, id);
-        if (action === 'pending') return chatwoot.updateStatus(cwUrl, cwToken, id, 'pending');
         if (action === 'read') return chatwoot.markAsRead(cwUrl, cwToken, id);
         return Promise.resolve();
       }));
-      if (action === 'delete') {
-        setConversations(prev => prev.filter(c => !selectedIds.has(c.id)));
-        if (selected && selectedIds.has(selected.id)) { setSelected(null); setMessages([]); }
-      }
-      if (action === 'read') {
-        setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 0 } : c));
-      }
-      if (action === 'unread') {
-        setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 1 } : c));
-      }
-      clearSelection();
+      const labels: Record<string, string> = { read: `${ids.length} marcados como leídos`, unread: `${ids.length} marcados como no leídos`, delete: `${ids.length} conversaciones eliminadas` };
+      showToast(labels[action] || 'Listo', 'success');
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
+      showToast(`Error: ${e.message}`, 'error');
     } finally {
       setBulkLoading(false);
     }
