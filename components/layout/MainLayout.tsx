@@ -102,7 +102,7 @@ export const MainLayout = () => {
             ? 'overflow-hidden p-0 h-[calc(100vh-56px)] md:h-screen flex flex-col'
             : isFixedPage 
               ? 'overflow-hidden p-4 md:p-6 h-[calc(100vh-56px)] md:h-screen flex flex-col' 
-              : 'overflow-auto p-4 md:p-8 lg:p-10 pb-48 md:pb-40 xl:pb-44'
+              : 'overflow-auto p-4 md:p-8 lg:p-10 pb-8'
         }`}>
           {/* Spacer so content starts below the fixed mobile header */}
           <div className="h-14 md:hidden" />

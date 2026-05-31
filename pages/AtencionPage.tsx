@@ -63,6 +63,7 @@ export default function AtencionPage() {
 
   const [conversations, setConversations] = useState<any[]>([]);
   const [convMeta, setConvMeta] = useState<{ all_count: number; unassigned_count: number; assigned_count: number } | null>(null);
+  const [inboxes, setInboxes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -97,13 +98,15 @@ export default function AtencionPage() {
     setCurrentPage(1);
     setHasMore(false);
     try {
-      const [{ payload: first, hasMore: more, meta }, sm] = await Promise.all([
+      const [{ payload: first, hasMore: more, meta }, sm, inboxList] = await Promise.all([
         chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1),
         chatwoot.getSummary(cwUrl, cwToken, Math.floor(new Date().setHours(0,0,0,0)/1000), Math.floor(Date.now()/1000)).catch(() => null),
+        chatwoot.getInboxes(cwUrl, cwToken).catch(() => []),
       ]);
       setConversations(first);
       setHasMore(more);
       setSummary(sm);
+      setInboxes(inboxList);
       if (meta) setConvMeta({ all_count: meta.all_count ?? 0, unassigned_count: meta.unassigned_count ?? 0, assigned_count: meta.assigned_count ?? 0 });
     } catch (e: any) {
       setError(e.message);
@@ -398,6 +401,35 @@ export default function AtencionPage() {
     if (ch.includes('email')) return 'email';
     return 'other';
   };
+
+  const isChannelActive = (channelKey: string) => {
+    if (channelKey === 'all') return true;
+    const hasInbox = inboxes.some(inbox => {
+      const type = (inbox.channel_type || '').toLowerCase();
+      if (channelKey === 'whatsapp') return type.includes('whatsapp');
+      if (channelKey === 'instagram') return type.includes('instagram');
+      if (channelKey === 'facebook') return type.includes('facebook') || type.includes('page');
+      if (channelKey === 'email') return type.includes('email');
+      if (channelKey === 'other') {
+        return !type.includes('whatsapp') && 
+               !type.includes('instagram') && 
+               !type.includes('facebook') && 
+               !type.includes('page') && 
+               !type.includes('email');
+      }
+      return false;
+    });
+    if (hasInbox) return true;
+    return conversations.some(c => getChannel(c) === channelKey);
+  };
+
+  const getChannelCount = (channelKey: string) => {
+    if (channelKey === 'all') {
+      return convMeta?.all_count !== undefined ? convMeta.all_count : conversations.length;
+    }
+    return conversations.filter(c => getChannel(c) === channelKey).length;
+  };
+
   const CHANNEL_ICON: Record<string, string> = { whatsapp: '📱', instagram: '📸', facebook: '📘', email: '📧', other: '💬' };
   const CHANNEL_COLOR: Record<string, string> = { whatsapp: 'bg-emerald-500', instagram: 'bg-pink-500', facebook: 'bg-blue-600', email: 'bg-violet-500', other: 'bg-zinc-500' };
 
@@ -420,10 +452,15 @@ export default function AtencionPage() {
   };
 
   const getChannelLabel = (c: any) => {
-    if (c.inbox?.name) return c.inbox.name;
     const ch = getChannel(c);
-    if (ch === 'other') return 'Canal';
-    return ch;
+    if (ch === 'whatsapp') return 'WhatsApp';
+    if (ch === 'instagram') return 'Instagram';
+    if (ch === 'facebook') return 'Facebook';
+    if (ch === 'email') return 'Email';
+    if (c.inbox?.name) {
+      return c.inbox.name.replace(/\+?\d[\d\s-]{5,}/g, '').trim() || 'Canal';
+    }
+    return 'Canal';
   };
 
   const renderAvatar = (conv: any) => {
@@ -633,14 +670,15 @@ export default function AtencionPage() {
                 { key: 'facebook', label: 'Facebook', icon: Facebook },
                 { key: 'email', label: 'Email', icon: Mail },
                 { key: 'other', label: 'Otros', icon: Globe },
-              ].map(ch => {
+              ].filter(ch => isChannelActive(ch.key)).map(ch => {
                 const Icon = ch.icon;
                 const isActive = channelFilter === ch.key;
+                const count = getChannelCount(ch.key);
                 return (
                   <button
                     key={ch.key}
                     onClick={() => setChannelFilter(ch.key as any)}
-                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10.5px] font-black transition-all duration-200 whitespace-nowrap ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10.5px] font-black transition-all duration-200 whitespace-nowrap ${
                       isActive
                         ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 shadow-sm'
                         : 'bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200/80 dark:border-zinc-800/80'
@@ -648,6 +686,15 @@ export default function AtencionPage() {
                   >
                     <Icon className="w-3.5 h-3.5" />
                     <span>{ch.label}</span>
+                    {count > 0 && (
+                      <span className={`text-[9px] px-1.5 py-0.25 rounded-full font-black ${
+                        isActive
+                          ? 'bg-white/20 text-white dark:bg-black/10 dark:text-zinc-900'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                      }`}>
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
