@@ -1328,15 +1328,6 @@ export default function MensajeriaPage() {
             ))}
           </div>
 
-          {/* Status filter */}
-          <div className="flex gap-1.5 p-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/20 dark:bg-zinc-950/20 flex-shrink-0">
-            {(['open', 'resolved', 'pending'] as const).map(s => (
-              <button key={s} onClick={() => setStatusFilter(s)}
-                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${statusFilter === s ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-550 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
-                {s === 'open' ? 'Abiertos' : s === 'resolved' ? 'Resueltos' : 'Pendientes'}
-              </button>
-            ))}
-          </div>
 
           {/* Bulk action bar */}
           {selectedIds.size > 0 && (
