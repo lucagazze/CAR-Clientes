@@ -254,10 +254,11 @@ export default function AtencionPage() {
     setSendError(null);
     try {
       const sent = await chatwoot.sendMessage(cwUrl, cwToken, selected.id, reply.trim());
-      setMessages(prev => [...prev, { ...sent, created_at: Date.now() / 1000 }]);
+      const newMsg = { id: sent?.id || `local_${Date.now()}`, content: reply.trim(), message_type: 1, created_at: Date.now() / 1000 };
+      setMessages(prev => prev.find((m: any) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
       setReply('');
     } catch (e: any) {
-      setSendError('No se pudo enviar. Verificá el token de Chatwoot.');
+      setSendError(e.message || 'No se pudo enviar el mensaje.');
     } finally {
       setSending(false);
     }

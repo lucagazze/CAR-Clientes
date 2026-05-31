@@ -53,8 +53,10 @@ export const chatwoot = {
   async sendMessage(url: string, token: string, conversationId: number, content: string) {
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`, {
-      content, message_type: 'outgoing', private: false,
-    });
+      content,
+      message_type: 'outgoing',
+      content_type: 'text',
+    }, 'POST');
   },
 
   // PATCH status: open | resolved | pending | snoozed
