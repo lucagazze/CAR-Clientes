@@ -543,7 +543,7 @@ export default function AtencionPage() {
         </div>
 
         {/* RIGHT: chat panel */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-900/30">
+        <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-zinc-950">
           {!selected ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
               <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-3xl">💬</div>
@@ -569,7 +569,7 @@ export default function AtencionPage() {
               </div>
 
               {/* Messages */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-white dark:bg-zinc-950">
                 {loadingMsgs ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
