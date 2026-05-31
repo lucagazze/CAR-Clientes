@@ -22,9 +22,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const geminiKey = process.env.GOOGLE_AI_API_KEY;
   const openAiKey = process.env.OPENAI_API_KEY;
-  if (!openAiKey) {
-    return res.status(500).json({ error: 'OpenAI API key not configured' });
+  if (!geminiKey && !openAiKey) {
+    return res.status(500).json({ error: 'No AI API key configured' });
   }
 
   const { clientId, itemText, username, postCaption, otherComments, conversationHistory, isDM } = req.body as {
@@ -216,31 +217,62 @@ Rules:
 ${isDM ? '6. Take into account the full conversation history above to understand the context, what has already been discussed, and what the customer needs next.' : ''}`;
 
 
-    // 4. Call OpenAI API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openAiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: `${isDM ? 'Mensaje del cliente en el DM' : 'Comentario del cliente'}: "${itemText}"\nGenerá el borrador de respuesta para @${username} en el mismo idioma del mensaje:` }
-        ],
-        temperature: 0.3,
-        max_tokens: isDM ? 300 : 200,
-      }),
-    });
+    // 4. Call AI API — Gemini 2.0 Flash preferred, fallback to OpenAI gpt-4.1-mini
+    const userPrompt = `${isDM ? 'Mensaje del cliente en el DM' : 'Comentario del cliente'}: "${itemText}"\nGenerá el borrador de respuesta para @${username} en el mismo idioma del mensaje:`;
+    let draftText = '';
 
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(502).json({ error: 'OpenAI error', detail: errText });
+    if (geminiKey) {
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemMessage }] },
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: isDM ? 300 : 200,
+            },
+          }),
+        }
+      );
+      if (geminiRes.ok) {
+        const geminiData = await geminiRes.json();
+        draftText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      } else {
+        const errText = await geminiRes.text();
+        console.error('Gemini error, falling back to OpenAI:', errText);
+      }
     }
 
-    const responseData = await response.json();
-    const draftText = responseData.choices?.[0]?.message?.content?.trim() || '';
+    // Fallback to OpenAI if Gemini not available or failed
+    if (!draftText && openAiKey) {
+      const openAiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4.1-mini',
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: isDM ? 300 : 200,
+        }),
+      });
+      if (openAiRes.ok) {
+        const openAiData = await openAiRes.json();
+        draftText = openAiData.choices?.[0]?.message?.content?.trim() || '';
+      } else {
+        const errText = await openAiRes.text();
+        return res.status(502).json({ error: 'AI error', detail: errText });
+      }
+    }
+
+    if (!draftText) {
+      return res.status(502).json({ error: 'Empty response from AI' });
+    }
 
     return res.status(200).json({ draft: draftText });
 
