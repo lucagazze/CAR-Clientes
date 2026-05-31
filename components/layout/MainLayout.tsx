@@ -126,7 +126,7 @@ export const MainLayout = () => {
             </Routes>
           </Suspense>
         </div>
-        <AIChatFloat />
+        {location.pathname !== '/atencion' && <AIChatFloat />}
       </main>
     </div>
   );
