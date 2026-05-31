@@ -584,215 +584,211 @@ export const AIChatFloat = () => {
   ];
 
   return (
-    <div
-      ref={containerRef}
-      className={`fixed print:hidden transition-all duration-300 ${
-        isOpen
-          ? 'inset-0 w-full h-[100dvh] bg-white dark:bg-zinc-950 flex flex-col justify-start p-0 left-0 top-0 translate-x-0 z-[350] md:inset-auto md:bg-transparent md:backdrop-blur-none md:p-0 md:fixed md:z-[250] md:bottom-6 md:w-[820px] md:h-auto md:left-[calc(50%+120px)] md:-translate-x-1/2'
-          : 'bottom-2 w-[96%] left-1/2 -translate-x-1/2 md:bottom-6 md:w-[820px] md:left-[calc(50%+120px)] z-[250]'
-      }`}
-    >
-      {/* ── Chat panel ── */}
-      <div className={`w-full bg-white dark:bg-zinc-950 md:dark:bg-zinc-900 border-none md:border md:border-zinc-200 md:dark:border-zinc-800 shadow-none md:shadow-2xl rounded-none md:rounded-3xl overflow-hidden spring-transition flex flex-col ${
-        isOpen 
-          ? 'opacity-100 scale-100 flex-1 relative bottom-auto mb-0 w-full h-auto md:absolute md:bottom-full md:mb-3 md:w-full md:h-[640px] md:flex-none' 
-          : 'opacity-0 scale-95 h-0 pointer-events-none absolute bottom-full w-full'
-      } ${isThinking ? 'siri-glow border-violet-500/50' : ''}`}>
-
-        {/* Header */}
-        <div className="flex justify-between items-center px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shadow-md overflow-hidden">
-              <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="Algoritmia" className="w-7 h-7 object-contain" />
-            </div>
-            <div>
-              <p className="text-[14.5px] font-black text-zinc-800 dark:text-zinc-200 leading-none">Algor IA</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {messages.length > 0 && (
-              <button onClick={clearChat} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-xl text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" title="Limpiar chat">
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            )}
-            <button 
-              onClick={() => setIsOpen(false)} 
-              className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-850 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer flex items-center justify-center flex-shrink-0"
-              title="Cerrar chat"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div ref={chatRef} className="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-50/50 dark:bg-zinc-950">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full gap-3 px-4 pb-2">
-              <div className="flex flex-col items-center gap-2 mb-1">
-                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-md flex items-center justify-center">
-                  <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="Algoritmia" className="w-8 h-8 object-contain" />
-                </div>
-                <p className="text-[14px] font-black text-zinc-700 dark:text-zinc-200">Hola 👋 Soy Algor</p>
-                <p className="text-[11.5px] text-zinc-400 dark:text-zinc-500 text-center max-w-[280px] leading-relaxed">
-                  Preguntame sobre tus campañas, creativos, emails o ventas.
-                </p>
+    <div ref={containerRef} className="fixed print:hidden z-[300]">
+      {/* ── Apple-style Floating Chat Window ── */}
+      {isOpen && (
+        <div className={`fixed z-[300] bottom-24 right-6 w-[385px] h-[580px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-120px)] bg-white dark:bg-zinc-950 rounded-[28px] border border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300 md:bottom-24 md:right-6 inset-x-4 bottom-24 top-auto h-[520px] md:h-[580px] md:inset-auto ${
+          isThinking ? 'siri-glow border-violet-500/50' : ''
+        }`}>
+          {/* Header */}
+          <div className="flex justify-between items-center px-4 py-3 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/60 flex-shrink-0 select-none">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shadow overflow-hidden">
+                <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="Algoritmia" className="w-6 h-6 object-contain" />
               </div>
-              <div className="grid grid-cols-2 gap-2.5 w-full max-w-[420px]">
-                {initialPrompts.map((p, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSend(p.text)}
-                    className="flex items-center gap-2.5 px-4 py-3.5 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-violet-400 dark:hover:border-violet-500/50 hover:bg-violet-50 dark:hover:bg-violet-500/5 active:scale-[0.97] transition-all text-left"
-                  >
-                    <span className="text-[18px] flex-shrink-0">{p.icon}</span>
-                    <span className="text-[12.5px] font-semibold text-zinc-600 dark:text-zinc-400 leading-snug">{p.text}</span>
-                  </button>
-                ))}
+              <div>
+                <p className="text-[13px] font-black text-zinc-800 dark:text-zinc-200 leading-none">Algor IA</p>
+                <p className="text-[9px] text-emerald-500 font-bold mt-1 tracking-wider leading-none">CONECTADA</p>
               </div>
             </div>
-          )}
-
-          {messages.map((msg: Message, i: number) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.role === 'assistant' && (
-                <div className="w-7 h-7 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 shadow-sm overflow-hidden">
-                  <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="" className="w-5 h-5 object-contain" />
-                </div>
+            <div className="flex items-center gap-1.5">
+              {messages.length > 0 && (
+                <button onClick={clearChat} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" title="Limpiar chat">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
               )}
-              <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13px] md:text-[13.5px] leading-[1.55] shadow-sm ${
-                msg.role === 'user'
-                  ? 'bg-black dark:bg-zinc-100 text-white dark:text-zinc-950 rounded-br-sm whitespace-pre-wrap font-semibold'
-                  : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-bl-sm'
-              }`}>
-                {msg.role === 'user' ? (
-                  msg.content
-                ) : (
-                  <MarkdownRenderer content={msg.content} onSend={(text) => handleSend(text)} onNavigate={handleNavigate} />
-                )}
-              </div>
+              <button 
+                onClick={() => setIsOpen(false)} 
+                className="w-7 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-855 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-550 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-all flex items-center justify-center cursor-pointer flex-shrink-0"
+                title="Cerrar chat"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          ))}
-
-          {isThinking && (
-            <div className="flex justify-start">
-              <div className="w-7 h-7 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 overflow-hidden shadow-sm">
-                <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="" className="w-5 h-5 object-contain" />
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm min-w-[180px] max-w-[85%]">
-                {thinkingSteps.length === 0 ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-[0.15em] mb-2.5">Analizando...</p>
-                    {thinkingSteps.map((step: ThinkingStep, i: number) => (
-                      <div
-                        key={step.tool + i}
-                        className="flex items-center gap-2.5 animate-in fade-in slide-in-from-left-2 duration-300"
-                        style={{ animationDelay: `${i * 60}ms` }}
-                      >
-                        {step.done ? (
-                          <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-emerald-500/30">
-                            <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          </div>
-                        ) : (
-                          <div className="w-4 h-4 rounded-full border-[2px] border-violet-500 border-t-transparent animate-spin flex-shrink-0" />
-                        )}
-                        <span className={`text-[12px] font-semibold leading-tight transition-colors duration-300 ${step.done ? 'text-zinc-400 dark:text-zinc-500 line-through decoration-zinc-300 dark:decoration-zinc-600' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                          {step.icon} {step.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {isRecording && (
-            <div className="flex justify-end">
-              <div className="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 px-3.5 py-2.5 rounded-2xl rounded-br-sm flex items-center gap-2 animate-pulse text-[12.5px] text-red-600 dark:text-red-400 font-black">
-                <div className="w-2 h-2 rounded-full bg-red-500" /> Escuchando...
-              </div>
-            </div>
-          )}
-          {isTranscribing && (
-            <div className="flex justify-end">
-              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 px-3.5 py-2.5 rounded-2xl rounded-br-sm flex items-center gap-2 text-[12.5px] text-blue-600 dark:text-blue-400 font-black">
-                <Loader2 className="w-4 h-4 animate-spin" /> Transcribiendo...
-              </div>
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {/* ── Pill input bar ── */}
-      <div
-        onClick={() => { setIsOpen(true); setTimeout(() => inputRef.current?.focus(), 100); }}
-        className={`relative group spring-transition cursor-text flex items-center ${
-          isOpen
-            ? 'w-full rounded-none border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 md:rounded-full md:border md:border-zinc-300 md:dark:border-zinc-700 md:shadow-xl md:px-3 md:py-2 ring-2 ring-violet-500/30'
-            : 'w-full rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800/90 shadow-xl px-2 py-2 hover:scale-105 hover:bg-white dark:hover:bg-zinc-750 md:px-3'
-        } ${isThinking ? 'siri-glow border-violet-500/50' : ''}`}
-      >
-        <div
-          onClick={handleMicClick}
-          className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-white shadow-lg transition-all duration-500 cursor-pointer flex-shrink-0 ${
-            isThinking || isTranscribing
-              ? 'bg-indigo-500 animate-pulse'
-              : isRecording
-              ? 'bg-red-500 scale-110 shadow-red-500/50'
-              : input.trim()
-              ? 'bg-violet-600 hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600'
-              : 'bg-black hover:bg-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900'
-          }`}
-        >
-          {isThinking || isTranscribing
-            ? <Loader2 className="w-5 h-5 animate-spin" />
-            : isRecording
-            ? <div className="w-3 h-3 rounded-sm bg-white" />
-            : input.trim()
-            ? <CornerDownLeft className="w-5 h-5" />
-            : <Mic className="w-5 h-5" />
-          }
-        </div>
-
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && !isThinking && !isTranscribing && handleSend()}
-          placeholder={
-            isRecording ? 'Escuchando...'
-            : isTranscribing ? 'Transcribiendo...'
-            : activeBusinessName ? `¿Qué querés saber de ${activeBusinessName}?`
-            : '¿En qué te ayudo hoy?'
-          }
-          disabled={isRecording || isTranscribing || isThinking}
-          className="flex-1 bg-transparent border-none outline-none text-[13px] md:text-[14px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 font-semibold px-2.5 md:px-4 h-full min-w-0"
-          autoComplete="off"
-        />
-
-        <div className="flex items-center gap-2 pr-2 flex-shrink-0">
-          <div className="hidden md:flex items-center gap-1.5 text-[10.5px] text-emerald-600 dark:text-emerald-500 font-black mr-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>IA CONECTADA</span>
           </div>
-          <button
-            onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); setIsOpen((o: boolean) => !o); }}
-            className="hidden md:flex text-zinc-350 hover:text-zinc-500 dark:text-zinc-500 dark:hover:text-zinc-400 transition-colors"
-          >
-            <ChevronUp className={`w-5.5 h-5.5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
-          </button>
+
+          {/* Messages */}
+          <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-950">
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full gap-4 px-3 py-6 select-none">
+                <div className="flex flex-col items-center gap-2.5 mb-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-md flex items-center justify-center">
+                    <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="Algoritmia" className="w-8 h-8 object-contain" />
+                  </div>
+                  <p className="text-[13.5px] font-black text-zinc-850 dark:text-zinc-100">Hola 👋 Soy Algor</p>
+                  <p className="text-[11px] text-zinc-450 dark:text-zinc-500 text-center max-w-[240px] leading-relaxed">
+                    Preguntame sobre tus campañas, creativos, emails o ventas.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 w-full max-w-[280px]">
+                  {initialPrompts.slice(0, 4).map((p, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSend(p.text)}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-violet-400 dark:hover:border-violet-500/50 hover:bg-violet-50 dark:hover:bg-violet-500/5 active:scale-[0.97] transition-all text-left"
+                    >
+                      <span className="text-[15px] flex-shrink-0">{p.icon}</span>
+                      <span className="text-[11.5px] font-semibold text-zinc-700 dark:text-zinc-400 leading-snug truncate">{p.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg: Message, i: number) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'assistant' && (
+                  <div className="w-6 h-6 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2 mt-0.5 shadow-sm overflow-hidden select-none">
+                    <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="" className="w-4 h-4 object-contain" />
+                  </div>
+                )}
+                <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[12.5px] leading-[1.5] shadow-sm ${
+                  msg.role === 'user'
+                    ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 rounded-br-sm whitespace-pre-wrap font-semibold'
+                    : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-bl-sm'
+                }`}>
+                  {msg.role === 'user' ? (
+                    msg.content
+                  ) : (
+                    <MarkdownRenderer content={msg.content} onSend={(text) => handleSend(text)} onNavigate={handleNavigate} />
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {isThinking && (
+              <div className="flex justify-start">
+                <div className="w-6 h-6 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 flex items-center justify-center flex-shrink-0 mr-2 mt-0.5 overflow-hidden shadow-sm">
+                  <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="" className="w-4 h-4 object-contain" />
+                </div>
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 px-3.5 py-2.5 rounded-2xl rounded-bl-sm shadow-sm min-w-[150px] max-w-[85%]">
+                  {thinkingSteps.length === 0 ? (
+                    <div className="flex items-center gap-1.5 py-1">
+                      <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-violet-400 dark:bg-violet-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-[8.5px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-[0.15em] mb-1.5">Analizando...</p>
+                      {thinkingSteps.map((step: ThinkingStep, i: number) => (
+                        <div
+                          key={step.tool + i}
+                          className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300"
+                          style={{ animationDelay: `${i * 60}ms` }}
+                        >
+                          {step.done ? (
+                            <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-emerald-500/30">
+                              <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={4} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          ) : (
+                            <div className="w-3.5 h-3.5 rounded-full border-[2px] border-violet-500 border-t-transparent animate-spin flex-shrink-0" />
+                          )}
+                          <span className={`text-[11px] font-semibold leading-tight transition-colors duration-300 ${step.done ? 'text-zinc-400 dark:text-zinc-500 line-through decoration-zinc-300 dark:decoration-zinc-700' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                            {step.icon} {step.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isRecording && (
+              <div className="flex justify-end">
+                <div className="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 px-3 py-2 rounded-2xl rounded-br-sm flex items-center gap-2 animate-pulse text-[11.5px] text-red-700 dark:text-red-400 font-bold select-none">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> Escuchando...
+                </div>
+              </div>
+            )}
+            {isTranscribing && (
+              <div className="flex justify-end">
+                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 px-3 py-2 rounded-2xl rounded-br-sm flex items-center gap-2 text-[11.5px] text-blue-700 dark:text-blue-400 font-bold select-none">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Transcribiendo...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Integrated Input Bar */}
+          <div className="p-3 border-t border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950 flex-shrink-0 flex items-center gap-2">
+            <div
+              onClick={handleMicClick}
+              className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md transition-all duration-300 cursor-pointer flex-shrink-0 ${
+                isThinking || isTranscribing
+                  ? 'bg-indigo-500 animate-pulse'
+                  : isRecording
+                  ? 'bg-red-500 scale-110 shadow-red-500/50'
+                  : input.trim()
+                  ? 'bg-violet-600 hover:bg-violet-700'
+                  : 'bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850'
+              }`}
+            >
+              {isThinking || isTranscribing
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : isRecording
+                ? <div className="w-2.5 h-2.5 rounded-sm bg-white" />
+                : input.trim()
+                ? <CornerDownLeft className="w-4 h-4" />
+                : <Mic className="w-4 h-4" />
+              }
+            </div>
+
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && !isThinking && !isTranscribing && handleSend()}
+              placeholder={
+                isRecording ? 'Escuchando...'
+                : isTranscribing ? 'Transcribiendo...'
+                : 'Escribí tu mensaje...'
+              }
+              disabled={isRecording || isTranscribing || isThinking}
+              className="flex-1 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 rounded-xl px-3.5 py-1.5 text-[12.5px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-violet-400/50 focus:border-violet-400/50 transition-all font-semibold min-w-0"
+              autoComplete="off"
+            />
+          </div>
         </div>
+      )}
+
+      {/* ── Circular Floating Bubble Trigger Button (WhatsApp style) ── */}
+      <div
+        onClick={() => {
+          setIsOpen(prev => !prev);
+          if (!isOpen) {
+            setTimeout(() => inputRef.current?.focus(), 150);
+          }
+        }}
+        className={`fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center cursor-pointer transition-all duration-300 z-[310] select-none hover:scale-110 active:scale-95 ${
+          isOpen
+            ? 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rotate-90 shadow-none'
+            : 'bg-gradient-to-tr from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-violet-500/20 shadow-lg'
+        }`}
+      >
+        {isOpen ? (
+          <X className="w-5.5 h-5.5" />
+        ) : (
+          <svg className="w-6.5 h-6.5 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        )}
       </div>
     </div>
   );

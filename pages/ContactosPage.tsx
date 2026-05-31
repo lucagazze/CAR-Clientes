@@ -367,7 +367,7 @@ export default function ContactosPage() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className={`text-[12.5px] truncate font-bold ${isSelected ? 'text-white' : 'text-zinc-800 dark:text-zinc-250'}`}>
+                      <p className={`text-[12.5px] truncate font-bold ${isSelected ? 'text-white' : 'text-zinc-800 dark:text-zinc-100'}`}>
                         {c.name || `Contacto #${c.id}`}
                       </p>
                       <p className={`text-[10px] font-mono mt-0.5 truncate ${isSelected ? 'text-blue-150' : 'text-zinc-450 dark:text-zinc-500'}`}>
@@ -462,7 +462,7 @@ export default function ContactosPage() {
                 
                 {/* Core Attributes */}
                 <div className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800/60 pb-2">Información Básica</h3>
+                  <h3 className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800/60 pb-2">Información Básica</h3>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
@@ -511,7 +511,7 @@ export default function ContactosPage() {
 
                 {/* Custom Attributes */}
                 <div className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800/60 pb-2">Atributos Personalizados</h3>
+                  <h3 className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800/60 pb-2">Atributos Personalizados</h3>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">

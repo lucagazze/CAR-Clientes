@@ -577,13 +577,24 @@ export default function AtencionPage() {
     );
   };
 
+  const getComputedActivityTimestamp = (c: any) => {
+    const lastRealMsg = c?.messages?.find((m: any) => m?.message_type !== 2) || c?.last_non_activity_message;
+    const ts = c?.last_activity_at || lastRealMsg?.created_at || c?.messages?.[0]?.created_at || c?.created_at;
+    if (!ts) return 0;
+    if (typeof ts === 'number') return ts;
+    const d = new Date(ts).getTime();
+    return isNaN(d) ? 0 : d / 1000;
+  };
+
   const sortedConversations = [...conversations].sort((a, b) => {
-    if (sortBy === 'oldest') return a.last_activity_at - b.last_activity_at;
+    const tsA = getComputedActivityTimestamp(a);
+    const tsB = getComputedActivityTimestamp(b);
+    if (sortBy === 'oldest') return tsA - tsB;
     if (sortBy === 'priority') {
       const p: any = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
       return (p[a.priority] ?? 4) - (p[b.priority] ?? 4);
     }
-    return b.last_activity_at - a.last_activity_at;
+    return tsB - tsA;
   });
 
   const channelFilteredConversations = sortedConversations.filter(c => {
