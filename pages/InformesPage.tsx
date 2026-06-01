@@ -406,24 +406,10 @@ export default function InformesPage() {
     const days = buildDailyRange(range.since, range.until);
     const endFollowers = metrics.currentFollowers || 0;
 
-    // Follower series from snapshots
-    const followerSnaps = snaps.length >= 2 ? snaps : (() => {
-      const endVal = endFollowers || (isIg ? 1200 : 850);
-      return days.slice(0, 7).map((d, i, arr) => ({ 
-        snapshot_date: d, 
-        ig_followers: Math.round(endVal - (arr.length - 1 - i) * Math.max(1, endVal * 0.001)),
-        fb_followers: Math.round(endVal - (arr.length - 1 - i) * Math.max(1, endVal * 0.001)),
-        fb_fans: Math.round(endVal - (arr.length - 1 - i) * Math.max(1, endVal * 0.001)),
-      }));
-    })();
-
-    const followers = followerSnaps.map(s => ({ date: s.snapshot_date, val: isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0) }));
-
-    // Growth per day (diff from previous snapshot)
-    const growth = followerSnaps.map((s, i) => ({
-      date: s.snapshot_date,
-      val: i === 0 ? 0 : Math.max(0, (isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0)) - (isIg ? (followerSnaps[i-1].ig_followers || 0) : (followerSnaps[i-1].fb_followers || followerSnaps[i-1].fb_fans || 0))),
-    }));
+    // Follower series — only real snapshots, no fake fallback
+    const followers = snaps.length >= 2
+      ? snaps.map(s => ({ date: s.snapshot_date, val: isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0) }))
+      : [];
 
     // Interaction & engagement per-day aggregated from posts
     const dayInteractions: Record<string, number> = {};
@@ -441,12 +427,18 @@ export default function InformesPage() {
     const interactions = days.map(d => ({ date: d, val: dayInteractions[d] || 0 }));
     const postsPerDay  = days.map(d => ({ date: d, val: dayPosts[d]        || 0 }));
 
-    // Engagement rate per day
+    // Engagement: cumulative running average (interactions/post / followers × 100)
+    // Gives a smooth converging line instead of sparse daily spikes
     const fRef = endFollowers || 1;
-    const engagement = days.map(d => ({
-      date: d,
-      val: dayPosts[d] > 0 ? Number(((dayInteractions[d] / dayPosts[d]) / fRef * 100).toFixed(4)) : 0,
-    }));
+    let cumInt = 0; let cumPosts = 0;
+    const engagement = days.map(d => {
+      cumInt   += dayInteractions[d] || 0;
+      cumPosts += dayPosts[d]        || 0;
+      return {
+        date: d,
+        val: cumPosts > 0 ? Number(((cumInt / cumPosts) / fRef * 100).toFixed(4)) : 0,
+      };
+    });
 
     return { followers, interactions, engagement, posts: postsPerDay };
   }, [activeTab, socialSnapshots, range, igMedia, fbMedia, metrics.currentFollowers]);
@@ -462,16 +454,17 @@ export default function InformesPage() {
     const days = buildDailyRange(prevRange.since, prevRange.until);
     const endFollowers = isIg ? (snaps[snaps.length-1]?.ig_followers || 0) : (snaps[snaps.length-1]?.fb_followers || snaps[snaps.length-1]?.fb_fans || 0);
 
-    const followerData = snaps.length >= 2 ? snaps.map(s => ({ date: s.snapshot_date, val: isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0) })) : days.map(d => ({ date: d, val: 0 }));
+    const followerData = snaps.length >= 2 ? snaps.map(s => ({ date: s.snapshot_date, val: isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0) })) : [];
     const dayInt: Record<string, number> = {}; const dayP: Record<string, number> = {};
     days.forEach(d => { dayInt[d] = 0; dayP[d] = 0; });
     prevPosts.forEach(p => { const d = (p.timestamp || p.created_time || '').split('T')[0]; if (dayInt[d] !== undefined) { dayInt[d] += isIg ? (p.like_count || 0) + (p.comments_count || 0) : (p.likes?.summary?.total_count || 0) + (p.comments?.summary?.total_count || 0); dayP[d] += 1; } });
     const fRef = endFollowers || 1;
+    let cI = 0; let cP = 0;
     return {
       followers: followerData,
       posts: days.map(d => ({ date: d, val: dayP[d] || 0 })),
       interactions: days.map(d => ({ date: d, val: dayInt[d] || 0 })),
-      engagement: days.map(d => ({ date: d, val: dayP[d] > 0 ? Number(((dayInt[d] / dayP[d]) / fRef * 100).toFixed(4)) : 0 })),
+      engagement: days.map(d => { cI += dayInt[d] || 0; cP += dayP[d] || 0; return { date: d, val: cP > 0 ? Number(((cI / cP) / fRef * 100).toFixed(4)) : 0 }; }),
     };
   }, [activeTab, socialSnapshots, prevRange, igMedia, fbMedia]);
 
@@ -773,12 +766,19 @@ export default function InformesPage() {
             if (!config) return null;
             const series = (metricSeriesData as any)[expandedMetric] || [];
             const prevSeries = (prevMetricSeriesData as any)[expandedMetric] || [];
+            const emptyMessages: Record<string, string> = {
+              followers: 'Sin datos históricos de seguidores — la evolución se acumula diariamente',
+              posts: 'Sin publicaciones en este período',
+              interactions: 'Sin interacciones registradas en este período',
+              engagement: 'Sin publicaciones para calcular el engagement',
+            };
             return (
               <MetricDetailChart
                 label={config.label}
                 color={config.color}
                 data={series}
                 prevData={prevSeries}
+                emptyMessage={emptyMessages[expandedMetric]}
               />
             );
           })()}

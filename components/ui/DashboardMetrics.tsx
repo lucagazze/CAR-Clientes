@@ -18,20 +18,13 @@ export const DashboardMetric = ({
   onClick,
   icon: Icon,
 }: any) => {
-  // Convert hex color to bg- classes by mapping. Since Tailwind classes need to be static, 
-  // we'll apply inline styles for the dynamic bg color with opacity if active.
-  const isBlue = color === BLUE || color === '#3b82f6';
-  const isGreen = color === GREEN || color === '#10b981';
-  const isPink = color === '#ec4899';
-  
-  let activeBgClass = "bg-blue-50/60 dark:bg-blue-500/5";
-  let pulseClass = "bg-blue-500";
-  if (isGreen) { activeBgClass = "bg-emerald-50/60 dark:bg-emerald-500/5"; pulseClass = "bg-emerald-500"; }
-  if (isPink) { activeBgClass = "bg-pink-50/60 dark:bg-pink-500/5"; pulseClass = "bg-pink-500"; }
+  // Use inline style for active bg — works for any color without Tailwind static class constraints
+  const activeBgStyle = active ? { backgroundColor: `${color}12` } : {};
 
   return (
     <button
       onClick={onClick}
+      style={activeBgStyle}
       className={`flex flex-col flex-1 min-w-0 px-4 py-4 sm:px-6 sm:py-5
         border-b border-r border-zinc-100 dark:border-zinc-800
         [&:nth-child(odd)]:border-r [&:nth-child(even)]:border-r-0
@@ -39,7 +32,7 @@ export const DashboardMetric = ({
         sm:[&:nth-child(3n)]:border-r-0
         xl:border-b-0 xl:border-r xl:last:border-r-0
         transition-all text-left group relative
-        ${active ? activeBgClass : "hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 hover:shadow-[inset_0_0_20px_rgba(0,0,0,0.02)] dark:hover:shadow-none"}`}
+        ${!active ? "hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50" : ""}`}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -90,8 +83,26 @@ export const DashboardMetric = ({
   );
 };
 
-export const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
+export const MetricDetailChart = ({ label, data = [], prevData = [], color, emptyMessage }: any) => {
   const [hoveredLine, setHoveredLine] = useState<"curr" | "prev" | null>(null);
+
+  const hasData = (data || []).some((d: any) => d.val > 0);
+
+  if (!hasData) {
+    return (
+      <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-8 shadow-sm mt-4 flex flex-col items-center justify-center gap-3 h-[160px]">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+        </div>
+        <p className="text-[13px] font-bold text-zinc-400 text-center">
+          {emptyMessage || 'Sin datos suficientes para mostrar la evolución'}
+        </p>
+        <p className="text-[11px] text-zinc-300 dark:text-zinc-600 text-center max-w-xs">
+          Los datos se acumulan con el tiempo. Volvé más tarde para ver la evolución.
+        </p>
+      </div>
+    );
+  }
 
   const merged = (data || []).map((d: any, i: number) => ({
     ...d,
@@ -113,7 +124,7 @@ export const MetricDetailChart = ({ label, data = [], prevData = [], color }: an
         prevNonZero.length
       : 0;
 
-  const maxVal = Math.max(...data.map((d: any) => d.val), 0);
+  const maxVal = data.length > 0 ? Math.max(...data.map((d: any) => d.val), 0) : 0;
 
   const trend = prevAvg > 0 ? ((avg - prevAvg) / prevAvg) * 100 : 0;
   const chartColor = color;
