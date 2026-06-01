@@ -486,11 +486,14 @@ export const metaAds = {
       });
     }),
 
-  getInstagramMedia: (igId: string, limit = 12) =>
-    apiGetPageActive(`${igId}/media`, {
+  getInstagramMedia: (igId: string, limit = 8, after?: string) => {
+    const params: Record<string, string> = {
       fields: 'id,caption,media_type,timestamp,like_count,comments_count,permalink,thumbnail_url,media_url,comments{id,text,timestamp,username,like_count,replies{id,text,timestamp,username}}',
       limit: String(limit),
-    }),
+    };
+    if (after) params.after = after;
+    return apiGetPageActive(`${igId}/media`, params);
+  },
 
   getInstagramMediaComments: (mediaId: string) =>
     apiGetPageActive(`${mediaId}/comments`, {
@@ -522,11 +525,14 @@ export const metaAds = {
       fields: 'id,name,fan_count,followers_count,picture{url},about',
     }),
 
-  getFacebookPageFeed: (pageId: string, limit = 24) =>
-    apiGetPage(pageId, `${pageId}/feed`, {
+  getFacebookPageFeed: (pageId: string, limit = 8, after?: string) => {
+    const params: Record<string, string> = {
       fields: 'id,message,created_time,full_picture,permalink_url,likes.summary(true),comments.summary(true){id,message,created_time,from,like_count,replies{id,message,from,created_time}},attachments{media,type}',
       limit: String(limit),
-    }),
+    };
+    if (after) params.after = after;
+    return apiGetPage(pageId, `${pageId}/feed`, params);
+  },
 
   getFacebookPostComments: (postId: string) =>
     apiGetPageActive(`${postId}/comments`, {

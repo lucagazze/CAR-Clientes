@@ -90,15 +90,13 @@ export default function RedesSocialesPage() {
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(false);
 
-  // Infinite scroll: how many posts to show in each feed
-  const [visibleIgCount, setVisibleIgCount] = useState(8);
-  const [visibleFbCount, setVisibleFbCount] = useState(8);
+  // Cursor-based pagination
+  const [igNextCursor, setIgNextCursor] = useState<string | null>(null);
+  const [fbNextCursor, setFbNextCursor] = useState<string | null>(null);
+  const [loadingMoreIg, setLoadingMoreIg] = useState(false);
+  const [loadingMoreFb, setLoadingMoreFb] = useState(false);
   const igSentinelRef = useRef<HTMLDivElement>(null);
   const fbSentinelRef = useRef<HTMLDivElement>(null);
-
-  // Reset visible count when filters change
-  useEffect(() => { setVisibleIgCount(12); }, [mediaFilter]);
-  useEffect(() => { setVisibleFbCount(12); }, [fbMediaFilter]);
 
   // Comments modal/side-sheet state
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -592,6 +590,8 @@ export default function RedesSocialesPage() {
     setLoading(true);
     setError(null);
     setFbError(null);
+    setIgNextCursor(null);
+    setFbNextCursor(null);
 
     const loadData = async () => {
       try {
@@ -608,7 +608,7 @@ export default function RedesSocialesPage() {
             console.error('Error fetching Instagram Profile:', err);
             return null;
           });
-          igMediaPromise = metaAds.getInstagramMedia(igId, 24).catch(err => {
+          igMediaPromise = metaAds.getInstagramMedia(igId, 8).catch(err => {
             console.error('Error fetching Instagram Media:', err);
             return [];
           });
@@ -620,7 +620,7 @@ export default function RedesSocialesPage() {
             console.error('Error fetching Facebook Page Info:', err);
             return null;
           });
-          fbMediaPromise = metaAds.getFacebookPageFeed(fbPageId, 24).catch(err => {
+          fbMediaPromise = metaAds.getFacebookPageFeed(fbPageId, 8).catch(err => {
             console.error('Error fetching Facebook Page Feed:', err);
             setFbError(err.message || String(err));
             return [];
@@ -641,6 +641,7 @@ export default function RedesSocialesPage() {
         setIgProfile(igProfileRes);
         const resolvedIgMedia = (igMediaRes as any)?.data || igMediaRes || [];
         setIgMedia(resolvedIgMedia);
+        setIgNextCursor((igMediaRes as any)?.paging?.cursors?.after || null);
 
         setFbProfile(fbProfileRes);
         const resolvedFbMedia = ((fbMediaRes as any)?.data || fbMediaRes || []).map((post: any) => ({
@@ -648,6 +649,7 @@ export default function RedesSocialesPage() {
           source: post.source || post.attachments?.data?.[0]?.media?.source || null
         }));
         setFbMedia(resolvedFbMedia);
+        setFbNextCursor((fbMediaRes as any)?.paging?.cursors?.after || null);
 
       } catch (err: any) {
         console.error('Failed to load social media data:', err);
@@ -675,35 +677,53 @@ export default function RedesSocialesPage() {
     return fbMedia.filter(post => !post.full_picture);
   }, [fbMedia, fbMediaFilter]);
 
-  // IntersectionObserver for Instagram feed sentinel (must be after filteredMedia useMemo)
+  const loadMoreIg = async () => {
+    if (!igId || !igNextCursor || loadingMoreIg) return;
+    setLoadingMoreIg(true);
+    try {
+      const res = await metaAds.getInstagramMedia(igId, 8, igNextCursor);
+      const newPosts = res?.data || [];
+      setIgMedia(prev => [...prev, ...newPosts]);
+      setIgNextCursor(res?.paging?.cursors?.after || null);
+    } catch (e) { console.error(e); }
+    finally { setLoadingMoreIg(false); }
+  };
+
+  const loadMoreFb = async () => {
+    if (!fbPageId || !fbNextCursor || loadingMoreFb) return;
+    setLoadingMoreFb(true);
+    try {
+      const res = await metaAds.getFacebookPageFeed(fbPageId, 8, fbNextCursor);
+      const newPosts = (res?.data || []).map((p: any) => ({ ...p, source: p.source || p.attachments?.data?.[0]?.media?.source || null }));
+      setFbMedia(prev => [...prev, ...newPosts]);
+      setFbNextCursor(res?.paging?.cursors?.after || null);
+    } catch (e) { console.error(e); }
+    finally { setLoadingMoreFb(false); }
+  };
+
+  // IntersectionObserver for Instagram sentinel
   useEffect(() => {
     if (!igSentinelRef.current) return;
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleIgCount(prev => prev + 8);
-        }
-      },
+      (entries) => { if (entries[0].isIntersecting) loadMoreIg(); },
       { rootMargin: '200px' }
     );
     observer.observe(igSentinelRef.current);
     return () => observer.disconnect();
-  }, [filteredMedia]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [igNextCursor, loadingMoreIg, igId]);
 
-  // IntersectionObserver for Facebook feed sentinel (must be after filteredFbMedia useMemo)
+  // IntersectionObserver for Facebook sentinel
   useEffect(() => {
     if (!fbSentinelRef.current) return;
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleFbCount(prev => prev + 8);
-        }
-      },
+      (entries) => { if (entries[0].isIntersecting) loadMoreFb(); },
       { rootMargin: '200px' }
     );
     observer.observe(fbSentinelRef.current);
     return () => observer.disconnect();
-  }, [filteredFbMedia]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fbNextCursor, loadingMoreFb, fbPageId]);
 
 
   const igEngagementRate = useMemo(() => {
@@ -931,7 +951,7 @@ export default function RedesSocialesPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {filteredMedia.slice(0, visibleIgCount).map((m: any) => {
+                      {filteredMedia.map((m: any) => {
                         const hasLongCaption = m.caption && m.caption.length > 80;
                         const isExpanded = !!expandedCaptions[m.id];
                         const dateStr = m.timestamp 
@@ -1084,9 +1104,9 @@ export default function RedesSocialesPage() {
                   )}
 
                   {/* IG scroll sentinel */}
-                  {visibleIgCount < filteredMedia.length && (
+                  {igNextCursor && (
                     <div ref={igSentinelRef} className="flex justify-center py-4">
-                      <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-700 border-t-pink-500 rounded-full animate-spin" />
+                      {loadingMoreIg && <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-700 border-t-pink-500 rounded-full animate-spin" />}
                     </div>
                   )}
 
@@ -1206,7 +1226,7 @@ export default function RedesSocialesPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {filteredFbMedia.slice(0, visibleFbCount).map((m: any) => {
+                      {filteredFbMedia.map((m: any) => {
                         const hasLongCaption = m.message && m.message.length > 80;
                         const isExpanded = !!expandedFbCaptions[m.id];
                         const dateStr = m.created_time 
@@ -1333,9 +1353,9 @@ export default function RedesSocialesPage() {
                     </div>
                   )}
                   {/* Sentinel: triggers loading more FB posts as user scrolls */}
-                  {visibleFbCount < filteredFbMedia.length && (
+                  {fbNextCursor && (
                     <div ref={fbSentinelRef} className="flex justify-center py-4">
-                      <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
+                      {loadingMoreFb && <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin" />}
                     </div>
                   )}
 
