@@ -553,7 +553,7 @@ export default function MensajeriaPage() {
     if (!cwUrl || !cwToken) return;
     setExpanded(false);
     setSelected(conv);
-    setMobileShowChat(true);
+    if (window.innerWidth < 768) setMobileShowChat(true);
     // Clear "manually unread" when opening
     setManuallyUnread(prev => { const s = new Set(prev); s.delete(conv.id); return s; });
     setMessages([]);
@@ -1549,13 +1549,15 @@ export default function MensajeriaPage() {
           </div>
         </div>
 
-        {/* RIGHT: chat panel — on mobile when open: fixed fullscreen overlay above all navbars */}
+        {/* RIGHT: chat panel */}
+        {/* Mobile: fixed fullscreen overlay. Desktop: flex-1 split view (unchanged) */}
         <div className={`
+          overflow-hidden
           ${mobileShowChat && selected
-            ? 'fixed inset-0 z-[250] flex flex-col bg-white dark:bg-zinc-950 animate-in slide-in-from-bottom duration-250'
-            : selected ? 'hidden md:flex flex-1'
-            : 'hidden md:flex flex-1'}
-          overflow-hidden bg-zinc-50 dark:bg-zinc-900/30
+            ? 'fixed inset-0 z-[250] flex flex-col bg-white dark:bg-zinc-950 animate-in slide-in-from-bottom duration-250 md:static md:inset-auto md:z-auto md:flex-1 md:bg-zinc-50 md:dark:bg-zinc-900/30 md:animate-none'
+            : selected
+            ? 'hidden md:flex md:flex-1 bg-zinc-50 dark:bg-zinc-900/30'
+            : 'hidden md:flex md:flex-1 bg-zinc-50 dark:bg-zinc-900/30'}
         `}>
 
           {!selected ? (
@@ -1567,12 +1569,12 @@ export default function MensajeriaPage() {
             <>
               {/* Main Chat Area */}
               <div
-                className="flex-1 flex flex-col overflow-hidden h-full md:border-r border-zinc-200 dark:border-zinc-800"
+                className="flex-1 flex flex-col overflow-hidden h-full md:border-r border-zinc-200 dark:border-zinc-800 min-h-0"
                 onTouchStart={e => { if (e.touches[0].clientX < 35) setSwipeTouchStartX(e.touches[0].clientX); }}
                 onTouchEnd={e => { if (swipeTouchStartX !== null && e.changedTouches[0].clientX - swipeTouchStartX > 70) { setSelected(null); setMobileShowChat(false); } setSwipeTouchStartX(null); }}
               >
-                {/* MOBILE header — AIChatFloat style */}
-                <div className="md:hidden flex items-center justify-between px-4 py-3.5 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/60 flex-shrink-0 select-none">
+                {/* MOBILE header — AIChatFloat style, always visible */}
+                <div className="md:hidden flex items-center justify-between px-4 py-3.5 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/60 flex-shrink-0 select-none sticky top-0 z-10">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-black flex-shrink-0 ${CHANNEL_COLOR[getChannel(selected)]}`}>
                       {(contact(selected).name || '?').slice(0,2).toUpperCase()}
@@ -1691,7 +1693,7 @@ export default function MensajeriaPage() {
                   const isClosed = selected.can_reply === false || (selected.can_reply === undefined && isMetaConv && !loadingMsgs && (over24h || noIncoming));
                   if (isClosed) return null;
                   return (
-                    <div className="md:hidden flex items-end gap-2 px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900/60 border-t border-zinc-100 dark:border-zinc-900 flex-shrink-0">
+                    <div className="md:hidden flex items-end gap-2 px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900/60 border-t border-zinc-100 dark:border-zinc-900 flex-shrink-0 sticky bottom-0 z-10">
                       <div className="flex-1 flex items-end bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-3xl px-4 py-2.5 min-h-[44px]">
                         <textarea
                           ref={mobileTextareaRef}
