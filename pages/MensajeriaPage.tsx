@@ -1601,8 +1601,9 @@ export default function MensajeriaPage() {
               const lastMsg = lastRealMsg;
               const isSelected = selected?.id === conv?.id;
               const isManualUnread = manuallyUnread.has(conv?.id);
-              const unread = isManualUnread ? Math.max(1, conv?.unread_count || 0) : (conv?.unread_count || 0);
-              const isUnread = unread > 0 || isManualUnread;
+              const hasReplied = lastRealMsg && lastRealMsg.message_type === 1;
+              const unread = hasReplied ? 0 : (isManualUnread ? Math.max(1, conv?.unread_count || 0) : (conv?.unread_count || 0));
+              const isUnread = unread > 0 || (isManualUnread && !hasReplied);
               const activityTimestamp = lastRealMsg?.created_at || conv?.last_non_activity_message?.created_at || conv?.last_activity_at || conv?.created_at;
               return (
                 <div key={conv.id}
