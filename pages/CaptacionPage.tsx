@@ -435,7 +435,7 @@ export default function CaptacionPage() {
   const gradientId = `grad-${expandedMetric}`;
 
   return (
-    <div className="w-full space-y-8 print:space-y-6 print:p-0 pt-6 px-4 md:px-6 lg:px-8 print:max-w-none">
+    <div className="w-full space-y-8 print:space-y-6 print:p-0 pt-4 md:pt-6 print:max-w-none">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
         <div>

@@ -558,7 +558,7 @@ export default function InformesPage() {
   const currentTabGlow = activeTab === 'instagram' ? 'shadow-pink-500/20' : 'shadow-blue-600/20';
 
   return (
-    <div className="space-y-6 md:space-y-8 w-full pt-4 md:pt-6 px-3 md:px-6 lg:px-8 animate-in fade-in duration-300 print:bg-white print:p-0 print:space-y-4">
+    <div className="space-y-6 md:space-y-8 w-full pt-3 md:pt-6 animate-in fade-in duration-300 print:bg-white print:p-0 print:space-y-4">
       
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5 print:border-b-2 print:pb-2">

@@ -261,4 +261,27 @@ html.is-printing .recharts-surface {
   transform: scale(0.98);
 }
 
+/* ── Mobile responsive polish (< 640px) ─────────────────────────────────────── */
+@media (max-width: 639px) {
+  /* Softer corners on small screens — 3xl feels too round on 375px */
+  .rounded-3xl  { border-radius: 1rem !important; }
+  .rounded-\[32px\] { border-radius: 1rem !important; }
+  .rounded-\[24px\] { border-radius: 0.875rem !important; }
+  .rounded-\[20px\] { border-radius: 0.75rem !important; }
+
+  /* Tighter section spacing */
+  .space-y-8 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(1.25rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(1.25rem * var(--tw-space-y-reverse)); }
+  .space-y-6 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(1rem * var(--tw-space-y-reverse)); }
+
+  /* Tighter card padding */
+  .p-6 { padding: 1rem !important; }
+  .p-5 { padding: 0.875rem !important; }
+  .px-6 { padding-left: 1rem !important; padding-right: 1rem !important; }
+  .px-5 { padding-left: 0.875rem !important; padding-right: 0.875rem !important; }
+  .py-6 { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+  .py-5 { padding-top: 0.875rem !important; padding-bottom: 0.875rem !important; }
+
+  /* Remove redundant page-level horizontal padding */
+  .page-section { padding-left: 0 !important; padding-right: 0 !important; }
+}
 
