@@ -81,9 +81,10 @@ export const chatwoot = {
     return proxy(url, token, path);
   },
 
-  async getMessages(url: string, token: string, conversationId: number) {
+  async getMessages(url: string, token: string, conversationId: number, before?: number) {
     const accountId = await chatwoot.getAccountId(url, token);
-    const data = await proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`);
+    const qs = before ? `?before=${before}` : '';
+    const data = await proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages${qs}`);
     return data?.payload || [];
   },
 

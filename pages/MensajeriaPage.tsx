@@ -259,6 +259,10 @@ export default function MensajeriaPage() {
   const [selected, setSelected] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingOlderMsgs, setLoadingOlderMsgs] = useState(false);
+  const isLoadingOlderRef = useRef(false);
+  const pendingScrollRestoreRef = useRef<number | null>(null);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -675,6 +679,9 @@ export default function MensajeriaPage() {
       chatwoot.markAsRead(cwUrl, cwToken, conv.id).catch(() => {});
     }
     setMessages([]);
+    setHasMoreMessages(false);
+    isLoadingOlderRef.current = false;
+    pendingScrollRestoreRef.current = null;
     setReply('');
     setSendError(null);
     setLoadingSuggestion(null);
@@ -683,6 +690,7 @@ export default function MensajeriaPage() {
       const msgs = await chatwoot.getMessages(cwUrl, cwToken, conv.id);
       const sorted = msgs.sort((a: any, b: any) => a.created_at - b.created_at);
       setMessages(sorted);
+      setHasMoreMessages(msgs.length >= 20);
     } catch (e: any) {
       setMessages([]);
     } finally {
@@ -690,6 +698,40 @@ export default function MensajeriaPage() {
     }
   }, [cwUrl, cwToken, isConvUnread, markRead]);
 
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!cwUrl || !cwToken || !selected || isLoadingOlderRef.current || !hasMoreMessages) return;
+    const firstMsg = messages[0];
+    if (!firstMsg?.id) return;
+
+    isLoadingOlderRef.current = true;
+    setLoadingOlderMsgs(true);
+
+    // Save scroll anchor BEFORE state update
+    const container = messagesContainerRef.current;
+    const prevScrollHeight = container?.scrollHeight ?? 0;
+
+    try {
+      const older = await chatwoot.getMessages(cwUrl, cwToken, selected.id, firstMsg.id);
+      const sorted = older.sort((a: any, b: any) => a.created_at - b.created_at);
+      if (sorted.length === 0) {
+        setHasMoreMessages(false);
+        isLoadingOlderRef.current = false;
+        return;
+      }
+      // Store the scroll restore target before React re-renders
+      pendingScrollRestoreRef.current = prevScrollHeight;
+      setMessages(prev => {
+        const existingIds = new Set(prev.map((m: any) => m.id));
+        return [...sorted.filter((m: any) => !existingIds.has(m.id)), ...prev];
+      });
+      setHasMoreMessages(older.length >= 20);
+    } catch {
+      isLoadingOlderRef.current = false;
+    } finally {
+      setLoadingOlderMsgs(false);
+    }
+  }, [cwUrl, cwToken, selected, hasMoreMessages, messages]);
 
   // Load conversation from URL search parameter convId if present
   useEffect(() => {
@@ -725,16 +767,17 @@ export default function MensajeriaPage() {
     }
   }, [location.key]);
 
-  // Poll messages of selected conversation every 5s
+  // Poll messages of selected conversation every 5s — only appends new ones
   useEffect(() => {
     if (!cwUrl || !cwToken || !selected) return;
     const pollMessages = async () => {
       try {
         const msgs = await chatwoot.getMessages(cwUrl, cwToken, selected.id);
-        const sorted = msgs.sort((a: any, b: any) => a.created_at - b.created_at);
         setMessages(prev => {
-          if (sorted.length === prev.length && sorted[sorted.length - 1]?.id === prev[prev.length - 1]?.id) return prev;
-          return sorted;
+          const existingIds = new Set(prev.map((m: any) => m.id));
+          const newOnes = msgs.filter((m: any) => !existingIds.has(m.id));
+          if (newOnes.length === 0) return prev;
+          return [...prev, ...newOnes].sort((a: any, b: any) => a.created_at - b.created_at);
         });
       } catch {}
     };
@@ -745,8 +788,26 @@ export default function MensajeriaPage() {
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container || messages.length === 0) return;
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
-    if (isAtBottom) container.scrollTop = container.scrollHeight;
+
+    // Restore scroll anchor after prepending older messages
+    if (pendingScrollRestoreRef.current !== null) {
+      const prevScrollHeight = pendingScrollRestoreRef.current;
+      pendingScrollRestoreRef.current = null;
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop =
+            messagesContainerRef.current.scrollHeight - prevScrollHeight;
+        }
+        isLoadingOlderRef.current = false;
+      });
+      return;
+    }
+
+    // Auto-scroll to bottom only if user is already near the bottom
+    if (!isLoadingOlderRef.current) {
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+      if (isAtBottom) container.scrollTop = container.scrollHeight;
+    }
   }, [messages]);
 
   // Lock body scroll when mobile chat is open (prevents iOS from scrolling page behind)
@@ -1908,7 +1969,24 @@ export default function MensajeriaPage() {
                 })()}
 
                 {/* Messages list */}
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 md:px-5 py-4 md:space-y-3 space-y-2 bg-zinc-50/50 dark:bg-zinc-950">
+                <div
+                  ref={messagesContainerRef}
+                  className="flex-1 overflow-y-auto px-4 md:px-5 py-4 md:space-y-3 space-y-2 bg-zinc-50/50 dark:bg-zinc-950"
+                  onScroll={(e) => {
+                    if (e.currentTarget.scrollTop < 80 && hasMoreMessages && !isLoadingOlderRef.current) {
+                      loadOlderMessages();
+                    }
+                  }}
+                >
+                  {/* Top sentinel: loading older messages */}
+                  {hasMoreMessages && (
+                    <div className="flex justify-center py-2">
+                      {loadingOlderMsgs
+                        ? <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
+                        : <div className="w-1 h-1" />
+                      }
+                    </div>
+                  )}
                   {loadingMsgs ? (
                     <AppleLoader variant="inline" title="Cargando mensajes..." />
                   ) : messages.length === 0 ? (
