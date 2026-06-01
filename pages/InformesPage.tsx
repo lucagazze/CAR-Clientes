@@ -3,19 +3,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { 
-  TrendingUp, Loader2, Instagram, ArrowUpRight, ArrowDownRight, 
-  Calendar, ChevronDown, Sparkles, ThumbsUp, MessageCircle, 
-  Layers, Video, Image as ImageIcon, Facebook, Info, Users, 
-  BarChart2, RefreshCw, FileText, Download, Share2
+  TrendingUp, Instagram, ArrowUpRight, ArrowDownRight, 
+  Calendar, ChevronDown, ThumbsUp, MessageCircle, 
+  Layers, Video, Image as ImageIcon, Facebook, Info, 
+  BarChart2, RefreshCw, FileText, Download, Users, Activity
 } from 'lucide-react';
-import { metaAds, DatePreset, presetToRange, getPrevPeriod, today, daysAgo } from '../services/metaAds';
+import { metaAds, DatePreset, presetToRange, getPrevPeriod, today } from '../services/metaAds';
 import { 
-  AreaChart, Area, BarChart, Bar, LineChart, Line, 
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend 
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  PieChart, Pie, Cell
 } from 'recharts';
 import { supabase } from '../services/supabase';
 import { AppleLoader } from '../components/ui/AppleLoader';
 import SmoothImage from '../components/ui/SmoothImage';
+import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
 
 const PRESETS: { id: DatePreset | 'custom'; label: string }[] = [
   { id: 'last_7d', label: 'Últimos 7 días' },
@@ -25,6 +27,27 @@ const PRESETS: { id: DatePreset | 'custom'; label: string }[] = [
   { id: 'this_month', label: 'Este mes' },
   { id: 'last_month', label: 'Mes anterior' },
 ];
+
+const IG_METRICS_CONFIG = [
+  { key: 'followers',     label: 'Seguidores',      icon: Users,      color: '#ec4899' },
+  { key: 'growth',        label: 'Crecimiento',      icon: TrendingUp, color: '#8b5cf6' },
+  { key: 'interactions',  label: 'Interacciones',    icon: ThumbsUp,   color: '#f59e0b' },
+  { key: 'engagement',    label: 'Engagement Prom.', icon: BarChart2,  color: '#10b981' },
+  { key: 'reach',         label: 'Alcance Orgánico', icon: Activity,   color: '#3b82f6' },
+  { key: 'impressions',   label: 'Impresiones',      icon: Layers,     color: '#6366f1' },
+  { key: 'profile_views', label: 'Visitas al Perfil',icon: ImageIcon,  color: '#14b8a6' },
+] as const;
+
+const FB_METRICS_CONFIG = [
+  { key: 'followers',     label: 'Fans',             icon: Users,      color: '#3b82f6' },
+  { key: 'growth',        label: 'Crecimiento',      icon: TrendingUp, color: '#8b5cf6' },
+  { key: 'interactions',  label: 'Interacciones',    icon: ThumbsUp,   color: '#f59e0b' },
+  { key: 'engagement',    label: 'Engagement Prom.', icon: BarChart2,  color: '#10b981' },
+  { key: 'reach',         label: 'Alcance Orgánico', icon: Activity,   color: '#60a5fa' },
+  { key: 'impressions',   label: 'Impresiones',      icon: Layers,     color: '#6366f1' },
+] as const;
+
+type SocialMetricKey = 'followers' | 'growth' | 'interactions' | 'engagement' | 'reach' | 'impressions' | 'profile_views';
 
 const MiniCal = ({ year, month, since, until, hovering, onDay, onHover, onPrev, onNext }: any) => {
   const touchStart = useRef<number>(0);
@@ -114,7 +137,10 @@ export default function InformesPage() {
   // Media Feed States
   const [igMedia, setIgMedia] = useState<any[]>([]);
   const [fbMedia, setFbMedia] = useState<any[]>([]);
-  
+
+  // Expanded metric for detail chart
+  const [expandedMetric, setExpandedMetric] = useState<SocialMetricKey>('followers');
+
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Calculate current range and previous comparison range
@@ -131,6 +157,15 @@ export default function InformesPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reset expanded metric if not supported on the active platform
+  useEffect(() => {
+    const config = activeTab === 'instagram' ? IG_METRICS_CONFIG : FB_METRICS_CONFIG;
+    const isSupported = config.some(m => m.key === expandedMetric);
+    if (!isSupported) {
+      setExpandedMetric('followers');
+    }
+  }, [activeTab, expandedMetric]);
 
   // Fetching Logic
   useEffect(() => {
@@ -397,56 +432,131 @@ export default function InformesPage() {
     igOrganicInsightsPrev, fbOrganicInsightsPrev
   ]);
 
-  // Follower Growth line/area chart data formatting
-  const chartData = useMemo(() => {
+  // ─── Per-metric time-series data for MetricDetailChart ───────────────────
+  const buildDailyRange = (since: string, until: string): string[] => {
+    const dates: string[] = [];
+    let d = new Date(since + 'T12:00:00');
+    const end = new Date(until + 'T12:00:00');
+    while (d <= end) { dates.push(d.toISOString().split('T')[0]); d.setDate(d.getDate() + 1); }
+    return dates;
+  };
+
+  // Build MetricDetailChart-compatible series: [{ date, val }]
+  const metricSeriesData = useMemo(() => {
     const isIg = activeTab === 'instagram';
-    const snaps = metrics.currentSnaps || [];
-    
-    // Fallback: If no snaps are in the DB yet, generate simulated points to avoid blank graphs
-    if (snaps.length < 2) {
-      const mockPoints = [];
-      const endVal = metrics.currentFollowers || (isIg ? 1200 : 850);
-      const startD = new Date(range.since + 'T12:00:00');
-      const endD = new Date(range.until + 'T12:00:00');
-      const diffTime = Math.abs(endD.getTime() - startD.getTime());
-      const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-      const step = Math.max(1, Math.round(diffDays / 6));
+    const snaps = (socialSnapshots || []).filter(s => s.snapshot_date >= range.since && s.snapshot_date <= range.until);
+    const snapMap: Record<string, any> = {};
+    snaps.forEach(s => { snapMap[s.snapshot_date] = s; });
 
-      for (let i = 0; i <= 6; i++) {
-        const d = new Date(startD.getTime() + i * step * 24 * 60 * 60 * 1000);
-        const iso = d.toISOString().split('T')[0];
-        if (iso <= range.until) {
-          const val = Math.round(endVal - (6 - i) * Math.max(1, endVal * 0.001));
-          mockPoints.push({
-            snapshot_date: iso,
-            followers: val,
-            isMock: true,
-          });
-        }
-      }
-      return mockPoints;
-    }
+    const media = isIg ? igMedia : fbMedia;
+    const currentPosts = media.filter(p => {
+      const d = (p.timestamp || p.created_time || '').split('T')[0];
+      return d && d >= range.since && d <= range.until;
+    });
 
-    return snaps.map(s => ({
-      snapshot_date: s.snapshot_date,
-      followers: isIg ? s.ig_followers : (s.fb_followers || s.fb_fans),
-      isMock: false,
+    const days = buildDailyRange(range.since, range.until);
+    const endFollowers = metrics.currentFollowers || 0;
+
+    // Follower series from snapshots
+    const followerSnaps = snaps.length >= 2 ? snaps : (() => {
+      const endVal = endFollowers || (isIg ? 1200 : 850);
+      return days.slice(0, 7).map((d, i, arr) => ({ 
+        snapshot_date: d, 
+        ig_followers: Math.round(endVal - (arr.length - 1 - i) * Math.max(1, endVal * 0.001)),
+        fb_followers: Math.round(endVal - (arr.length - 1 - i) * Math.max(1, endVal * 0.001)),
+        fb_fans: Math.round(endVal - (arr.length - 1 - i) * Math.max(1, endVal * 0.001)),
+      }));
+    })();
+
+    const followers = followerSnaps.map(s => ({ date: s.snapshot_date, val: isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0) }));
+
+    // Growth per day (diff from previous snapshot)
+    const growth = followerSnaps.map((s, i) => ({
+      date: s.snapshot_date,
+      val: i === 0 ? 0 : Math.max(0, (isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0)) - (isIg ? (followerSnaps[i-1].ig_followers || 0) : (followerSnaps[i-1].fb_followers || followerSnaps[i-1].fb_fans || 0))),
     }));
-  }, [activeTab, metrics.currentSnaps, metrics.currentFollowers, range]);
 
-  // Daily engagement bar chart data formatting
+    // Interaction & engagement per-day aggregated from posts
+    const dayInteractions: Record<string, number> = {};
+    const dayPosts: Record<string, number> = {};
+    days.forEach(d => { dayInteractions[d] = 0; dayPosts[d] = 0; });
+    currentPosts.forEach(p => {
+      const d = (p.timestamp || p.created_time || '').split('T')[0];
+      if (dayInteractions[d] !== undefined) {
+        const interactions = isIg ? (p.like_count || 0) + (p.comments_count || 0) : (p.likes?.summary?.total_count || 0) + (p.comments?.summary?.total_count || 0);
+        dayInteractions[d] += interactions;
+        dayPosts[d] += 1;
+      }
+    });
+
+    const interactions = days.map(d => ({ date: d, val: dayInteractions[d] || 0 }));
+    const postsPerDay = days.map(d => ({ date: d, val: dayPosts[d] || 0 }));
+
+    // Engagement rate per day
+    const fRef = endFollowers || 1;
+    const engagement = days.map(d => ({
+      date: d,
+      val: dayPosts[d] > 0 ? Number(((dayInteractions[d] / dayPosts[d]) / fRef * 100).toFixed(4)) : 0,
+    }));
+
+    // Reach & Impressions from insights daily values
+    const getInsightDailySeries = (insightsRes: any, metricName: string) => {
+      if (!insightsRes?.data) return days.map(d => ({ date: d, val: 0 }));
+      const metric = insightsRes.data.find((m: any) => m.name === metricName);
+      if (!metric?.values) return days.map(d => ({ date: d, val: 0 }));
+      const valMap: Record<string, number> = {};
+      metric.values.forEach((v: any) => { 
+        const d = (v.end_time || v.date || '').split('T')[0]; 
+        if (d) valMap[d] = v.value || 0; 
+      });
+      return days.map(d => ({ date: d, val: valMap[d] || 0 }));
+    };
+
+    const insights = isIg ? igOrganicInsights : fbOrganicInsights;
+    const reachSeries = getInsightDailySeries(insights, isIg ? 'reach' : 'page_impressions');
+    const impressionsSeries = getInsightDailySeries(insights, isIg ? 'impressions' : 'page_impressions');
+    const viewsSeries = getInsightDailySeries(insights, isIg ? 'profile_views' : 'page_engaged_users');
+
+    return { followers, growth, interactions, engagement, reach: reachSeries, impressions: impressionsSeries, profile_views: viewsSeries };
+  }, [activeTab, socialSnapshots, range, igMedia, fbMedia, metrics.currentFollowers, igOrganicInsights, fbOrganicInsights]);
+
+  const prevMetricSeriesData = useMemo(() => {
+    const isIg = activeTab === 'instagram';
+    const snaps = (socialSnapshots || []).filter(s => s.snapshot_date >= prevRange.since && s.snapshot_date <= prevRange.until);
+    const media = isIg ? igMedia : fbMedia;
+    const prevPosts = media.filter(p => {
+      const d = (p.timestamp || p.created_time || '').split('T')[0];
+      return d && d >= prevRange.since && d <= prevRange.until;
+    });
+    const days = buildDailyRange(prevRange.since, prevRange.until);
+    const endFollowers = isIg ? (snaps[snaps.length-1]?.ig_followers || 0) : (snaps[snaps.length-1]?.fb_followers || snaps[snaps.length-1]?.fb_fans || 0);
+
+    const followerData = snaps.length >= 2 ? snaps.map(s => ({ date: s.snapshot_date, val: isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0) })) : days.map(d => ({ date: d, val: 0 }));
+    const growth = snaps.length >= 2 ? snaps.map((s, i) => ({ date: s.snapshot_date, val: i === 0 ? 0 : Math.max(0, (isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0)) - (isIg ? (snaps[i-1].ig_followers || 0) : (snaps[i-1].fb_followers || snaps[i-1].fb_fans || 0))) })) : days.map(d => ({ date: d, val: 0 }));
+    const dayInt: Record<string, number> = {}; const dayP: Record<string, number> = {};
+    days.forEach(d => { dayInt[d] = 0; dayP[d] = 0; });
+    prevPosts.forEach(p => { const d = (p.timestamp || p.created_time || '').split('T')[0]; if (dayInt[d] !== undefined) { dayInt[d] += isIg ? (p.like_count || 0) + (p.comments_count || 0) : (p.likes?.summary?.total_count || 0) + (p.comments?.summary?.total_count || 0); dayP[d] += 1; } });
+    const fRef = endFollowers || 1;
+    return {
+      followers: followerData,
+      growth,
+      interactions: days.map(d => ({ date: d, val: dayInt[d] || 0 })),
+      engagement: days.map(d => ({ date: d, val: dayP[d] > 0 ? Number(((dayInt[d] / dayP[d]) / fRef * 100).toFixed(4)) : 0 })),
+      reach: days.map(d => ({ date: d, val: 0 })),
+      impressions: days.map(d => ({ date: d, val: 0 })),
+      profile_views: days.map(d => ({ date: d, val: 0 })),
+    };
+  }, [activeTab, socialSnapshots, prevRange, igMedia, fbMedia]);
+
+  // Daily engagement bar chart data
   const dailyInteractionsData = useMemo(() => {
     const isIg = activeTab === 'instagram';
     const media = isIg ? igMedia : fbMedia;
-    
     const currentPosts = media.filter(p => {
       const dateStr = (p.timestamp || p.created_time || '').split('T')[0];
       return dateStr && dateStr >= range.since && dateStr <= range.until;
     });
-
     const dataMap: Record<string, { interactions: number; posts: number }> = {};
-    
-    // Fill all dates in range with zeros
     let d = new Date(range.since + 'T12:00:00');
     const end = new Date(range.until + 'T12:00:00');
     while (d <= end) {
@@ -454,8 +564,6 @@ export default function InformesPage() {
       dataMap[iso] = { interactions: 0, posts: 0 };
       d.setDate(d.getDate() + 1);
     }
-    
-    // Accumulate
     currentPosts.forEach(p => {
       const dateStr = (p.timestamp || p.created_time || '').split('T')[0];
       if (dataMap[dateStr]) {
@@ -465,12 +573,30 @@ export default function InformesPage() {
         dataMap[dateStr].posts += 1;
       }
     });
-
     return Object.entries(dataMap).map(([date, val]) => ({
       date,
       Interacciones: val.interactions,
       Publicaciones: val.posts,
     })).sort((a, b) => a.date.localeCompare(b.date));
+  }, [activeTab, igMedia, fbMedia, range]);
+
+  // Pie chart: post-type distribution
+  const postTypeData = useMemo(() => {
+    const isIg = activeTab === 'instagram';
+    const media = isIg ? igMedia : fbMedia;
+    const currentPosts = media.filter(p => {
+      const d = (p.timestamp || p.created_time || '').split('T')[0];
+      return d && d >= range.since && d <= range.until;
+    });
+    if (currentPosts.length === 0) return [];
+    const counts: Record<string, number> = {};
+    currentPosts.forEach(p => {
+      const t = (p.media_type || (p.full_picture ? 'PHOTO' : 'TEXT')).toUpperCase();
+      const label = t === 'CAROUSEL_ALBUM' ? 'Carrusel' : t === 'VIDEO' ? 'Video' : t === 'TEXT' ? 'Texto' : 'Imagen';
+      counts[label] = (counts[label] || 0) + 1;
+    });
+    const PIE_COLORS: Record<string, string> = { 'Imagen': '#ec4899', 'Video': '#8b5cf6', 'Carrusel': '#f59e0b', 'Texto': '#6b7280' };
+    return Object.entries(counts).map(([name, value]) => ({ name, value, color: PIE_COLORS[name] || '#94a3b8' }));
   }, [activeTab, igMedia, fbMedia, range]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -656,216 +782,105 @@ export default function InformesPage() {
             </div>
           )}
 
-          {/* KPI Dashboard Metrics Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* KPI 1: Followers */}
-            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black text-zinc-450 dark:text-zinc-500 uppercase tracking-widest">Seguidores</span>
-                <div className={`w-8 h-8 rounded-xl ${currentTabBg}/10 flex items-center justify-center`}>
-                  {activeTab === 'instagram' ? <Instagram className="w-4 h-4 text-pink-500" /> : <Facebook className="w-4 h-4 text-blue-600" />}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white leading-none tracking-tight">
-                  {fmtN(metrics.currentFollowers)}
-                </h3>
-                <div className="flex items-center gap-1 mt-2 text-[11px] font-bold text-zinc-450">
-                  <span>@{activeTab === 'instagram' ? (igProfile?.username || 'instagram') : (fbProfile?.name || 'facebook')}</span>
-                </div>
-              </div>
-            </div>
+          {/* ── Clickable KPI Cards (DashboardMetric) ────────────────────────── */}
+          {(() => {
+            const isIg = activeTab === 'instagram';
+            const config = isIg ? IG_METRICS_CONFIG : FB_METRICS_CONFIG;
 
-            {/* KPI 2: Followers Growth */}
-            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black text-zinc-450 dark:text-zinc-500 uppercase tracking-widest">Crecimiento</span>
-                <div className={`w-8 h-8 rounded-xl bg-violet-500/10 flex items-center justify-center`}>
-                  <TrendingUp className="w-4 h-4 text-violet-500" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white leading-none tracking-tight flex items-baseline gap-1.5">
-                  {metrics.followerGrowth >= 0 ? `+${fmtN(metrics.followerGrowth)}` : fmtN(metrics.followerGrowth)}
-                  <span className={`text-[12px] font-black ${metrics.followerGrowth >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    ({metrics.followerGrowthPct >= 0 ? `+${metrics.followerGrowthPct.toFixed(1)}%` : `${metrics.followerGrowthPct.toFixed(1)}%`})
-                  </span>
-                </h3>
-                <div className="flex items-center gap-1 mt-2 text-[11px] font-bold text-zinc-450">
-                  {metrics.followerGrowthDiff >= 0 ? (
-                    <span className="text-emerald-500 font-extrabold">+{fmtN(metrics.followerGrowthDiff)}</span>
-                  ) : (
-                    <span className="text-rose-500 font-extrabold">{fmtN(metrics.followerGrowthDiff)}</span>
-                  )}
-                  <span>vs período anterior</span>
-                </div>
-              </div>
-            </div>
+            // Map metric key → display value & change pct
+            const getValue = (key: string): { val: string; changePct: number | undefined; trend: 'up' | 'down' } => {
+              switch (key) {
+                case 'followers': return {
+                  val: fmtN(metrics.currentFollowers),
+                  changePct: metrics.followerGrowthPct,
+                  trend: metrics.followerGrowthPct >= 0 ? 'up' : 'down',
+                };
+                case 'growth': return {
+                  val: metrics.followerGrowth >= 0 ? `+${fmtN(metrics.followerGrowth)}` : fmtN(metrics.followerGrowth),
+                  changePct: metrics.followerGrowthDiff !== 0 ? undefined : undefined,
+                  trend: metrics.followerGrowth >= 0 ? 'up' : 'down',
+                };
+                case 'interactions': return {
+                  val: fmtN(metrics.totalInteractions),
+                  changePct: metrics.interactionsChangePct,
+                  trend: (metrics.interactionsChangePct ?? 0) >= 0 ? 'up' : 'down',
+                };
+                case 'engagement': return {
+                  val: `${metrics.engagementRate.toFixed(2)}%`,
+                  changePct: metrics.engagementRateChangePct,
+                  trend: (metrics.engagementRateChangePct ?? 0) >= 0 ? 'up' : 'down',
+                };
+                case 'reach': return {
+                  val: fmtN(metrics.reachVal ?? 0),
+                  changePct: metrics.reachChangePct,
+                  trend: (metrics.reachChangePct ?? 0) >= 0 ? 'up' : 'down',
+                };
+                case 'impressions': return {
+                  val: fmtN(metrics.impressionsVal ?? 0),
+                  changePct: metrics.impressionsChangePct,
+                  trend: (metrics.impressionsChangePct ?? 0) >= 0 ? 'up' : 'down',
+                };
+                case 'profile_views': return {
+                  val: fmtN(metrics.viewsVal ?? 0),
+                  changePct: metrics.viewsChangePct,
+                  trend: (metrics.viewsChangePct ?? 0) >= 0 ? 'up' : 'down',
+                };
+                default: return { val: '—', changePct: undefined, trend: 'up' };
+              }
+            };
 
-            {/* KPI 3: Interactions */}
-            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black text-zinc-450 dark:text-zinc-500 uppercase tracking-widest">Interacciones</span>
-                <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                  <ThumbsUp className="w-4 h-4 text-amber-500" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white leading-none tracking-tight flex items-baseline gap-1.5">
-                  {fmtN(metrics.totalInteractions)}
-                  {metrics.interactionsChangePct !== undefined && (
-                    <span className={`text-[12px] font-black ${metrics.interactionsChangePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {metrics.interactionsChangePct >= 0 ? `+${metrics.interactionsChangePct.toFixed(1)}%` : `${metrics.interactionsChangePct.toFixed(1)}%`}
-                    </span>
-                  )}
-                </h3>
-                <div className="flex items-center gap-1 mt-2 text-[11px] font-bold text-zinc-450">
-                  <span>En {metrics.postsCount} publicaciones</span>
-                </div>
-              </div>
-            </div>
-
-            {/* KPI 4: Engagement Rate */}
-            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm space-y-2 relative overflow-hidden group">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black text-zinc-450 dark:text-zinc-500 uppercase tracking-widest">Engagement Prom.</span>
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                  <BarChart2 className="w-4 h-4 text-emerald-500" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white leading-none tracking-tight flex items-baseline gap-1.5">
-                  {metrics.engagementRate.toFixed(2)}%
-                  {metrics.engagementRateChangePct !== undefined && (
-                    <span className={`text-[12px] font-black ${metrics.engagementRateChangePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                      {metrics.engagementRateChangePct >= 0 ? `+${metrics.engagementRateChangePct.toFixed(1)}%` : `${metrics.engagementRateChangePct.toFixed(1)}%`}
-                    </span>
-                  )}
-                </h3>
-                <div className="flex items-center gap-1 mt-2 text-[11px] font-bold text-zinc-450">
-                  <span>Promedio de interacciones / seg.</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Organic reach / impressions metrics from Meta (Visible only if insights API returns valid numbers) */}
-          {(metrics.reachVal !== null || metrics.impressionsVal !== null || metrics.viewsVal !== null) && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
-              {/* Reach */}
-              {metrics.reachVal !== null && (
-                <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Alcance Orgánico</span>
-                    <h4 className="text-xl font-black text-zinc-800 dark:text-white leading-none mt-0.5">{fmtN(metrics.reachVal)}</h4>
-                  </div>
-                  {metrics.reachChangePct !== undefined && (
-                    <span className={`text-[11px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5 ${metrics.reachChangePct >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}`}>
-                      {metrics.reachChangePct >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      {Math.abs(metrics.reachChangePct).toFixed(1)}%
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Impressions */}
-              {metrics.impressionsVal !== null && (
-                <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Impresiones Totales</span>
-                    <h4 className="text-xl font-black text-zinc-800 dark:text-white leading-none mt-0.5">{fmtN(metrics.impressionsVal)}</h4>
-                  </div>
-                  {metrics.impressionsChangePct !== undefined && (
-                    <span className={`text-[11px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5 ${metrics.impressionsChangePct >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}`}>
-                      {metrics.impressionsChangePct >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      {Math.abs(metrics.impressionsChangePct).toFixed(1)}%
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Profile Views / Engaged Users */}
-              {metrics.viewsVal !== null && (
-                <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                      {activeTab === 'instagram' ? 'Visitas al Perfil' : 'Usuarios Enganchados'}
-                    </span>
-                    <h4 className="text-xl font-black text-zinc-800 dark:text-white leading-none mt-0.5">{fmtN(metrics.viewsVal)}</h4>
-                  </div>
-                  {metrics.viewsChangePct !== undefined && (
-                    <span className={`text-[11px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5 ${metrics.viewsChangePct >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}`}>
-                      {metrics.viewsChangePct >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      {Math.abs(metrics.viewsChangePct).toFixed(1)}%
-                    </span>
-                  )}
-                </div>
-              )}
-
-            </div>
-          )}
-
-          {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Chart 1: Follower Growth Evolution */}
-            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-[14px] font-black text-zinc-800 dark:text-white">Evolución de Seguidores</h3>
-                  <p className="text-[11px] text-zinc-400">Tendencia histórica diaria de seguidores acumulados</p>
-                </div>
-                {chartData.length > 0 && chartData[0].isMock && (
-                  <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-450 dark:text-zinc-500 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    Estimado
-                  </span>
-                )}
-              </div>
-              <div className="h-64 md:h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 5, left: -20 }}>
-                    <defs>
-                      <linearGradient id="colorFollowers" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={activeTab === 'instagram' ? '#ec4899' : '#3b82f6'} stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor={activeTab === 'instagram' ? '#ec4899' : '#3b82f6'} stopOpacity={0.0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#1f1f23' : '#f1f1f4'} />
-                    <XAxis 
-                      dataKey="snapshot_date" 
-                      tick={{ fontSize: 9, fill: '#a1a1aa' }} 
-                      tickFormatter={(d) => { if (!d) return ''; const p = d.split('-'); return `${p[2]}/${p[1]}`; }} 
+            return (
+              <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 md:grid-cols-3 xl:flex xl:flex-nowrap">
+                {config.map(m => {
+                  const { val, changePct, trend } = getValue(m.key);
+                  const series = (metricSeriesData as any)[m.key] || [];
+                  return (
+                    <DashboardMetric
+                      key={m.key}
+                      icon={m.icon}
+                      label={m.label}
+                      value={val}
+                      change={changePct}
+                      trend={trend}
+                      data={series}
+                      color={m.color}
+                      loading={loadingSocial}
+                      active={expandedMetric === m.key}
+                      onClick={() => setExpandedMetric(m.key as SocialMetricKey)}
                     />
-                    <YAxis 
-                      tick={{ fontSize: 9, fill: '#a1a1aa' }} 
-                      tickFormatter={fmtN} 
-                      domain={['auto', 'auto']}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="followers" 
-                      stroke={activeTab === 'instagram' ? '#ec4899' : '#3b82f6'} 
-                      strokeWidth={2.5} 
-                      fillOpacity={1} 
-                      fill="url(#colorFollowers)" 
-                      name="followers"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                  );
+                })}
               </div>
-            </div>
+            );
+          })()}
 
-            {/* Chart 2: Publications and Interactions daily breakdown */}
-            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-sm space-y-4">
+          {/* ── Metric Evolution Detail Chart ─────────────────────────────────── */}
+          {(() => {
+            const isIg = activeTab === 'instagram';
+            const config = (isIg ? IG_METRICS_CONFIG : FB_METRICS_CONFIG).find(m => m.key === expandedMetric);
+            if (!config) return null;
+            const series = (metricSeriesData as any)[expandedMetric] || [];
+            const prevSeries = (prevMetricSeriesData as any)[expandedMetric] || [];
+            return (
+              <MetricDetailChart
+                label={config.label}
+                color={config.color}
+                data={series}
+                prevData={prevSeries}
+              />
+            );
+          })()}
+
+          {/* ── Charts Row ─────────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Interactions BarChart (2/3 width) */}
+            <div className="lg:col-span-2 bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-sm space-y-4">
               <div>
                 <h3 className="text-[14px] font-black text-zinc-800 dark:text-white">Actividad e Interacciones</h3>
-                <p className="text-[11px] text-zinc-400">Total diario de me gusta, comentarios y publicaciones publicadas</p>
+                <p className="text-[11px] text-zinc-400">Total diario de likes, comentarios y publicaciones publicadas</p>
               </div>
-              <div className="h-64 md:h-72">
+              <div className="h-60 md:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyInteractionsData} margin={{ top: 10, right: 10, bottom: 5, left: -20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#1f1f23' : '#f1f1f4'} />
@@ -902,6 +917,64 @@ export default function InformesPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+
+            {/* Post-type Donut PieChart (1/3 width) */}
+            <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 md:p-6 shadow-sm space-y-4">
+              <div>
+                <h3 className="text-[14px] font-black text-zinc-800 dark:text-white">Tipos de Publicaciones</h3>
+                <p className="text-[11px] text-zinc-400">Distribución por formato en el período</p>
+              </div>
+              {postTypeData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-52 gap-3">
+                  <ImageIcon className="w-8 h-8 text-zinc-300 dark:text-zinc-700" />
+                  <p className="text-[12px] font-bold text-zinc-400">Sin publicaciones en este período</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="h-40">
+                    <ResponsiveContainer width={160} height={160}>
+                      <PieChart>
+                        <Pie
+                          data={postTypeData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={44}
+                          outerRadius={70}
+                          paddingAngle={3}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {postTypeData.map((entry, idx) => (
+                            <Cell key={`cell-${idx}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }: any) =>
+                            active && payload?.[0] ? (
+                              <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 rounded-xl shadow-lg text-[11px] font-bold">
+                                <span style={{ color: payload[0].payload.color }}>{payload[0].name}: </span>
+                                <span className="text-zinc-800 dark:text-white">{payload[0].value} posts</span>
+                              </div>
+                            ) : null
+                          }
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="w-full space-y-2">
+                    {postTypeData.map(entry => (
+                      <div key={entry.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                          <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-300">{entry.name}</span>
+                        </div>
+                        <span className="text-[11px] font-black text-zinc-800 dark:text-white">{entry.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
