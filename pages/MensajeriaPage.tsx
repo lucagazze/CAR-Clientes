@@ -202,8 +202,13 @@ export default function MensajeriaPage() {
   const cwUrl = (profile as any)?.chatwoot_url;
   const cwToken = (profile as any)?.chatwoot_token;
 
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [backgroundConversations, setBackgroundConversations] = useState<any[]>([]);
+  const convCacheKey = `car_convs_${(profile as any)?.id || 'default'}`;
+  const [conversations, setConversations] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`car_convs_${(profile as any)?.id || 'default'}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   const [convMeta, setConvMeta] = useState<{ all_count: number; unassigned_count: number; assigned_count: number } | null>(() => {
     try {
       const saved = sessionStorage.getItem(`car_conv_meta_${profile?.id || 'default'}`);
@@ -419,24 +424,32 @@ export default function MensajeriaPage() {
       const firstPayload = firstPage.payload;
 
       if (allCount <= 25) {
-        setBackgroundConversations(firstPayload);
+        setConversations(prev => {
+          const prevIds = new Set(prev.map((c: any) => c.id));
+          const toAdd = firstPayload.filter((c: any) => !prevIds.has(c.id));
+          return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+        });
         return;
       }
 
-      const totalPages = Math.min(40, Math.ceil(allCount / 25)); // safety limit of 40 pages
+      const totalPages = Math.min(40, Math.ceil(allCount / 25));
       const pagesToFetch = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
 
-      // Fetch remaining pages in parallel
       const results = await Promise.all(
-        pagesToFetch.map(p => 
+        pagesToFetch.map(p =>
           chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, p).catch(() => ({ payload: [] }))
         )
       );
 
       const remainingPayloads = results.flatMap(r => r.payload);
       const allConversations = [...firstPayload, ...remainingPayloads];
-      
-      setBackgroundConversations(allConversations);
+
+      // Merge silently — no list switching, no flash
+      setConversations(prev => {
+        const prevIds = new Set(prev.map((c: any) => c.id));
+        const toAdd = allConversations.filter((c: any) => !prevIds.has(c.id));
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+      });
     } catch (err) {
       console.error("Error in background fetch of all conversations:", err);
     }
@@ -444,13 +457,13 @@ export default function MensajeriaPage() {
 
   const loadConversations = useCallback(async () => {
     if (!cwUrl || !cwToken) return;
-    setLoading(true);
+    // Only show spinner if we have nothing cached
+    setConversations(prev => { if (prev.length === 0) setLoading(true); return prev; });
     setError(null);
-    setConversations([]);
     setCurrentPage(1);
     setHasMore(false);
 
-    // Trigger background fetcher immediately in parallel
+    // Trigger background fetcher in parallel
     fetchAllOpenConversationsInBackground();
 
     try {
@@ -466,7 +479,16 @@ export default function MensajeriaPage() {
         setConvMeta({ all_count: meta.all_count ?? 0, unassigned_count: meta.unassigned_count ?? 0, assigned_count: meta.assigned_count ?? 0 });
       }
 
-      setConversations(firstPayload);
+      // Merge update: update existing items, prepend new ones — no flash
+      setConversations(prev => {
+        const apiMap = new Map(firstPayload.map((c: any) => [c.id, c]));
+        const updated = prev.map((c: any) => apiMap.has(c.id) ? apiMap.get(c.id) : c);
+        const prevIds = new Set(prev.map((c: any) => c.id));
+        const newOnes = firstPayload.filter((c: any) => !prevIds.has(c.id));
+        const merged = [...newOnes, ...updated];
+        try { sessionStorage.setItem(convCacheKey, JSON.stringify(merged.slice(0, 50))); } catch {}
+        return merged;
+      });
       setHasMore(firstHasMore);
       setCurrentPage(1);
     } catch (e: any) {
@@ -474,7 +496,7 @@ export default function MensajeriaPage() {
     } finally {
       setLoading(false);
     }
-  }, [cwUrl, cwToken, statusFilter, channelFilter, getInboxIdForChannel, fetchAllOpenConversationsInBackground]);
+  }, [cwUrl, cwToken, statusFilter, channelFilter, getInboxIdForChannel, fetchAllOpenConversationsInBackground, convCacheKey]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!cwUrl || !cwToken || loadingMore || !hasMore) return;
@@ -534,21 +556,10 @@ export default function MensajeriaPage() {
               // Update last message preview in conversation list
               setConversations(prev => prev.map(c =>
                 c.id === d.conversation_id
-                  ? { 
-                      ...c, 
-                      last_activity_at: d.created_at, 
-                      messages: [d, ...(c.messages || [])], 
-                      unread_count: selectedRef.current?.id === d.conversation_id ? 0 : (c.unread_count || 0) + (d?.message_type === 0 ? 1 : 0),
-                      ...(d?.message_type !== 2 ? { last_non_activity_message: d } : {})
-                    }
-                  : c
-              ));
-              setBackgroundConversations(prev => prev.map(c =>
-                c.id === d.conversation_id
-                  ? { 
-                      ...c, 
-                      last_activity_at: d.created_at, 
-                      messages: [d, ...(c.messages || [])], 
+                  ? {
+                      ...c,
+                      last_activity_at: d.created_at,
+                      messages: [d, ...(c.messages || [])],
                       unread_count: selectedRef.current?.id === d.conversation_id ? 0 : (c.unread_count || 0) + (d?.message_type === 0 ? 1 : 0),
                       ...(d?.message_type !== 2 ? { last_non_activity_message: d } : {})
                     }
@@ -564,26 +575,20 @@ export default function MensajeriaPage() {
             } else if (msg.event === 'conversation.created') {
               const d = msg.data;
               setConversations(prev => prev.find(c => c.id === d.id) ? prev : [d, ...prev]);
-              setBackgroundConversations(prev => prev.find(c => c.id === d.id) ? prev : [d, ...prev]);
             } else if (msg.event === 'conversation.read') {
               const d = msg.data;
               setConversations(prev => prev.map(c => c.id === d.id ? { ...c, unread_count: 0 } : c));
-              setBackgroundConversations(prev => prev.map(c => c.id === d.id ? { ...c, unread_count: 0 } : c));
             } else if (msg.event === 'conversation.status_changed') {
               const d = msg.data;
-              setConversations(prev => prev.map(c => c.id === d.id ? { ...c, status: d.status } : c));
-              setBackgroundConversations(prev => {
-                const shouldRemove = statusFilter !== 'all' && statusFilter !== d.status;
-                if (shouldRemove) {
-                  return prev.filter(c => c.id !== d.id);
-                }
-                return prev.map(c => c.id === d.id ? { ...c, status: d.status } : c);
-              });
+              const shouldRemove = statusFilter !== 'all' && statusFilter !== d.status;
+              setConversations(prev => shouldRemove
+                ? prev.filter(c => c.id !== d.id)
+                : prev.map(c => c.id === d.id ? { ...c, status: d.status } : c)
+              );
               if (selectedRef.current?.id === d.id) setSelected((s: any) => s ? { ...s, status: d.status } : s);
             } else if (msg.event === 'conversation.updated') {
               const d = msg.data;
               setConversations(prev => prev.map(c => c.id === d.id ? { ...c, ...d } : c));
-              setBackgroundConversations(prev => prev.map(c => c.id === d.id ? { ...c, ...d } : c));
             }
           } catch {}
         };
@@ -611,16 +616,10 @@ export default function MensajeriaPage() {
       try {
         const { payload } = await chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1);
         setConversations(prev => {
-          // Merge: update existing + prepend new ones
+          const apiMap = new Map(payload.map((c: any) => [c.id, c]));
+          const updated = prev.map((c: any) => apiMap.has(c.id) ? apiMap.get(c.id) : c);
           const prevIds = new Set(prev.map((c: any) => c.id));
           const newOnes = payload.filter((c: any) => !prevIds.has(c.id));
-          const updated = prev.map((c: any) => payload.find((p: any) => p.id === c.id) || c);
-          return [...newOnes, ...updated];
-        });
-        setBackgroundConversations(prev => {
-          const prevIds = new Set(prev.map((c: any) => c.id));
-          const newOnes = payload.filter((c: any) => !prevIds.has(c.id));
-          const updated = prev.map((c: any) => payload.find((p: any) => p.id === c.id) || c);
           return [...newOnes, ...updated];
         });
       } catch {}
@@ -674,7 +673,7 @@ export default function MensajeriaPage() {
     const wasUnread = isConvUnread(conv);
     setManuallyUnread(prev => { const s = new Set(prev); s.delete(conv.id); return s; });
     setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
-    setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
+    // bg sync removed
     if (wasUnread) markRead();
     // Fire API in background — don't block the UI
     if (conv.unread_count > 0 || wasUnread) {
@@ -1124,16 +1123,6 @@ export default function MensajeriaPage() {
           } 
         : c
     ));
-    setBackgroundConversations(prev => prev.map(c => 
-      c.id === selected.id 
-        ? { 
-            ...c, 
-            last_activity_at: tempMsg.created_at, 
-            messages: [tempMsg, ...(c.messages || [])],
-            last_non_activity_message: tempMsg
-          } 
-        : c
-    ));
 
     const sentText = reply.trim();
     setReply('');
@@ -1152,30 +1141,12 @@ export default function MensajeriaPage() {
             } 
           : c
       ));
-      setBackgroundConversations(prev => prev.map(c => 
-        c.id === selected.id 
-          ? { 
-              ...c, 
-              last_activity_at: sent?.created_at || Date.now()/1000, 
-              messages: [sent, ...(c.messages || []).filter((m: any) => m.id !== tempId)],
-              last_non_activity_message: sent
-            } 
-          : c
-      ));
     } catch (e: any) {
       // Mark temp message as failed in active chat
       setFailedMsgIds(prev => new Set([...prev, tempId]));
       setSendError(e.message || 'No se pudo enviar el mensaje.');
       // Remove temp message from conversation list on failure
       setConversations(prev => prev.map(c => 
-        c.id === selected.id 
-          ? { 
-              ...c, 
-              messages: (c.messages || []).filter((m: any) => m.id !== tempId) 
-            } 
-          : c
-      ));
-      setBackgroundConversations(prev => prev.map(c => 
         c.id === selected.id 
           ? { 
               ...c, 
@@ -1204,7 +1175,7 @@ export default function MensajeriaPage() {
     // ── Mark as unread ────────────────────────────────────────────────
     if (action === 'unread') {
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 1 } : c));
-      setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 1 } : c));
+      // bg sync removed
       setManuallyUnread(prev => new Set([...prev, conv.id]));
       showToast('Marcado como no leído', 'success');
       chatwoot.markAsUnread(cwUrl, cwToken, conv.id).catch(() => {});
@@ -1215,7 +1186,7 @@ export default function MensajeriaPage() {
     if (action === 'read') {
       // Update UI immediately
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
-      setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
+      // bg sync removed
       setManuallyUnread(prev => { const s = new Set(prev); s.delete(conv.id); return s; });
       showToast('Marcado como leído', 'success');
       // Fire API in background — ignore errors (UI already updated)
@@ -1228,10 +1199,6 @@ export default function MensajeriaPage() {
       // Optimistic: remove or update in list
       const shouldRemove = statusFilter !== 'all' && statusFilter !== newStatus;
       setConversations(prev => shouldRemove
-        ? prev.filter(c => c.id !== conv.id)
-        : prev.map(c => c.id === conv.id ? { ...c, status: newStatus } : c)
-      );
-      setBackgroundConversations(prev => shouldRemove
         ? prev.filter(c => c.id !== conv.id)
         : prev.map(c => c.id === conv.id ? { ...c, status: newStatus } : c)
       );
@@ -1248,7 +1215,7 @@ export default function MensajeriaPage() {
 
     if (action === 'snooze') {
       setConversations(prev => prev.filter(c => c.id !== conv.id));
-      setBackgroundConversations(prev => prev.filter(c => c.id !== conv.id));
+      // bg sync removed
       if (selected?.id === conv.id) { setSelected(null); setMessages([]); }
       showToast('Pospuesto 1 hora ⏰', 'success');
       const snoozed_until = Math.floor(Date.now() / 1000) + 3600;
@@ -1260,7 +1227,7 @@ export default function MensajeriaPage() {
 
     if (action === 'priority_high') {
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, priority: 'high' } : c));
-      setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, priority: 'high' } : c));
+      // bg sync removed
       showToast('Prioridad alta 🔴', 'success');
       chatwoot.updatePriority(cwUrl, cwToken, conv.id, 'high').catch(() => {});
       return;
@@ -1268,7 +1235,7 @@ export default function MensajeriaPage() {
 
     if (action === 'priority_none') {
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, priority: 'none' } : c));
-      setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, priority: 'none' } : c));
+      // bg sync removed
       showToast('Sin prioridad ⚪', 'success');
       chatwoot.updatePriority(cwUrl, cwToken, conv.id, 'none').catch(() => {});
       return;
@@ -1277,7 +1244,7 @@ export default function MensajeriaPage() {
     if (action === 'delete') {
       if (!window.confirm('¿Eliminar esta conversación? Esta acción no se puede deshacer.')) return;
       setConversations(prev => prev.filter(c => c.id !== conv.id));
-      setBackgroundConversations(prev => prev.filter(c => c.id !== conv.id));
+      // bg sync removed
       if (selected?.id === conv.id) { setSelected(null); setMessages([]); }
       showToast('Conversación eliminada', 'success');
       chatwoot.deleteConversation(cwUrl, cwToken, conv.id).catch(e => {
@@ -1337,27 +1304,10 @@ export default function MensajeriaPage() {
   };
 
   const getChannelCount = (channelKey: string) => {
-    if (backgroundConversations.length > 0) {
-      const listToCount = backgroundConversations;
-      let count = 0;
-      if (channelKey === 'all') {
-        count = listToCount.filter(isConvUnread).length;
-      } else {
-        count = listToCount.filter(c => getChannel(c) === channelKey && isConvUnread(c)).length;
-      }
-      try {
-        const saved = sessionStorage.getItem(`car_unread_counts_${profile?.id || 'default'}`);
-        const currentCache = saved ? JSON.parse(saved) : {};
-        const nextCache = { ...currentCache, [channelKey]: count };
-        sessionStorage.setItem(`car_unread_counts_${profile?.id || 'default'}`, JSON.stringify(nextCache));
-      } catch {}
-      return count;
-    }
-    try {
-      const saved = sessionStorage.getItem(`car_unread_counts_${profile?.id || 'default'}`);
-      const cache = saved ? JSON.parse(saved) : {};
-      return cache[channelKey] || 0;
-    } catch { return 0; }
+    if (conversations.length === 0) return 0;
+    return channelKey === 'all'
+      ? conversations.filter(isConvUnread).length
+      : conversations.filter(c => getChannel(c) === channelKey && isConvUnread(c)).length;
   };
 
   const CHANNEL_ICON: Record<string, string> = { whatsapp: '📱', instagram: '📸', facebook: '📘', email: '📧', other: '💬' };
@@ -1430,7 +1380,7 @@ export default function MensajeriaPage() {
     return isNaN(d) ? 0 : d / 1000;
   };
 
-  const sourceList = backgroundConversations.length > 0 ? backgroundConversations : conversations;
+  const sourceList = conversations;
 
   const sortedConversations = [...sourceList].sort((a, b) => {
     const tsA = getComputedActivityTimestamp(a);
@@ -1491,17 +1441,17 @@ export default function MensajeriaPage() {
     // Optimistic UI update immediately
     if (action === 'delete') {
       setConversations(prev => prev.filter(c => !selectedIds.has(c.id)));
-      setBackgroundConversations(prev => prev.filter(c => !selectedIds.has(c.id)));
+      // bg sync removed
       if (selected && selectedIds.has(selected.id)) { setSelected(null); setMessages([]); }
     }
     if (action === 'read') {
       setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 0 } : c));
-      setBackgroundConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 0 } : c));
+      // bg sync removed
       setManuallyUnread(prev => { const s = new Set(prev); ids.forEach(id => s.delete(id)); return s; });
     }
     if (action === 'unread') {
       setConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 1 } : c));
-      setBackgroundConversations(prev => prev.map(c => selectedIds.has(c.id) ? { ...c, unread_count: 1 } : c));
+      // bg sync removed
       setManuallyUnread(prev => new Set([...prev, ...ids]));
     }
     clearSelection();
@@ -1757,10 +1707,8 @@ export default function MensajeriaPage() {
             onScroll={(e) => {
               const target = e.currentTarget;
               if (target.scrollHeight - target.scrollTop - target.clientHeight < 100) {
-                if (backgroundConversations.length > 0) {
-                  if (filtered.length > currentPage * 25) {
-                    setCurrentPage(prev => prev + 1);
-                  }
+                if (filtered.length > currentPage * 25) {
+                  setCurrentPage(prev => prev + 1);
                 } else {
                   loadMoreConversations();
                 }
@@ -1864,7 +1812,7 @@ export default function MensajeriaPage() {
             })}
 
             {/* Scroll sentinel — loads more when reached */}
-            {((backgroundConversations.length > 0 && filtered.length > currentPage * 25) || (backgroundConversations.length === 0 && hasMore)) && (
+            {(filtered.length > currentPage * 25 || hasMore) && (
               <div className="flex items-center justify-center py-3 text-[10px] text-zinc-400 gap-1.5">
                 {loadingMore ? (
                   <><Loader2 className="w-3 h-3 animate-spin" /> Cargando más...</>
