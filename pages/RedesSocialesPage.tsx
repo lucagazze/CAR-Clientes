@@ -91,8 +91,8 @@ export default function RedesSocialesPage() {
   const [loadingDraft, setLoadingDraft] = useState(false);
 
   // Infinite scroll: how many posts to show in each feed
-  const [visibleIgCount, setVisibleIgCount] = useState(12);
-  const [visibleFbCount, setVisibleFbCount] = useState(12);
+  const [visibleIgCount, setVisibleIgCount] = useState(8);
+  const [visibleFbCount, setVisibleFbCount] = useState(8);
   const igSentinelRef = useRef<HTMLDivElement>(null);
   const fbSentinelRef = useRef<HTMLDivElement>(null);
 
@@ -681,7 +681,7 @@ export default function RedesSocialesPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisibleIgCount(prev => prev + 12);
+          setVisibleIgCount(prev => prev + 8);
         }
       },
       { rootMargin: '200px' }
@@ -696,7 +696,7 @@ export default function RedesSocialesPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisibleFbCount(prev => prev + 12);
+          setVisibleFbCount(prev => prev + 8);
         }
       },
       { rootMargin: '200px' }
@@ -811,7 +811,7 @@ export default function RedesSocialesPage() {
             color="#ec4899" 
             labels={['Cargando perfil de Instagram...', 'Obteniendo posts orgánicos...', 'Sincronizando feed de Facebook...']} 
           />
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {[1, 2, 3, 4].map(n => (
               <div key={n} className="aspect-square bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl animate-pulse" />
             ))}
@@ -930,7 +930,7 @@ export default function RedesSocialesPage() {
                       <p className="text-[12px] text-zinc-400 mt-1">Intentá cambiando el filtro o cargando más adelante.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {filteredMedia.slice(0, visibleIgCount).map((m: any) => {
                         const hasLongCaption = m.caption && m.caption.length > 80;
                         const isExpanded = !!expandedCaptions[m.id];
@@ -1083,6 +1083,13 @@ export default function RedesSocialesPage() {
                     </div>
                   )}
 
+                  {/* IG scroll sentinel */}
+                  {visibleIgCount < filteredMedia.length && (
+                    <div ref={igSentinelRef} className="flex justify-center py-4">
+                      <div className="w-5 h-5 border-2 border-zinc-300 dark:border-zinc-700 border-t-pink-500 rounded-full animate-spin" />
+                    </div>
+                  )}
+
                 </div>
               )}
 
@@ -1198,7 +1205,7 @@ export default function RedesSocialesPage() {
                       <p className="text-[12px] text-zinc-400 mt-1">Intentá cambiando el filtro o cargando más adelante.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {filteredFbMedia.slice(0, visibleFbCount).map((m: any) => {
                         const hasLongCaption = m.message && m.message.length > 80;
                         const isExpanded = !!expandedFbCaptions[m.id];
