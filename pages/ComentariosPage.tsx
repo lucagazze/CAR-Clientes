@@ -10,6 +10,7 @@ import { db } from '../services/db';
 import { supabaseAdmin } from '../services/supabase';
 import EmailLoader from '../components/ui/EmailLoader';
 import { AppleLoader } from '../components/ui/AppleLoader';
+import SmoothImage from '../components/ui/SmoothImage';
 
 interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   value: string;
@@ -256,84 +257,140 @@ export default function ComentariosPage() {
     if (fbPageId) localStorage.setItem('active_fb_page_id', fbPageId);
   }, [fbPageId]);
 
+  // Global keydown listeners for Escape to close slide-over
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedPost(null);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Load from cache initially
+  useEffect(() => {
+    if (!clientId) return;
+    const cacheKey = `comentarios_cache_${clientId}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.posts) setPosts(parsed.posts);
+        setLoading(false);
+      } catch (e) {
+        console.error('Error parsing comments cache:', e);
+      }
+    }
+  }, [clientId]);
+
   // Load data
   useEffect(() => {
     if (!clientId || (!fbPageId && !igId)) return;
     let active = true;
-    setLoading(true);
+    const hasCache = sessionStorage.getItem(`comentarios_cache_${clientId}`);
+    setLoading(!hasCache);
     setIgError(null);
     setFbError(null);
 
+    const processMediaRes = (igRes: any, fbRes: any) => {
+      const items: PostItem[] = [];
+
+      // Instagram
+      const igMedia = (igRes as any)?.data || igRes || [];
+      igMedia.forEach((post: any) => {
+        const rawComments = post.comments?.data || [];
+        const userComments = rawComments.filter((c: any) => c.username !== igUsername);
+        if (userComments.length === 0) return;
+        const pending = userComments.filter((c: any) => isCommentPending(c, 'instagram'));
+        items.push({
+          id: post.id,
+          platform: 'instagram',
+          thumbnail: post.media_type === 'VIDEO' ? post.thumbnail_url : post.media_url,
+          caption: post.caption || '',
+          permalink: post.permalink,
+          timestamp: post.timestamp,
+          totalComments: userComments.length,
+          pendingComments: pending.length,
+          comments: userComments,
+          raw: post,
+          mediaType: post.media_type,
+          mediaUrl: post.media_url,
+        });
+      });
+
+      // Facebook
+      const fbMedia = (fbRes as any)?.data || fbRes || [];
+      fbMedia.forEach((post: any) => {
+        const rawComments = post.comments?.data || [];
+        const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
+        if (userComments.length === 0) return;
+        const normalized = userComments.map((c: any, i: number) => ({
+          ...c,
+          username: c.from?.name || c.name || c.username || `Comentarista ${i + 1}`,
+          text: c.text || c.message || '',
+          from: c.from || null,
+        }));
+        const pending = normalized.filter((c: any) => isCommentPending(c, 'facebook'));
+        items.push({
+          id: post.id,
+          platform: 'facebook',
+          thumbnail: post.full_picture || null,
+          caption: post.message || '',
+          permalink: post.permalink_url,
+          timestamp: post.created_time || new Date().toISOString(),
+          totalComments: normalized.length,
+          pendingComments: pending.length,
+          comments: normalized,
+          raw: post,
+          mediaType: post.source ? 'VIDEO' : 'IMAGE',
+          mediaUrl: post.full_picture || null,
+        });
+      });
+
+      items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      return items;
+    };
+
     const load = async () => {
       try {
-        const [igMediaRes, fbMediaRes] = await Promise.all([
+        // Step 1: Fast initial fetch of 12 items
+        const [igMediaRes12, fbMediaRes12] = await Promise.all([
           igId
-            ? metaAds.getInstagramMedia(igId, 50).catch(err => { setIgError(err.message); return []; })
+            ? metaAds.getInstagramMedia(igId, 12).catch(err => { setIgError(err.message); return []; })
             : Promise.resolve([]),
           fbPageId
-            ? metaAds.getFacebookPageFeed(fbPageId, 50).catch(err => { setFbError(err.message); return []; })
+            ? metaAds.getFacebookPageFeed(fbPageId, 12).catch(err => { setFbError(err.message); return []; })
             : Promise.resolve([]),
         ]);
 
         if (!active) return;
 
-        const items: PostItem[] = [];
+        const initialItems = processMediaRes(igMediaRes12, fbMediaRes12);
+        setPosts(initialItems);
+        setLoading(false);
 
-        // Instagram
-        const igMedia = (igMediaRes as any)?.data || igMediaRes || [];
-        igMedia.forEach((post: any) => {
-          const rawComments = post.comments?.data || [];
-          const userComments = rawComments.filter((c: any) => c.username !== igUsername);
-          if (userComments.length === 0) return;
-          const pending = userComments.filter((c: any) => isCommentPending(c, 'instagram'));
-          items.push({
-            id: post.id,
-            platform: 'instagram',
-            thumbnail: post.media_type === 'VIDEO' ? post.thumbnail_url : post.media_url,
-            caption: post.caption || '',
-            permalink: post.permalink,
-            timestamp: post.timestamp,
-            totalComments: userComments.length,
-            pendingComments: pending.length,
-            comments: userComments,
-            raw: post,
-            mediaType: post.media_type,
-            mediaUrl: post.media_url,
-          });
-        });
+        // Update cache with initial items
+        sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: initialItems }));
 
-        // Facebook
-        const fbMedia = (fbMediaRes as any)?.data || fbMediaRes || [];
-        fbMedia.forEach((post: any) => {
-          const rawComments = post.comments?.data || [];
-          const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
-          if (userComments.length === 0) return;
-          // Normalize FB comments
-          const normalized = userComments.map((c: any, i: number) => ({
-            ...c,
-            username: c.from?.name || c.name || c.username || `Comentarista ${i + 1}`,
-            text: c.text || c.message || '',
-            from: c.from || null,
-          }));
-          const pending = normalized.filter((c: any) => isCommentPending(c, 'facebook'));
-          items.push({
-            id: post.id,
-            platform: 'facebook',
-            thumbnail: post.full_picture || null,
-            caption: post.message || '',
-            permalink: post.permalink_url,
-            timestamp: post.created_time || new Date().toISOString(),
-            totalComments: normalized.length,
-            pendingComments: pending.length,
-            comments: normalized,
-            raw: post,
-            mediaType: post.source ? 'VIDEO' : 'IMAGE',
-            mediaUrl: post.full_picture || null,
-          });
-        });
+        // Step 2: Background deep fetch of 50 items
+        const [igMediaRes50, fbMediaRes50] = await Promise.all([
+          igId
+            ? metaAds.getInstagramMedia(igId, 50).catch(() => [])
+            : Promise.resolve([]),
+          fbPageId
+            ? metaAds.getFacebookPageFeed(fbPageId, 50).catch(() => [])
+            : Promise.resolve([]),
+        ]);
 
-        items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        setPosts(items);
+        if (!active) return;
+
+        const allItems = processMediaRes(igMediaRes50, fbMediaRes50);
+        setPosts(allItems);
+        sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: allItems }));
+
+      } catch (err) {
+        console.error('Error loading comments feed:', err);
       } finally {
         if (active) setLoading(false);
       }
@@ -414,8 +471,27 @@ export default function ComentariosPage() {
     e.preventDefault();
     const text = replyTexts[comment.id]?.trim();
     if (!text || !selectedPost) return;
+
+    const localId = `local_${Date.now()}`;
+    const newReply = {
+      id: localId,
+      username: igUsername || 'Yo',
+      text,
+      timestamp: new Date().toISOString(),
+      from: { id: fbPageId, name: 'Yo' },
+      isSending: true,
+    };
+
+    // 1. Instantly show the reply in the UI & clear input
+    setComments(prev => prev.map(c => {
+      if (c.id !== comment.id) return c;
+      return { ...c, replies: { data: [...(c.replies?.data || []), newReply] } };
+    }));
+    setReplyTexts(prev => { const copy = { ...prev }; delete copy[comment.id]; return copy; });
+    setOpenReplies(prev => ({ ...prev, [comment.id]: false }));
     setSubmitting(prev => ({ ...prev, [comment.id]: true }));
     setReplyErrors(prev => ({ ...prev, [comment.id]: null }));
+
     try {
       if (selectedPost.platform === 'instagram') {
         await metaAds.replyToInstagramComment(comment.id, text);
@@ -433,20 +509,14 @@ export default function ComentariosPage() {
         }).catch(() => {});
       }
 
-      // Update comment thread locally
-      const newReply = {
-        id: `local_${Date.now()}`,
-        username: igUsername || 'Yo',
-        text,
-        timestamp: new Date().toISOString(),
-        from: { id: fbPageId, name: 'Yo' },
-      };
+      // 2. Mark reply as sent (remove isSending)
       setComments(prev => prev.map(c => {
         if (c.id !== comment.id) return c;
-        return { ...c, replies: { data: [...(c.replies?.data || []), newReply] } };
+        const updatedReplies = (c.replies?.data || []).map((r: any) => 
+          r.id === localId ? { ...r, isSending: false } : r
+        );
+        return { ...c, replies: { data: updatedReplies } };
       }));
-      setReplyTexts(prev => { const copy = { ...prev }; delete copy[comment.id]; return copy; });
-      setOpenReplies(prev => ({ ...prev, [comment.id]: false }));
 
       // Update post pending count
       setPosts(prev => prev.map(p => {
@@ -454,6 +524,14 @@ export default function ComentariosPage() {
         return { ...p, pendingComments: Math.max(0, p.pendingComments - 1) };
       }));
     } catch (err: any) {
+      // 3. On error: remove the optimistic reply and restore text
+      setComments(prev => prev.map(c => {
+        if (c.id !== comment.id) return c;
+        const filteredReplies = (c.replies?.data || []).filter((r: any) => r.id !== localId);
+        return { ...c, replies: { data: filteredReplies } };
+      }));
+      setReplyTexts(prev => ({ ...prev, [comment.id]: text }));
+      setOpenReplies(prev => ({ ...prev, [comment.id]: true }));
       setReplyErrors(prev => ({ ...prev, [comment.id]: 'Error al enviar la respuesta.' }));
     } finally {
       setSubmitting(prev => ({ ...prev, [comment.id]: false }));
@@ -627,7 +705,7 @@ export default function ComentariosPage() {
               {/* Thumbnail */}
               <div className="aspect-square w-full bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
                 {post.thumbnail ? (
-                  <img src={post.thumbnail} alt="" className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-500" loading="lazy" />
+                  <SmoothImage src={post.thumbnail} alt="" containerClassName="w-full h-full" className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-500" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <MessageSquare className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
@@ -688,7 +766,7 @@ export default function ComentariosPage() {
         <div className="fixed inset-0 z-[400] flex justify-end animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedPost(null)} />
 
-          <div className="relative w-full max-w-5xl h-full bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 z-10">
+          <div className="relative w-full max-w-5xl h-full bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right transition-spring duration-300 z-10">
 
             {/* Header */}
             <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between flex-shrink-0">
@@ -849,10 +927,17 @@ export default function ComentariosPage() {
                                 const rIsMe = r.username === igUsername || r.from?.id === fbPageId;
                                 return (
                                   <div key={r.id} className="space-y-0.5">
-                                    <span className={`text-[10px] font-black ${rIsMe ? 'text-violet-600 dark:text-violet-400' : 'text-zinc-500'}`}>
-                                      @{r.username || r.from?.name || 'Yo'}
-                                    </span>
-                                    <p className={`text-[12px] leading-relaxed ${rIsMe ? 'text-violet-700 dark:text-violet-300 font-semibold' : 'text-zinc-600 dark:text-zinc-400 font-medium'}`}>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`text-[10px] font-black ${rIsMe ? 'text-violet-600 dark:text-violet-400' : 'text-zinc-500'}`}>
+                                        @{r.username || r.from?.name || 'Yo'}
+                                      </span>
+                                      {r.isSending && (
+                                        <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold flex items-center gap-1">
+                                          <Loader2 className="w-2.5 h-2.5 animate-spin" /> Enviando...
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className={`text-[12px] leading-relaxed ${rIsMe ? (r.isSending ? 'text-violet-400 dark:text-violet-600 italic' : 'text-violet-700 dark:text-violet-300 font-semibold') : 'text-zinc-600 dark:text-zinc-400 font-medium'}`}>
                                       {r.text || r.message}
                                     </p>
                                   </div>

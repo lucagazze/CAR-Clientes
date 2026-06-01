@@ -314,12 +314,36 @@ export default function RedesSocialesPage() {
     }
   };
 
-  // Submit response for a specific comment (inline)
+  // Submit response for a specific comment (inline) (Optimistic UI)
   const handleSubmitPerComment = async (e: React.FormEvent, commentId: string) => {
     e.preventDefault();
     const replyText = commentReplies[commentId]?.trim();
     if (!replyText || !selectedPostId) return;
+
+    const localId = `local_${Date.now()}`;
+    const newReply = {
+      id: localId,
+      username: igUsername || 'Yo',
+      text: replyText,
+      timestamp: new Date().toISOString(),
+      from: { id: fbPageId, name: 'Yo' },
+      isSending: true,
+    };
+
+    // 1. Instantly append the reply locally
+    setComments(prev => prev.map(c => {
+      if (c.id !== commentId) return c;
+      return { ...c, replies: { data: [...(c.replies?.data || []), newReply] } };
+    }));
     
+    // Clear input and close input block
+    setCommentReplies(prev => {
+      const copy = { ...prev };
+      delete copy[commentId];
+      return copy;
+    });
+    setActiveReplyCommentIds(prev => ({ ...prev, [commentId]: false }));
+
     setCommentRepliesSubmitting(prev => ({ ...prev, [commentId]: true }));
     setCommentRepliesErrors(prev => ({ ...prev, [commentId]: null }));
     
@@ -330,7 +354,6 @@ export default function RedesSocialesPage() {
         await metaAds.replyToFacebookComment(commentId, replyText);
       }
 
-      // Log the reply action in car_user_activity for few-shot learning
       if (user?.id && clientId) {
         const parentComment = comments.find(c => c.id === commentId);
         const incomingText = parentComment ? (parentComment.text || parentComment.message || '') : '';
@@ -343,19 +366,24 @@ export default function RedesSocialesPage() {
         }).catch(err => console.error('Error logging inline comment reply activity:', err));
       }
       
-      // Clear input and reload comments
-      setCommentReplies(prev => {
-        const copy = { ...prev };
-        delete copy[commentId];
-        return copy;
-      });
-      
-      // Hide the input block
-      setActiveReplyCommentIds(prev => ({ ...prev, [commentId]: false }));
-      
-      await fetchComments(selectedPostId, selectedPostType);
+      // 2. Mark reply as sent (remove isSending)
+      setComments(prev => prev.map(c => {
+        if (c.id !== commentId) return c;
+        const updatedReplies = (c.replies?.data || []).map((r: any) => 
+          r.id === localId ? { ...r, isSending: false } : r
+        );
+        return { ...c, replies: { data: updatedReplies } };
+      }));
     } catch (err: any) {
       console.error(`Failed to submit reply to comment ${commentId}:`, err);
+      // 3. On error, remove optimistic reply and restore text input
+      setComments(prev => prev.map(c => {
+        if (c.id !== commentId) return c;
+        const filteredReplies = (c.replies?.data || []).filter((r: any) => r.id !== localId);
+        return { ...c, replies: { data: filteredReplies } };
+      }));
+      setCommentReplies(prev => ({ ...prev, [commentId]: replyText }));
+      setActiveReplyCommentIds(prev => ({ ...prev, [commentId]: true }));
       setCommentRepliesErrors(prev => ({
         ...prev,
         [commentId]: 'No se pudo enviar la respuesta. Verifica tus permisos o hazlo desde la plataforma original.'
@@ -537,11 +565,12 @@ export default function RedesSocialesPage() {
     setLikingCommentIds({});
   };
 
-  // Global keydown listeners for Escape to close panels
+
+  // Global keydown listeners for Escape to close slide-over
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        closeCommentsModal();
+        setSelectedPostId(null);
         setShowPendingPanel(false);
       }
     };
@@ -549,49 +578,151 @@ export default function RedesSocialesPage() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
+  // Load Instagram from cache first
+  useEffect(() => {
+    if (!clientId || !igId) return;
+    const cacheKey = `ig_cache_${clientId}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.igProfile) setIgProfile(parsed.igProfile);
+        if (parsed.igMedia) setIgMedia(parsed.igMedia);
+        if (parsed.igNextCursor) setIgNextCursor(parsed.igNextCursor);
+        setIgLoading(false);
+      } catch (e) {
+        console.error('Error parsing IG cache:', e);
+      }
+    }
+  }, [clientId, igId]);
+
+  // Load Facebook from cache first
+  useEffect(() => {
+    if (!clientId || !fbPageId) return;
+    const cacheKey = `fb_cache_${clientId}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.fbProfile) setFbProfile(parsed.fbProfile);
+        if (parsed.fbMedia) setFbMedia(parsed.fbMedia);
+        if (parsed.fbNextCursor) setFbNextCursor(parsed.fbNextCursor);
+        setFbLoading(false);
+      } catch (e) {
+        console.error('Error parsing FB cache:', e);
+      }
+    }
+  }, [clientId, fbPageId]);
+
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim() || !selectedPostId) return;
+    const text = commentInput.trim();
+
+    const localId = `local_${Date.now()}`;
+    
+    // If replying to a specific comment inside the sheet
+    if (replyingTo) {
+      const commentId = replyingTo.id;
+      const newReply = {
+        id: localId,
+        username: igUsername || 'Yo',
+        text,
+        timestamp: new Date().toISOString(),
+        from: { id: fbPageId, name: 'Yo' },
+        isSending: true,
+      };
+
+      // Instantly show local reply
+      setComments(prev => prev.map(c => {
+        if (c.id !== commentId) return c;
+        return { ...c, replies: { data: [...(c.replies?.data || []), newReply] } };
+      }));
+    } else {
+      // Top level comment on the post
+      const newComment = {
+        id: localId,
+        username: igUsername || 'Yo',
+        text,
+        timestamp: new Date().toISOString(),
+        from: { id: fbPageId, name: 'Yo' },
+        like_count: 0,
+        replies: { data: [] },
+        isSending: true,
+      };
+
+      // Instantly show local comment
+      setComments(prev => [newComment, ...prev]);
+    }
+
+    setCommentInput('');
+    const prevReplyingTo = replyingTo;
+    setReplyingTo(null);
+
     setSubmittingReply(true);
     setSubmitError(null);
     try {
       if (selectedPostType === 'instagram') {
-        if (replyingTo) {
-          await metaAds.replyToInstagramComment(replyingTo.id, commentInput.trim());
+        if (prevReplyingTo) {
+          await metaAds.replyToInstagramComment(prevReplyingTo.id, text);
         } else {
-          await metaAds.createInstagramMediaComment(selectedPostId, commentInput.trim());
+          await metaAds.createInstagramMediaComment(selectedPostId, text);
         }
       } else {
-        if (replyingTo) {
-          await metaAds.replyToFacebookComment(replyingTo.id, commentInput.trim());
+        if (prevReplyingTo) {
+          await metaAds.replyToFacebookComment(prevReplyingTo.id, text);
         } else {
-          await metaAds.replyToFacebookComment(selectedPostId, commentInput.trim());
+          await metaAds.replyToFacebookComment(selectedPostId, text);
         }
       }
 
       // Log the reply action in car_user_activity for few-shot learning
       if (user?.id && clientId) {
         let incomingText = '';
-        if (replyingTo) {
-          const parentComment = comments.find(c => c.id === replyingTo.id);
+        if (prevReplyingTo) {
+          const parentComment = comments.find(c => c.id === prevReplyingTo.id);
           incomingText = parentComment ? (parentComment.text || parentComment.message || '') : '';
         } else {
           incomingText = '[Top-Level Comment on Post]';
         }
         db.activity.log(user.id, clientId, 'reply_sent', {
-          reply_text: commentInput.trim(),
+          reply_text: text,
           incoming_text: incomingText,
           platform: selectedPostType,
-          item_id: replyingTo?.id || selectedPostId,
+          item_id: prevReplyingTo?.id || selectedPostId,
           user_email: user.email || 'Desconocido'
         }).catch(err => console.error('Error logging comment/reply activity:', err));
       }
 
-      setCommentInput('');
-      setReplyingTo(null);
-      await fetchComments(selectedPostId, selectedPostType);
+      // Mark local item as sent
+      setComments(prev => prev.map(c => {
+        if (c.id === localId) {
+          return { ...c, isSending: false };
+        }
+        if (prevReplyingTo && c.id === prevReplyingTo.id) {
+          const updatedReplies = (c.replies?.data || []).map((r: any) => 
+            r.id === localId ? { ...r, isSending: false } : r
+          );
+          return { ...c, replies: { data: updatedReplies } };
+        }
+        return c;
+      }));
     } catch (err: any) {
       console.error('Failed to submit comment/reply:', err);
+      // Revert optimistic changes on failure
+      setComments(prev => {
+        if (prevReplyingTo) {
+          return prev.map(c => {
+            if (c.id !== prevReplyingTo.id) return c;
+            const filteredReplies = (c.replies?.data || []).filter((r: any) => r.id !== localId);
+            return { ...c, replies: { data: filteredReplies } };
+          });
+        } else {
+          return prev.filter(c => c.id !== localId);
+        }
+      });
+      setCommentInput(text);
+      setReplyingTo(prevReplyingTo);
       setSubmitError('Tu token de Meta es de solo lectura o no tiene los permisos necesarios para comentar/responder directamente. Podés hacer click en el botón de abajo para responder en la plataforma.');
     } finally {
       setSubmittingReply(false);
@@ -605,12 +736,13 @@ export default function RedesSocialesPage() {
     setFbLoading(true);
   }, [refreshKey]);
 
-  // Load Instagram independently
+  // Load Instagram independently (SWR)
   useEffect(() => {
     if (!clientId) return;
 
     let active = true;
-    setIgLoading(!!igId);
+    const hasCache = sessionStorage.getItem(`ig_cache_${clientId}`);
+    setIgLoading(!hasCache && !!igId);
     setError(null);
     setIgNextCursor(null);
 
@@ -623,7 +755,15 @@ export default function RedesSocialesPage() {
         setIgProfile(profileRes);
         const media = (mediaRes as any)?.data || mediaRes || [];
         setIgMedia(media);
-        setIgNextCursor((mediaRes as any)?.paging?.cursors?.after || null);
+        const nextCursor = (mediaRes as any)?.paging?.cursors?.after || null;
+        setIgNextCursor(nextCursor);
+
+        // Update Cache
+        sessionStorage.setItem(`ig_cache_${clientId}`, JSON.stringify({
+          igProfile: profileRes,
+          igMedia: media,
+          igNextCursor: nextCursor
+        }));
       }).catch(err => {
         if (active) setError(err.message || 'Error al obtener datos de Instagram.');
       }).finally(() => { if (active) setIgLoading(false); });
@@ -634,13 +774,14 @@ export default function RedesSocialesPage() {
     return () => { active = false; };
   }, [clientId, igId, refreshKey]);
 
-  // Load Facebook independently on demand
+  // Load Facebook independently on demand (SWR)
   useEffect(() => {
     if (!clientId || !fbPageId || activeTab !== 'facebook') return;
     if (fbProfile !== null) return; // Prevent refetching if already loaded for the current refreshKey
 
     let active = true;
-    setFbLoading(true);
+    const hasCache = sessionStorage.getItem(`fb_cache_${clientId}`);
+    setFbLoading(!hasCache);
     setFbError(null);
     setFbNextCursor(null);
 
@@ -652,7 +793,15 @@ export default function RedesSocialesPage() {
       setFbProfile(profileRes);
       const media = ((feedRes as any)?.data || feedRes || []).map((p: any) => ({ ...p, source: p.source || p.attachments?.data?.[0]?.media?.source || null }));
       setFbMedia(media);
-      setFbNextCursor((feedRes as any)?.paging?.cursors?.after || null);
+      const nextCursor = (feedRes as any)?.paging?.cursors?.after || null;
+      setFbNextCursor(nextCursor);
+
+      // Update Cache
+      sessionStorage.setItem(`fb_cache_${clientId}`, JSON.stringify({
+        fbProfile: profileRes,
+        fbMedia: media,
+        fbNextCursor: nextCursor
+      }));
     }).finally(() => { if (active) setFbLoading(false); });
 
     return () => { active = false; };
@@ -1370,7 +1519,7 @@ export default function RedesSocialesPage() {
             />
 
             {/* Slide-over panel container */}
-            <div className="relative w-full md:max-w-4xl h-full bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300 ease-out z-10">
+            <div className="relative w-full md:max-w-4xl h-full bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col justify-between animate-in slide-in-from-right transition-spring duration-300 ease-out z-10">
               
               {/* Header */}
               <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/85 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between flex-shrink-0">
@@ -1532,6 +1681,11 @@ export default function RedesSocialesPage() {
                                       Pendiente
                                     </span>
                                   )}
+                                  {comment.isSending && (
+                                    <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold flex items-center gap-1">
+                                      <Loader2 className="w-2.5 h-2.5 animate-spin" /> Enviando...
+                                    </span>
+                                  )}
                                   <button
                                     onClick={() => {
                                       setActiveReplyCommentIds(prev => ({ ...prev, [comment.id]: !prev[comment.id] }));
@@ -1604,7 +1758,14 @@ export default function RedesSocialesPage() {
                                               <span className="font-extrabold text-zinc-800 dark:text-white mr-1.5">@{replyUser}</span>
                                               <span className="text-zinc-600 dark:text-zinc-200 font-medium">{reply.text || reply.message}</span>
                                             </div>
-                                            <div className="text-[9px] text-zinc-400 mt-1 font-bold">{rDateStr}</div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                              <div className="text-[9px] text-zinc-400 font-bold">{rDateStr}</div>
+                                              {reply.isSending && (
+                                                <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold flex items-center gap-1">
+                                                  <Loader2 className="w-2.5 h-2.5 animate-spin" /> Enviando...
+                                                </span>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       );
