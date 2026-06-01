@@ -1013,6 +1013,11 @@ export default function MensajeriaPage() {
   };
 
   const getChannelCount = (channelKey: string) => {
+    if (canReplyOnly) {
+      const base = conversations.filter(c => isWindowOpen(c));
+      if (channelKey === 'all') return base.length;
+      return base.filter(c => getChannel(c) === channelKey).length;
+    }
     if (channelKey === 'all') {
       return convMeta?.all_count !== undefined ? convMeta.all_count : conversations.length;
     }
@@ -1113,16 +1118,17 @@ export default function MensajeriaPage() {
     return true;
   });
 
+  const isWindowOpen = (c: any) => {
+    const ch = getChannel(c);
+    const isMeta = ['whatsapp', 'instagram', 'facebook'].includes(ch);
+    const lastIncoming = c.messages?.find((m: any) => m?.message_type === 0);
+    const timeSinceLastIncoming = lastIncoming ? (Date.now() / 1000 - lastIncoming.created_at) : null;
+    return c.can_reply === true || (c.can_reply !== false && (!isMeta || (timeSinceLastIncoming !== null && timeSinceLastIncoming < 86400) || (Date.now() / 1000 - (c.last_activity_at || c.created_at)) < 86400));
+  };
+
   const filtered = assignFiltered.filter(c => {
     if (!c) return false;
-    if (canReplyOnly) {
-      const ch = getChannel(c);
-      const isMeta = ['whatsapp', 'instagram', 'facebook'].includes(ch);
-      const lastIncoming = c.messages?.find((m: any) => m?.message_type === 0);
-      const timeSinceLastIncoming = lastIncoming ? (Date.now() / 1000 - lastIncoming.created_at) : null;
-      const canReply = c.can_reply === true || (c.can_reply !== false && (!isMeta || (timeSinceLastIncoming !== null && timeSinceLastIncoming < 86400) || (Date.now() / 1000 - (c.last_activity_at || c.created_at)) < 86400));
-      if (!canReply) return false;
-    }
+    if (canReplyOnly && !isWindowOpen(c)) return false;
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     const name = (c.meta?.sender?.name || '').toLowerCase();
@@ -1392,7 +1398,7 @@ export default function MensajeriaPage() {
               const activityTimestamp = lastRealMsg?.created_at || conv?.last_non_activity_message?.created_at || conv?.last_activity_at || conv?.created_at;
               return (
                 <div key={conv.id}
-                  onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, conv }); setSelectedIds(prev => { const next = new Set(prev); next.has(conv.id) ? next.delete(conv.id) : next.add(conv.id); return next; }); }}
+                  onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, conv }); }}
                   onClick={() => loadMessages(conv)}
                   className={`mx-2 my-0.5 px-3 py-2.5 flex items-start gap-2.5 transition-all duration-200 cursor-pointer rounded-xl group/conv ${
                     isSelected 
@@ -1734,6 +1740,17 @@ export default function MensajeriaPage() {
         <div ref={ctxRef}
           style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 9999 }}
           className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl py-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-100">
+          {/* Seleccionar option */}
+          <button
+            onClick={() => {
+              setSelectedIds(prev => { const next = new Set(prev); next.has(ctxMenu.conv.id) ? next.delete(ctxMenu.conv.id) : next.add(ctxMenu.conv.id); return next; });
+              setCtxMenu(null);
+            }}
+            className="w-full text-left px-4 py-2 text-[12px] font-medium flex items-center gap-2.5 transition-colors text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          >
+            <span>☑</span> {selectedIds.has(ctxMenu.conv.id) ? 'Deseleccionar' : 'Seleccionar'}
+          </button>
+          <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
           {[
             { action: 'read',   label: 'Marcar como leído',   icon: '✓' },
             { action: 'unread', label: 'Marcar como no leído', icon: '●' },
