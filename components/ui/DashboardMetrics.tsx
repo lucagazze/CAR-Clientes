@@ -130,7 +130,7 @@ export const MetricDetailChart = ({ label, data = [], prevData = [], color, empt
   const chartColor = color;
   const gradientId = `grad-${label.replace(/\s+/g, "-")}`;
 
-  const isPercentLabel = label.toLowerCase().includes("tasa") || label.toLowerCase().includes("conversión");
+  const isPercentLabel = label.toLowerCase().includes("tasa") || label.toLowerCase().includes("conversión") || label.toLowerCase().includes("engagement");
   const isMoneyLabel =
     label.toLowerCase().includes("ingreso") ||
     label.toLowerCase().includes("inversión") ||
@@ -227,16 +227,10 @@ export const MetricDetailChart = ({ label, data = [], prevData = [], color, empt
               interval="preserveStartEnd"
             />
             <YAxis
-              domain={[0, maxVal > 0 ? maxVal * 1.2 : "auto"]}
+              domain={[0, maxVal > 0 ? maxVal * 1.25 : "auto"]}
               ticks={
                 maxVal > 0
-                  ? [
-                      0,
-                      Math.round(avg),
-                      Math.round(prevAvg),
-                      Math.round(maxVal),
-                    ]
-                      .filter((v) => v >= 0)
+                  ? [...new Set([0, avg > 0 ? avg : null, maxVal].filter(v => v !== null) as number[])]
                       .sort((a, b) => a - b)
                   : undefined
               }

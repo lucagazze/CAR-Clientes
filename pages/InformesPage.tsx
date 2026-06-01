@@ -406,10 +406,12 @@ export default function InformesPage() {
     const days = buildDailyRange(range.since, range.until);
     const endFollowers = metrics.currentFollowers || 0;
 
-    // Follower series — only real snapshots, no fake fallback
+    // Follower series — real snapshots when available, flat line at current count otherwise
     const followers = snaps.length >= 2
       ? snaps.map(s => ({ date: s.snapshot_date, val: isIg ? (s.ig_followers || 0) : (s.fb_followers || s.fb_fans || 0) }))
-      : [];
+      : endFollowers > 0
+        ? days.map(d => ({ date: d, val: endFollowers }))
+        : [];
 
     // Interaction & engagement per-day aggregated from posts
     const dayInteractions: Record<string, number> = {};
@@ -458,7 +460,8 @@ export default function InformesPage() {
     const dayInt: Record<string, number> = {}; const dayP: Record<string, number> = {};
     days.forEach(d => { dayInt[d] = 0; dayP[d] = 0; });
     prevPosts.forEach(p => { const d = (p.timestamp || p.created_time || '').split('T')[0]; if (dayInt[d] !== undefined) { dayInt[d] += isIg ? (p.like_count || 0) + (p.comments_count || 0) : (p.likes?.summary?.total_count || 0) + (p.comments?.summary?.total_count || 0); dayP[d] += 1; } });
-    const fRef = endFollowers || 1;
+    // Fallback to current followers so engagement % stays sane when no prev snapshots
+    const fRef = endFollowers || metrics.currentFollowers || 1;
     let cI = 0; let cP = 0;
     return {
       followers: followerData,
@@ -466,7 +469,7 @@ export default function InformesPage() {
       interactions: days.map(d => ({ date: d, val: dayInt[d] || 0 })),
       engagement: days.map(d => { cI += dayInt[d] || 0; cP += dayP[d] || 0; return { date: d, val: cP > 0 ? Number(((cI / cP) / fRef * 100).toFixed(4)) : 0 }; }),
     };
-  }, [activeTab, socialSnapshots, prevRange, igMedia, fbMedia]);
+  }, [activeTab, socialSnapshots, prevRange, igMedia, fbMedia, metrics.currentFollowers]);
 
   // Daily engagement bar chart data
   const dailyInteractionsData = useMemo(() => {
@@ -748,7 +751,7 @@ export default function InformesPage() {
             const series = (metricSeriesData as any)[expandedMetric] || [];
             const prevSeries = (prevMetricSeriesData as any)[expandedMetric] || [];
             const emptyMessages: Record<string, string> = {
-              followers: 'Sin datos históricos de seguidores — la evolución se acumula diariamente',
+              followers: 'Sin historial suficiente — la evolución se acumula con el uso diario',
               posts: 'Sin publicaciones en este período',
               interactions: 'Sin interacciones registradas en este período',
               engagement: 'Sin publicaciones para calcular el engagement',
