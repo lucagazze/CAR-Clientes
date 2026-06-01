@@ -240,6 +240,11 @@ export default function MensajeriaPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mobileTextareaRef = useRef<HTMLTextAreaElement>(null);
   // Persist manuallyUnread in localStorage so it survives reloads
   const unreadStorageKey = `car_manually_unread_${profile?.id || 'default'}`;
   const [manuallyUnread, setManuallyUnreadRaw] = useState<Set<number>>(() => {
@@ -1189,6 +1194,56 @@ export default function MensajeriaPage() {
     ? (convMeta?.assigned_count !== undefined ? convMeta.assigned_count : conversations.filter(c => !!c.meta?.assignee).length)
     : (channelMetas[channelFilter]?.assigned_count !== undefined ? channelMetas[channelFilter].assigned_count : channelFilteredRaw.filter(c => !!c.meta?.assignee).length);
 
+  const adjustMobileTextarea = () => {
+    const ta = mobileTextareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 150) + 'px';
+  };
+
+  const handleMicPress = async () => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4' });
+      audioChunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const mimeType = mr.mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        setTranscribing(true);
+        try {
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64 = (reader.result as string).split(',')[1];
+            const res = await fetch('/api/transcribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio: base64, mimeType }),
+            });
+            const data = await res.json();
+            if (data.text) {
+              setReply(prev => (prev ? prev + ' ' : '') + data.text);
+              setTimeout(adjustMobileTextarea, 50);
+            }
+          };
+          reader.readAsDataURL(blob);
+        } catch (e) { console.error('Transcription error', e); }
+        finally { setTranscribing(false); }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+    } catch (e) {
+      alert('No se pudo acceder al micrófono. Verificá los permisos.');
+    }
+  };
+
   if (!cwUrl || !cwToken) {
     return (
       <div className="flex items-center justify-center h-full py-24">
@@ -1637,12 +1692,15 @@ export default function MensajeriaPage() {
                     <div className="md:hidden flex items-end gap-2 px-3 py-2 bg-[#0b141a] border-t border-zinc-800/60 flex-shrink-0">
                       <div className="flex-1 flex items-end bg-[#202c33] rounded-3xl px-4 py-2.5 min-h-[44px]">
                         <textarea
+                          ref={mobileTextareaRef}
                           value={reply}
-                          onChange={e => setReply(e.target.value)}
+                          onChange={e => { setReply(e.target.value); adjustMobileTextarea(); }}
                           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e as any); }}}
-                          placeholder="Mensaje..."
+                          placeholder={transcribing ? 'Transcribiendo...' : isRecording ? '● Grabando...' : 'Mensaje...'}
                           rows={1}
-                          className="flex-1 w-full bg-transparent text-white text-[14px] outline-none resize-none max-h-32 placeholder-zinc-500 leading-snug"
+                          disabled={transcribing}
+                          className="flex-1 w-full bg-transparent text-white text-[14px] outline-none resize-none placeholder-zinc-400 leading-snug overflow-hidden"
+                          style={{ maxHeight: '150px' }}
                         />
                       </div>
                       <button
@@ -1658,9 +1716,13 @@ export default function MensajeriaPage() {
                           {sending ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Send className="w-5 h-5 text-white" />}
                         </button>
                       ) : (
-                        <div className="p-2.5 bg-[#00a884] rounded-full flex-shrink-0">
-                          <Mic className="w-5 h-5 text-white" />
-                        </div>
+                        <button
+                          onClick={handleMicPress}
+                          disabled={transcribing}
+                          className={`p-2.5 rounded-full flex-shrink-0 active:scale-95 transition-all ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-[#00a884]'} disabled:opacity-40`}
+                        >
+                          {transcribing ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Mic className="w-5 h-5 text-white" />}
+                        </button>
                       )}
                     </div>
                   );
