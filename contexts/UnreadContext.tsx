@@ -45,6 +45,12 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [unreadCount, setUnreadCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Reset to 0 immediately when switching profiles — no stale count from previous client
+  useEffect(() => {
+    setUnreadCount(0);
+    document.title = 'Portal C.A.R | Algoritmia';
+  }, [profile?.id]);
+
   const fetchCount = useCallback(async () => {
     const url = profile?.chatwoot_url;
     const token = profile?.chatwoot_token;
@@ -131,18 +137,15 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const connect = async () => {
       try {
-        console.log('[UnreadContext WS] Fetching profile for pubsub token...');
         const { pubsub_token } = await chatwoot.getProfile(url, token);
         if (!pubsub_token) return;
 
         const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
         const wsUrl = cleanUrl.replace(/^https?/, (m: string) => m === 'https' ? 'wss' : 'ws') + '/cable';
         
-        console.log('[UnreadContext WS] Connecting to:', wsUrl);
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-          console.log('[UnreadContext WS] Connected. Subscribing to RoomChannel...');
           ws!.send(JSON.stringify({
             command: 'subscribe',
             identifier: JSON.stringify({ channel: 'RoomChannel', pubsub_token })
@@ -159,7 +162,6 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const msg = frame.message;
             if (!msg?.event) return;
 
-            console.log('[UnreadContext WS] Real-time event received:', msg.event);
 
             // Trigger fetchCount on any relevant conversation/message event
             if ([
@@ -169,10 +171,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               'conversation.status_changed',
               'conversation.updated'
             ].includes(msg.event)) {
-              setTimeout(() => {
-                console.log('[UnreadContext WS] Triggering badge refresh...');
-                fetchCountRef.current();
-              }, 200);
+              setTimeout(() => fetchCountRef.current(), 200);
             }
           } catch (err) {
             console.error('[UnreadContext WS] Message error:', err);
@@ -180,8 +179,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
 
         ws.onclose = () => {
-          console.log('[UnreadContext WS] Disconnected. Reconnecting in 5s...');
-          clearInterval(pingInterval);
+            clearInterval(pingInterval);
           reconnectTimeout = setTimeout(connect, 5000);
         };
         ws.onerror = (err) => {
@@ -195,7 +193,6 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     connect();
     return () => {
-      console.log('[UnreadContext WS] Cleaning up websocket connection...');
       clearInterval(pingInterval);
       clearTimeout(reconnectTimeout);
       ws?.close();
@@ -208,6 +205,8 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const token = profile?.chatwoot_token;
     if (!url || !token) {
       if (timerRef.current) clearInterval(timerRef.current);
+      // No Chatwoot = no badge, clean title
+      setUnreadCount(0);
       return;
     }
 

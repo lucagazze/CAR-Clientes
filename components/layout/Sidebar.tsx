@@ -40,7 +40,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     { path: '/captacion',        icon: BarChart2,     label: 'Captación' },
     { path: '/atencion',         icon: MessageCircle, label: 'Atención' },
     { path: '/retencion',        icon: Mail,          label: 'Retención' },
-    { path: '/informes',         icon: TrendingUp,    label: 'Redes Sociales' },
   ];
 
   const activosItems = [

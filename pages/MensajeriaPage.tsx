@@ -202,13 +202,30 @@ export default function MensajeriaPage() {
   const cwUrl = (profile as any)?.chatwoot_url;
   const cwToken = (profile as any)?.chatwoot_token;
 
-  const convCacheKey = `car_convs_${(profile as any)?.id || 'default'}`;
+  const profileId = (profile as any)?.id;
+  const convCacheKey = profileId ? `car_convs_${profileId}` : null;
   const [conversations, setConversations] = useState<any[]>(() => {
     try {
-      const cached = sessionStorage.getItem(`car_convs_${(profile as any)?.id || 'default'}`);
+      const key = profileId ? `car_convs_${profileId}` : null;
+      if (!key) return [];
+      const cached = sessionStorage.getItem(key);
       return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   });
+
+  // Reset conversations when switching profiles (admin view-as) — no data cross-contamination
+  useEffect(() => {
+    try {
+      const key = profileId ? `car_convs_${profileId}` : null;
+      const cached = key ? sessionStorage.getItem(key) : null;
+      setConversations(cached ? JSON.parse(cached) : []);
+    } catch {
+      setConversations([]);
+    }
+    setSelected(null);
+    setMessages([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId]);
   const [convMeta, setConvMeta] = useState<{ all_count: number; unassigned_count: number; assigned_count: number } | null>(() => {
     try {
       const saved = sessionStorage.getItem(`car_conv_meta_${profile?.id || 'default'}`);
@@ -486,7 +503,7 @@ export default function MensajeriaPage() {
         const prevIds = new Set(prev.map((c: any) => c.id));
         const newOnes = firstPayload.filter((c: any) => !prevIds.has(c.id));
         const merged = [...newOnes, ...updated];
-        try { sessionStorage.setItem(convCacheKey, JSON.stringify(merged.slice(0, 50))); } catch {}
+        try { if (convCacheKey) sessionStorage.setItem(convCacheKey, JSON.stringify(merged.slice(0, 50))); } catch {}
         return merged;
       });
       setHasMore(firstHasMore);
