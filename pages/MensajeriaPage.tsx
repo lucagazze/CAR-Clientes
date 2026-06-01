@@ -9,7 +9,7 @@ import {
   RefreshCw, AlertCircle, Loader2, Send, Sparkles,
   Search, CheckCircle, Clock, Inbox, ExternalLink, Bot,
   Globe, Facebook, Instagram, MessageCircle, Mail,
-  BookOpen, ShoppingBag, Plus, Trash2, Link
+  BookOpen, ShoppingBag, Plus, Trash2, Link, Mic, ChevronLeft
 } from 'lucide-react';
 
 
@@ -196,6 +196,7 @@ export default function MensajeriaPage() {
   const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'instagram' | 'facebook' | 'email' | 'other'>('all');
   const [listCollapsed, setListCollapsed] = useState(false);
   const [mobileShowChat, setMobileShowChat] = useState(false);
+  const [swipeTouchStartX, setSwipeTouchStartX] = useState<number | null>(null);
   
   // Sidebar State Variables
   const [showSidebar, setShowSidebar] = useState(false);
@@ -1504,18 +1505,30 @@ export default function MensajeriaPage() {
           ) : (
             <>
               {/* Main Chat Area */}
-              <div className="flex-1 flex flex-col overflow-hidden h-full border-r border-zinc-200 dark:border-zinc-800">
-                {/* Chat header */}
-                <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center gap-3 flex-shrink-0">
-                  <button
-                    onClick={() => { setSelected(null); setMobileShowChat(false); }}
-                    className="md:hidden p-1.5 -ml-1 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              <div
+                className="flex-1 flex flex-col overflow-hidden h-full border-r border-zinc-200 dark:border-zinc-800"
+                onTouchStart={e => { if (e.touches[0].clientX < 35) setSwipeTouchStartX(e.touches[0].clientX); }}
+                onTouchEnd={e => { if (swipeTouchStartX !== null && e.changedTouches[0].clientX - swipeTouchStartX > 70) { setSelected(null); setMobileShowChat(false); } setSwipeTouchStartX(null); }}
+              >
+                {/* MOBILE header — WhatsApp style */}
+                <div className="md:hidden flex items-center gap-3 px-3 py-2.5 bg-zinc-950 border-b border-zinc-800/60 flex-shrink-0">
+                  <button onClick={() => { setSelected(null); setMobileShowChat(false); }} className="p-1 text-white">
+                    <ChevronLeft className="w-6 h-6" />
                   </button>
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-[13px] font-black flex-shrink-0 ${CHANNEL_COLOR[getChannel(selected)]}`}>
+                    {(contact(selected).name || '?').slice(0,2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-semibold text-white leading-tight truncate">{contact(selected).name || `Chat #${selected.id}`}</p>
+                    {contact(selected).phone_number && <p className="text-[11px] text-zinc-400 truncate">{contact(selected).phone_number}</p>}
+                  </div>
+                </div>
+
+                {/* DESKTOP header */}
+                <div className="hidden md:flex px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 items-center gap-3 flex-shrink-0">
                   <button
                     onClick={() => setListCollapsed(v => !v)}
-                    className="hidden md:flex p-1.5 -ml-1 rounded-lg text-zinc-550 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
+                    className="p-1.5 -ml-1 rounded-lg text-zinc-550 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
                     title={listCollapsed ? "Mostrar lista de chats" : "Ocultar lista de chats"}
                   >
                     <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1537,8 +1550,6 @@ export default function MensajeriaPage() {
                       </span>
                     </div>
                   </div>
-
-
                 </div>
 
                 {/* 24-hour warning banner */}
@@ -1561,7 +1572,7 @@ export default function MensajeriaPage() {
                 })()}
 
                 {/* Messages list */}
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-white dark:bg-zinc-950">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto md:px-5 px-2 md:py-4 py-3 md:space-y-3 space-y-1 bg-[#0b141a] md:bg-white dark:bg-zinc-950">
                   {loadingMsgs ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
@@ -1569,29 +1580,32 @@ export default function MensajeriaPage() {
                   ) : messages.length === 0 ? (
                     <div className="text-center py-12 text-zinc-400 text-[13px]">Sin mensajes</div>
                   ) : messages.map((msg: any) => {
-                    const isMe = msg?.message_type === 1; // 1 = outgoing
-                    const isActivity = msg?.message_type === 2; // 2 = activity
+                    const isMe = msg?.message_type === 1;
+                    const isActivity = msg?.message_type === 2;
                     if (isActivity) return (
-                      <div key={msg.id} className="flex justify-center">
-                        <span className="text-[10px] text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full">{msg?.content}</span>
+                      <div key={msg.id} className="flex justify-center my-1">
+                        <span className="text-[10px] text-zinc-400 bg-zinc-800/60 md:bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full">{msg?.content}</span>
                       </div>
                     );
                     return (
                       <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                        <span className="text-[9px] text-zinc-400 font-medium mb-0.5 px-2">
+                        {/* Desktop: name + time above bubble */}
+                        <span className="hidden md:block text-[9px] text-zinc-400 font-medium mb-0.5 px-2">
                           {isMe ? 'Agente' : (contact(selected).name || 'Cliente')} · {fmtTime(msg.created_at)}
                         </span>
-                        <div className={`max-w-[70%] rounded-[18px] px-4 py-2.5 text-[13px] leading-relaxed ${
+                        <div className={`md:max-w-[70%] max-w-[85%] rounded-[18px] px-3.5 md:px-4 py-2 md:py-2.5 text-[14px] md:text-[13px] leading-relaxed ${
                           failedMsgIds.has(msg.id)
-                            ? 'bg-red-100 dark:bg-red-950/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
+                            ? 'bg-red-900/50 border border-red-700 text-red-300 md:bg-red-100 md:border-red-300 md:text-red-700'
                             : isMe
-                              ? `bg-blue-600 text-white shadow-sm ${msg.pending ? 'opacity-60' : ''}`
-                              : 'bg-white dark:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 shadow-sm'
+                              ? `md:bg-blue-600 bg-[#005c4b] text-white shadow-sm ${msg.pending ? 'opacity-60' : ''}`
+                              : 'bg-[#202c33] md:bg-white dark:bg-zinc-800 md:border md:border-zinc-200/60 dark:border-zinc-700 text-zinc-100 md:text-zinc-800 shadow-sm'
                         }`}>
                           {renderMessageContent(msg, contact(selected).name)}
+                          {/* Mobile: timestamp inside bubble */}
+                          <span className="md:hidden block text-right text-[10px] opacity-50 mt-0.5">{fmtTime(msg.created_at)}</span>
                           {failedMsgIds.has(msg.id) && (
-                            <div className="flex items-center gap-1 mt-1 text-[10px] text-red-500 font-bold">
-                              <AlertCircle className="w-3 h-3" /> Error al enviar — ventana de 24hs cerrada
+                            <div className="flex items-center gap-1 mt-1 text-[10px] text-red-400 font-bold">
+                              <AlertCircle className="w-3 h-3" /> Error al enviar
                             </div>
                           )}
                           {msg.pending && !failedMsgIds.has(msg.id) && (
@@ -1604,8 +1618,50 @@ export default function MensajeriaPage() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Reply Box area */}
-                <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex-shrink-0">
+                {/* MOBILE reply bar — WhatsApp pill style */}
+                {(() => {
+                  const ch = getChannel(selected);
+                  const isMetaConv = ['whatsapp', 'instagram', 'facebook'].includes(ch);
+                  const lastIncoming = [...messages].reverse().find((m: any) => m?.message_type === 0);
+                  const over24h = isMetaConv && lastIncoming && (Date.now()/1000 - lastIncoming.created_at) > 86400;
+                  const noIncoming = isMetaConv && !lastIncoming;
+                  const isClosed = selected.can_reply === false || (selected.can_reply === undefined && isMetaConv && !loadingMsgs && (over24h || noIncoming));
+                  if (isClosed) return null;
+                  return (
+                    <div className="md:hidden flex items-end gap-2 px-3 py-2 bg-[#0b141a] border-t border-zinc-800/60 flex-shrink-0">
+                      <div className="flex-1 flex items-end bg-[#202c33] rounded-3xl px-4 py-2.5 min-h-[44px]">
+                        <textarea
+                          value={reply}
+                          onChange={e => setReply(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e as any); }}}
+                          placeholder="Mensaje..."
+                          rows={1}
+                          className="flex-1 w-full bg-transparent text-white text-[14px] outline-none resize-none max-h-32 placeholder-zinc-500 leading-snug"
+                        />
+                      </div>
+                      <button
+                        onClick={generateAiDraft}
+                        disabled={generatingDraft || sending || messages.length === 0}
+                        className="p-2.5 bg-violet-600 rounded-full flex-shrink-0 disabled:opacity-40 active:scale-95 transition-transform"
+                      >
+                        {generatingDraft ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Bot className="w-5 h-5 text-white" />}
+                      </button>
+                      {reply.trim() ? (
+                        <button onClick={handleSend as any} disabled={sending}
+                          className="p-2.5 bg-[#00a884] rounded-full flex-shrink-0 disabled:opacity-40 active:scale-95 transition-transform">
+                          {sending ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Send className="w-5 h-5 text-white" />}
+                        </button>
+                      ) : (
+                        <div className="p-2.5 bg-[#00a884] rounded-full flex-shrink-0">
+                          <Mic className="w-5 h-5 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* DESKTOP Reply Box area */}
+                <div className="hidden md:block border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex-shrink-0">
                   {(() => {
                     const ch = getChannel(selected);
                     const isMetaConv = ['whatsapp', 'instagram', 'facebook'].includes(ch);
