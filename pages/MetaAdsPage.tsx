@@ -7,8 +7,9 @@ import {
 } from 'lucide-react';
 
 // ── Creative Preview Modal ─────────────────────────────────────────────
-const CreativePreviewModal = ({ preview, onClose }: {
+const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
   preview: { url: string; isVideo: boolean; videoId?: string; adId?: string; creativeId?: string; name?: string; effectiveObjectStoryId?: string; };
+  prefetchedData?: any;
   onClose: () => void;
 }) => {
   const [loading, setLoading] = React.useState(true);
@@ -24,6 +25,13 @@ const CreativePreviewModal = ({ preview, onClose }: {
   const [activeIndex, setActiveIndex] = React.useState(0);
 
   React.useEffect(() => {
+    if (prefetchedData && prefetchedData.type && prefetchedData.type !== 'failed' && prefetchedData.type !== 'none') {
+      setMediaData(prefetchedData);
+      setLoading(false);
+      setActiveIndex(0);
+      return;
+    }
+
     setLoading(true);
     setMediaData(null);
     setActiveIndex(0);
@@ -54,7 +62,7 @@ const CreativePreviewModal = ({ preview, onClose }: {
         });
       })
       .finally(() => setLoading(false));
-  }, [preview.adId, preview.creativeId, preview.videoId, preview.isVideo, preview.url]);
+  }, [preview.adId, preview.creativeId, preview.videoId, preview.isVideo, preview.url, prefetchedData]);
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -186,10 +194,17 @@ export default function MetaAdsPage() {
   const [loading, setLoading] = useState(false);
   const [activePreview, setActivePreview] = useState<any | null>(null);
 
+  const [resolvedThumbnails, setResolvedThumbnails] = useState<Record<string, string>>({});
+  const [resolvedDetails, setResolvedDetails] = useState<Record<string, any>>({});
+  const [resolvingIds, setResolvingIds] = useState<Record<string, boolean>>({});
+
   const fetchAds = () => {
     const accountId = (profile as any)?.meta_account_id;
     if (!accountId) return;
     setLoading(true);
+    setResolvedThumbnails({});
+    setResolvedDetails({});
+    setResolvingIds({});
     const tr = { since: daysAgo(28), until: today() };
     const adFields = 'ad_id,spend,impressions,reach,inline_link_click_ctr,inline_link_clicks,actions,cost_per_action_type,action_values,purchase_roas';
     Promise.all([
@@ -208,6 +223,69 @@ export default function MetaAdsPage() {
   };
 
   useEffect(() => { fetchAds(); }, [profile?.id]);
+
+  // Sequential 4-by-4 batch thumbnail and asset resolver
+  useEffect(() => {
+    const accountId = (profile as any)?.meta_account_id;
+    if (!accountId || activeAds.length === 0) return;
+
+    // Identify ads that have not been resolved yet and are not currently resolving
+    const toResolve = activeAds.filter(ad => {
+      return !resolvedDetails[ad.id] && !resolvingIds[ad.id];
+    });
+
+    if (toResolve.length === 0) return;
+
+    // Take a batch of up to 4
+    const batch = toResolve.slice(0, 4);
+
+    // Mark as resolving
+    setResolvingIds(prev => {
+      const next = { ...prev };
+      batch.forEach(ad => {
+        next[ad.id] = true;
+      });
+      return next;
+    });
+
+    // Run fetches in parallel
+    Promise.all(batch.map(async (ad) => {
+      const params = new URLSearchParams();
+      if (ad.id) params.set('adId', ad.id);
+      if (ad.creative?.id) params.set('creativeId', ad.creative.id);
+      if (ad.creative?.video_id) params.set('videoId', ad.creative.video_id);
+
+      try {
+        const res = await fetch(`/api/meta-video?${params}`);
+        if (!res.ok) throw new Error('Fetch failed');
+        const data = await res.json();
+        
+        let thumbnail: string | null = null;
+        if (data.type === 'carousel' && data.cards?.[0]?.url) {
+          thumbnail = data.cards[0].url;
+        } else if (data.type === 'video_source' && data.picture) {
+          thumbnail = data.picture;
+        } else if (data.type === 'image' && data.url) {
+          thumbnail = data.url;
+        }
+
+        setResolvedDetails(prev => ({ ...prev, [ad.id]: data }));
+        if (thumbnail) {
+          setResolvedThumbnails(prev => ({ ...prev, [ad.id]: thumbnail }));
+        }
+      } catch (err) {
+        console.error(`Error resolving ad ${ad.id}:`, err);
+        // Mark as failed so we don't retry it
+        setResolvedDetails(prev => ({ ...prev, [ad.id]: { type: 'failed' } }));
+      } finally {
+        setResolvingIds(prev => {
+          const next = { ...prev };
+          delete next[ad.id];
+          return next;
+        });
+      }
+    }));
+  }, [activeAds, resolvedDetails, resolvingIds, profile]);
 
   const fmtN = (n: any) => {
     const v = parseInt(n);
@@ -316,30 +394,39 @@ export default function MetaAdsPage() {
                     const adRoas = parseFloat(insights?.purchase_roas?.[0]?.value || 0);
                     const resultLabel = purchases > 0 ? 'Ventas' : leads > 0 ? 'Leads' : messages > 0 ? 'Msgs' : 'Result.';
                     const isVideo = ad.creative?.object_type === 'VIDEO' || !!ad.creative?.video_id;
-                    const thumbUrl = ad.creative?.image_url || ad.creative?.thumbnail_url;
+                    const isCarousel = resolvedDetails[ad.id]?.type === 'carousel' || ad.creative?.object_type === 'CAROUSEL';
+                    const resolvedThumb = resolvedThumbnails[ad.id];
+                    const thumbUrl = resolvedThumb || ad.creative?.image_url || ad.creative?.thumbnail_url;
+                    const isResolving = resolvingIds[ad.id];
 
                     return (
                       <div key={ad.id} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 shadow-sm hover:shadow-lg hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 flex flex-col">
                         {/* Thumbnail */}
                         <div
                           className="relative w-full h-52 bg-zinc-100 dark:bg-zinc-800 cursor-pointer group overflow-hidden flex-shrink-0"
-                          onClick={() => thumbUrl && setActivePreview({ url: thumbUrl, isVideo, videoId: ad.creative?.video_id, adId: ad.id, creativeId: ad.creative?.id, name: ad.name, effectiveObjectStoryId: ad.creative?.effective_object_story_id })}
+                          onClick={() => setActivePreview({ url: thumbUrl || '', isVideo, videoId: ad.creative?.video_id, adId: ad.id, creativeId: ad.creative?.id, name: ad.name, effectiveObjectStoryId: ad.creative?.effective_object_story_id })}
                         >
                           {thumbUrl ? (<>
                             <img src={thumbUrl} alt="" className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60" aria-hidden />
                             <img src={thumbUrl} alt={ad.name} className="relative z-10 w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
                             <div className="absolute inset-0 z-20 bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center">
                               <div className={`flex items-center justify-center w-14 h-14 rounded-full shadow-2xl transition-all duration-200 ${isVideo ? 'bg-white/90 scale-90 group-hover:scale-100' : 'bg-black/50 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'}`}>
-                                {isVideo ? (<svg className="w-6 h-6 text-zinc-900 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>) : (<ImageIcon className="w-6 h-6 text-white" />)}
+                                {isVideo ? (<svg className="w-6 h-6 text-zinc-900 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>) : isCarousel ? (<Layers className="w-6 h-6 text-white" />) : (<ImageIcon className="w-6 h-6 text-white" />)}
                               </div>
                             </div>
-                          </>) : (
+                          </>) : isResolving ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-50 dark:bg-zinc-900/50">
+                              <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+                              <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Cargando...</span>
+                            </div>
+                          ) : (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                              {isVideo ? <Film className="w-10 h-10 opacity-20" /> : <ImageIcon className="w-10 h-10 opacity-20" />}
+                              {isVideo ? <Film className="w-10 h-10 opacity-20" /> : isCarousel ? <Layers className="w-10 h-10 opacity-20" /> : <ImageIcon className="w-10 h-10 opacity-20" />}
                               <span className="text-[11px] text-zinc-400 font-semibold">Sin preview</span>
                             </div>
                           )}
                           {isVideo && (<div className="absolute top-2 right-2 z-30 flex items-center gap-1 bg-black/60 text-white px-2 py-0.5 rounded-full text-[9px] font-bold uppercase backdrop-blur-sm"><Film className="w-3 h-3" /> Video</div>)}
+                          {!isVideo && isCarousel && (<div className="absolute top-2 right-2 z-30 flex items-center gap-1 bg-black/60 text-white px-2 py-0.5 rounded-full text-[9px] font-bold uppercase backdrop-blur-sm"><Layers className="w-3 h-3" /> Carousel</div>)}
                           <div className="absolute top-2 left-2 z-30"><span className="text-[9px] font-black px-2 py-1 rounded-lg bg-emerald-500/90 backdrop-blur-sm text-white uppercase tracking-wider">Activo</span></div>
                         </div>
 
@@ -369,7 +456,7 @@ export default function MetaAdsPage() {
 
                           <div className="flex gap-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800 mt-auto">
                             <button
-                              onClick={() => thumbUrl && setActivePreview({ url: thumbUrl, isVideo, videoId: ad.creative?.video_id, adId: ad.id, creativeId: ad.creative?.id, name: ad.name, effectiveObjectStoryId: ad.creative?.effective_object_story_id })}
+                              onClick={() => setActivePreview({ url: thumbUrl || '', isVideo, videoId: ad.creative?.video_id, adId: ad.id, creativeId: ad.creative?.id, name: ad.name, effectiveObjectStoryId: ad.creative?.effective_object_story_id })}
                               className="flex-1 flex items-center justify-center gap-1 h-7 rounded-lg text-[10px] font-bold text-zinc-500 bg-zinc-100 dark:bg-white/[0.05] hover:text-zinc-900 dark:hover:text-white"
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -393,7 +480,13 @@ export default function MetaAdsPage() {
         );
       })()}
 
-      {activePreview && <CreativePreviewModal preview={activePreview} onClose={() => setActivePreview(null)} />}
+      {activePreview && (
+        <CreativePreviewModal 
+          preview={activePreview} 
+          prefetchedData={resolvedDetails[activePreview.adId]} 
+          onClose={() => setActivePreview(null)} 
+        />
+      )}
     </div>
   );
 }

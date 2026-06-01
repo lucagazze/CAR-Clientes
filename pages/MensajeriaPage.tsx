@@ -218,6 +218,7 @@ export default function MensajeriaPage() {
   const [loadingSuggestion, setLoadingSuggestion] = useState<string | null>(null);
   const [assignFilter, setAssignFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'instagram' | 'facebook' | 'email' | 'other'>('all');
+  const [showPendingOnly, setShowPendingOnly] = useState<boolean>(false);
   const [listCollapsed, setListCollapsed] = useState(false);
   const [mobileShowChat, setMobileShowChat] = useState(false);
   const [swipeTouchStartX, setSwipeTouchStartX] = useState<number | null>(null);
@@ -953,6 +954,16 @@ export default function MensajeriaPage() {
     return () => clearTimeout(timer);
   }, [shopifySearch, searchShopifyProducts, profile?.shopify_domain, profile?.shopify_access_token]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveImagePreview(null);
+        setActiveVideoPreview(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1300,7 +1311,9 @@ export default function MensajeriaPage() {
     return getChannel(c) === channelFilter;
   });
 
-  const unreadFilteredConversations = channelFilteredConversations;
+  const unreadFilteredConversations = showPendingOnly
+    ? channelFilteredConversations.filter(isConvUnread)
+    : channelFilteredConversations;
 
   const assignFiltered = unreadFilteredConversations.filter(c => {
     if (assignFilter === 'unassigned') return !c.meta?.assignee;
@@ -1510,6 +1523,20 @@ export default function MensajeriaPage() {
               className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-zinc-750 dark:text-zinc-300 transition-all" 
             />
           </div>
+
+          {/* Pendientes Filter (Visible on both mobile and desktop) */}
+          <button
+            onClick={() => setShowPendingOnly(prev => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11.5px] font-black transition-all active:scale-[0.98] h-[32px] ${
+              showPendingOnly
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-650 dark:text-zinc-300 hover:border-zinc-350 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+            }`}
+            title="Mostrar solo mensajes pendientes"
+          >
+            <Clock className={`w-3.5 h-3.5 ${showPendingOnly ? 'text-amber-500 animate-pulse' : 'text-zinc-450 dark:text-zinc-400'}`} />
+            <span>Pendientes</span>
+          </button>
 
           {/* Sort button (Desktop only) */}
           <div className="hidden md:block relative group">
@@ -2081,20 +2108,7 @@ export default function MensajeriaPage() {
         </div>
       )}
 
-      {/* Keyboard listener for Escape to close image/video preview */}
-      {(() => {
-        React.useEffect(() => {
-          const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-              setActiveImagePreview(null);
-              setActiveVideoPreview(null);
-            }
-          };
-          window.addEventListener('keydown', handleKeyDown);
-          return () => window.removeEventListener('keydown', handleKeyDown);
-        }, []);
-        return null;
-      })()}
+      {/* Keyboard listener for Escape to close image/video preview removed from inline IIFE */}
 
       {/* Fullscreen Image Preview Modal */}
       {activeImagePreview && (
