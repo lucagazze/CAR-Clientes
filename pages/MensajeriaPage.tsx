@@ -625,10 +625,10 @@ export default function MensajeriaPage() {
     setSendError(null);
     try {
       const realMessages = messages.filter((m: any) => m?.message_type !== 2);
-      const last15 = realMessages.slice(-15);
-      const lastIncoming = [...last15].reverse().find((m: any) => m?.message_type === 0);
-      const lastMsg = last15[last15.length - 1];
-      const history = last15.map((m: any) => {
+      const last25 = realMessages.slice(-25);
+      const lastIncoming = [...last25].reverse().find((m: any) => m?.message_type === 0);
+      const lastMsg = last25[last25.length - 1];
+      const history = last25.map((m: any) => {
         const who = m?.message_type === 1 ? 'Agente' : (contact(selected).name || 'Cliente');
         return `${who}: ${m?.content || '[archivo adjunto]'}`;
       });
@@ -745,13 +745,15 @@ export default function MensajeriaPage() {
     };
   }, [mobileShowChat]);
 
-  // Scroll to bottom when chat opens (not on every message update)
-  const prevSelectedIdRef = useRef<number | null>(null);
+  // Scroll to bottom when chat opens and finishes loading (not on every message update)
+  const lastScrolledConvId = useRef<number | null>(null);
   useEffect(() => {
-    if (selected?.id && selected.id !== prevSelectedIdRef.current) {
-      prevSelectedIdRef.current = selected.id;
-      if (!loadingMsgs && messages.length > 0) {
-        messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight });
+    if (selected?.id && !loadingMsgs && messages.length > 0) {
+      if (selected.id !== lastScrolledConvId.current) {
+        lastScrolledConvId.current = selected.id;
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
       }
     }
   }, [selected?.id, loadingMsgs, messages.length]);

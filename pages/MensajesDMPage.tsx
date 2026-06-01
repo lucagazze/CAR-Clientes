@@ -535,7 +535,7 @@ export default function MensajesDMPage() {
     setLoadingDraft(true);
     setReplyError(null);
     try {
-      const history = convMessages.slice(-15).map(m => {
+      const history = convMessages.slice(-25).map(m => {
         const isMe = m.from?.id === fbPageId || (igId && m.from?.id === igId);
         return `${isMe ? 'Marca' : selectedConv.username}: ${m.message || '(archivo)'}`;
       });

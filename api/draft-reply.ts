@@ -226,7 +226,7 @@ Rules:
    - If there is no specific matching link in the custom links list but there is information in the business brain, explain it briefly and invite them to use the main store URL: ${canonicalSiteUrl}.
 4. Do not use placeholders like [price] or [link]. The reply must be ready to send.
 5. Output ONLY the final drafted text, without explanations, quotes, or prefixes.
-${isDM ? '6. CRITICAL: Analyze the conversation history block above. Identify what has already been discussed or offered (such as previous product recommendations, shipping info, or links). Do NOT repeat explanations, greetings, or links that have already been sent in the recent messages. Build upon the previous agent responses and answer the customer\'s latest query/need directly.' : ''}`;
+${isDM ? '6. CRITICAL: Analyze the conversation history block above. Identify what has already been discussed or offered (such as previous product recommendations, shipping info, or links). Do NOT repeat explanations, greetings, or links that have already been sent in the recent messages. Build upon the previous agent responses and answer the customer\'s latest query/need directly. Also, analyze the length, style, and dynamics of the messages in the history (e.g., if the user and agent have been exchanging short, brief messages, keep your reply short and direct; if they are exchanging detailed, longer paragraphs, write a similarly detailed response). Match the length and style of the conversation naturally.' : ''}`;
 
 
     // 4. Call AI API — Gemini 2.0 Flash preferred, fallback to OpenAI gpt-4o-mini
