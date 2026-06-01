@@ -478,12 +478,7 @@ export const metaAds = {
 
   getInstagramProfile: (igId: string) =>
     apiGetPageActive(igId, {
-      fields: 'id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,white_list,website',
-    }).catch(err => {
-      // If we queried a field that fails or standard profile fields
-      return apiGetPageActive(igId, {
-        fields: 'id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website',
-      });
+      fields: 'id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website',
     }),
 
   getInstagramMedia: (igId: string, limit = 8, after?: string) => {

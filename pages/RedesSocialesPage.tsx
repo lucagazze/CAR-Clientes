@@ -70,7 +70,9 @@ export default function RedesSocialesPage() {
   const [activeTab, setActiveTab] = useState<'instagram' | 'facebook'>('instagram');
 
   // Loading and Error States
-  const [loading, setLoading] = useState(true);
+  const [igLoading, setIgLoading] = useState(true);
+  const [fbLoading, setFbLoading] = useState(true);
+  const loading = igLoading && fbLoading;
   const [error, setError] = useState<string | null>(null);
   const [fbError, setFbError] = useState<string | null>(null);
 
@@ -582,84 +584,49 @@ export default function RedesSocialesPage() {
     }
   };
 
-  // Fetch all metrics
+  // Fetch IG and FB independently so each shows as soon as it's ready
   useEffect(() => {
     if (!clientId) return;
 
     let active = true;
-    setLoading(true);
+    setIgLoading(!!igId);
+    setFbLoading(!!fbPageId);
     setError(null);
     setFbError(null);
     setIgNextCursor(null);
     setFbNextCursor(null);
 
-    const loadData = async () => {
-      try {
-        const promises: Promise<any>[] = [];
-        
-        let igProfilePromise = Promise.resolve<any>(null);
-        let igMediaPromise = Promise.resolve<any[]>([]);
-        let fbProfilePromise = Promise.resolve<any>(null);
-        let fbMediaPromise = Promise.resolve<any[]>([]);
-
-        // Fetch Instagram
-        if (igId) {
-          igProfilePromise = metaAds.getInstagramProfile(igId).catch(err => {
-            console.error('Error fetching Instagram Profile:', err);
-            return null;
-          });
-          igMediaPromise = metaAds.getInstagramMedia(igId, 8).catch(err => {
-            console.error('Error fetching Instagram Media:', err);
-            return [];
-          });
-        }
-
-        // Fetch Facebook Page Info & Feed
-        if (fbPageId) {
-          fbProfilePromise = metaAds.getFacebookPageInfo(fbPageId).catch(err => {
-            console.error('Error fetching Facebook Page Info:', err);
-            return null;
-          });
-          fbMediaPromise = metaAds.getFacebookPageFeed(fbPageId, 8).catch(err => {
-            console.error('Error fetching Facebook Page Feed:', err);
-            setFbError(err.message || String(err));
-            return [];
-          });
-        }
-
-        const [
-          igProfileRes, igMediaRes,
-          fbProfileRes, fbMediaRes
-        ] = await Promise.all([
-          igProfilePromise, igMediaPromise,
-          fbProfilePromise, fbMediaPromise
-        ]);
-
+    // Load Instagram independently
+    if (igId) {
+      Promise.all([
+        metaAds.getInstagramProfile(igId).catch(() => null),
+        metaAds.getInstagramMedia(igId, 8).catch(() => []),
+      ]).then(([profileRes, mediaRes]) => {
         if (!active) return;
+        setIgProfile(profileRes);
+        const media = (mediaRes as any)?.data || mediaRes || [];
+        setIgMedia(media);
+        setIgNextCursor((mediaRes as any)?.paging?.cursors?.after || null);
+      }).catch(err => {
+        if (active) setError(err.message || 'Error al obtener datos de Instagram.');
+      }).finally(() => { if (active) setIgLoading(false); });
+    }
 
-        // Save Results
-        setIgProfile(igProfileRes);
-        const resolvedIgMedia = (igMediaRes as any)?.data || igMediaRes || [];
-        setIgMedia(resolvedIgMedia);
-        setIgNextCursor((igMediaRes as any)?.paging?.cursors?.after || null);
+    // Load Facebook independently
+    if (fbPageId) {
+      Promise.all([
+        metaAds.getFacebookPageInfo(fbPageId).catch(() => null),
+        metaAds.getFacebookPageFeed(fbPageId, 8).catch(err => { setFbError(err.message || String(err)); return []; }),
+      ]).then(([profileRes, feedRes]) => {
+        if (!active) return;
+        setFbProfile(profileRes);
+        const media = ((feedRes as any)?.data || feedRes || []).map((p: any) => ({ ...p, source: p.source || p.attachments?.data?.[0]?.media?.source || null }));
+        setFbMedia(media);
+        setFbNextCursor((feedRes as any)?.paging?.cursors?.after || null);
+      }).finally(() => { if (active) setFbLoading(false); });
+    }
 
-        setFbProfile(fbProfileRes);
-        const resolvedFbMedia = ((fbMediaRes as any)?.data || fbMediaRes || []).map((post: any) => ({
-          ...post,
-          source: post.source || post.attachments?.data?.[0]?.media?.source || null
-        }));
-        setFbMedia(resolvedFbMedia);
-        setFbNextCursor((fbMediaRes as any)?.paging?.cursors?.after || null);
-
-      } catch (err: any) {
-        console.error('Failed to load social media data:', err);
-        setError(err.message || 'Error al obtener los datos de redes sociales.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    loadData();
+    const noop = async () => {}; noop();
 
     return () => { active = false; };
   }, [clientId, igId, fbPageId, refreshKey]);
@@ -824,20 +791,7 @@ export default function RedesSocialesPage() {
       </div>
 
       {/* Main Container */}
-      {loading ? (
-        <div className="space-y-6">
-          <EmailLoader 
-            loading={loading} 
-            color="#ec4899" 
-            labels={['Cargando perfil de Instagram...', 'Obteniendo posts orgánicos...', 'Sincronizando feed de Facebook...']} 
-          />
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map(n => (
-              <div key={n} className="aspect-square bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl animate-pulse" />
-            ))}
-          </div>
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-5 rounded-2xl flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div>
@@ -868,9 +822,15 @@ export default function RedesSocialesPage() {
                     Parece que la cuenta de Instagram no está configurada para este cliente. No puedo acceder a las publicaciones en este momento.
                   </p>
                 </div>
+              ) : igLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 animate-in fade-in duration-200">
+                  {[1,2,3,4,5,6,7,8].map(n => (
+                    <div key={n} className="aspect-square bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl animate-pulse" />
+                  ))}
+                </div>
               ) : (
                 <div className="space-y-6 md:space-y-8 animate-in fade-in duration-200">
-                  
+
                   {/* Profile Bar */}
                   {igProfile && (
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-5">
@@ -1129,9 +1089,15 @@ export default function RedesSocialesPage() {
                     Parece que la página de Facebook no está configurada para este cliente. No puedo acceder al feed en este momento.
                   </p>
                 </div>
+              ) : fbLoading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 animate-in fade-in duration-200">
+                  {[1,2,3,4,5,6,7,8].map(n => (
+                    <div key={n} className="aspect-square bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl animate-pulse" />
+                  ))}
+                </div>
               ) : (
                 <div className="space-y-6 md:space-y-8 animate-in fade-in duration-200">
-                  
+
                   {/* Profile Bar */}
                   {fbProfile && (
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-5">
