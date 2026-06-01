@@ -126,9 +126,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 2b. Check if single video creative
         const resolvedVideoId =
-          creativeData.video_id ||
           creativeData.object_story_spec?.video_data?.video_id ||
-          creativeData.asset_feed_spec?.videos?.[0]?.video_id;
+          creativeData.asset_feed_spec?.videos?.[0]?.video_id ||
+          creativeData.video_id;
 
         if (resolvedVideoId) {
           const resolved = await resolveVideoSource(resolvedVideoId);
