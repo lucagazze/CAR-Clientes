@@ -9,6 +9,17 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const currentDate = new Date();
+  const argentineTime = currentDate.toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -160,11 +171,11 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
           } else if (variantsList.length === 1 && !variantsList[0].title) {
             priceText = `Precio: $${variantsList[0].price || 'Consultar'}`;
           } else {
-            const uniquePrices = Array.from(new Set(variantsList.map(v => v.price).filter(Boolean)));
+            const uniquePrices = Array.from(new Set(variantsList.map((v: any) => v.price).filter(Boolean)));
             if (uniquePrices.length === 1) {
-              priceText = `Precio: $${uniquePrices[0]} (Variantes/Talles disponibles: ${variantsList.map(v => v.title).join(', ')})`;
+              priceText = `Precio: $${uniquePrices[0]} (Variantes/Talles disponibles: ${variantsList.map((v: any) => v.title).join(', ')})`;
             } else {
-              priceText = `Variantes/Talles y Precios: ${variantsList.map(v => `${v.title || 'Única'} a $${v.price}`).join(', ')}`;
+              priceText = `Variantes/Talles y Precios: ${variantsList.map((v: any) => `${v.title || 'Única'} a $${v.price}`).join(', ')}`;
             }
           }
           return `- ${p.title}: ${priceText}. Link de compra EXACTO: ${canonicalSiteUrl}/products/${p.handle}`;
@@ -180,7 +191,8 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
       ? `\nCONTEXTO DE LA CONVERSACIÓN (últimos ${conversationHistory.length} mensajes, del más viejo al más reciente):\n${conversationHistory.map(m => `  ${m}`).join('\n')}\n`
       : '';
 
-    const systemMessage = `You are Algor, the advanced AI assistant for the brand "${business_name}".
+    const systemMessage = `FECHA Y HORA ACTUAL (ARGENTINA): ${argentineTime}.
+You are Algor, the advanced AI assistant for the brand "${business_name}".
 ${isDM ? 'Your task is to draft a natural, helpful, premium direct message reply to continue a conversation.' : 'Your task is to draft a friendly, natural, premium reply to a social media message.'}
 
 CRITICAL INSTRUCTION - LANGUAGE DETECTION:

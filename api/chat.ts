@@ -174,6 +174,17 @@ function startSpeculativeFetches(
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const currentDate = new Date();
+  const argentineTime = currentDate.toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   const openAiKey = process.env.OPENAI_API_KEY;
   if (!openAiKey) return res.status(500).json({ error: 'OpenAI API key not configured' });
 
@@ -288,7 +299,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? `ACTIVE CLIENT: "${profile?.business_name || 'User'}" — clientId="${fallbackClientId}". Always pass this exact clientId.`
     : 'No active client. Use list_clients to find one.';
 
-  const systemMessage = `You are Algor, Algoritmia's AI assistant. Respond in Argentine Spanish (vos, tenés, etc.) — friendly and professional.
+  const systemMessage = `FECHA Y HORA ACTUAL (ARGENTINA): ${argentineTime}.
+You are Algor, Algoritmia's AI assistant. Respond in Argentine Spanish (vos, tenés, etc.) — friendly and professional.
 
 ${activeClientText}
 
