@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import {
   RefreshCw, Mail, Workflow, ChevronDown, ChevronRight, ChevronLeft,
   Eye, Key, ExternalLink, AlertCircle, X, Monitor, Smartphone,
@@ -72,7 +72,6 @@ const kRequest = async (path: string, apiKey: string, method: string = 'GET', bo
 
   if (!res.ok) {
     const txt = await res.text();
-    console.error('KLAVIYO ERROR RESPONSE FULL:', txt, 'FOR PATH:', path, 'METHOD:', method);
     throw new Error(`${res.status}: ${txt}`);
   }
 
@@ -165,7 +164,6 @@ const fetchFlowEmails = async (flowId: string, apiKey: string): Promise<KvFlowEm
           },
         };
       } catch (err) {
-        console.error(`Failed to fetch messages for flow action ${action.id}:`, err);
         return {
           id: action.id,
           status: action.attributes.status,
@@ -358,7 +356,7 @@ function PreviewModal({
 
 // ─── Campaign Card ────────────────────────────────────────────────────────────
 
-function CampaignCard({
+const CampaignCard = memo(function CampaignCard({
   c,
   onPreview,
   onDelete,
@@ -528,11 +526,11 @@ function CampaignCard({
       </div>
     </div>
   );
-}
+});
 
 // ─── Flow Row ─────────────────────────────────────────────────────────────────
 
-function FlowRow({ f, apiKey, onPreview }: {
+const FlowRow = memo(function FlowRow({ f, apiKey, onPreview }: {
   f: KvFlow;
   apiKey: string;
   onPreview: (templateId: string, name: string, subject?: string) => void;
@@ -583,11 +581,12 @@ function FlowRow({ f, apiKey, onPreview }: {
         </div>
       </button>
 
-      {expanded && (
+      <div
+        className="overflow-hidden transition-all duration-200 ease-out"
+        style={{ maxHeight: expanded ? 1200 : 0 }}
+      >
         <div className="border-t border-zinc-100 dark:border-white/5">
-          {error && (
-            <p className="px-5 py-3 text-[12px] text-red-500">{error}</p>
-          )}
+          {error && <p className="px-5 py-3 text-[12px] text-red-500">{error}</p>}
           {actions !== null && actions.length === 0 && (
             <p className="px-5 py-3 text-[12px] text-zinc-400">Sin emails en este flow.</p>
           )}
@@ -598,15 +597,9 @@ function FlowRow({ f, apiKey, onPreview }: {
                 className={`flex items-center gap-3 px-5 py-3 ${i < (actions ?? []).length - 1 ? 'border-b border-zinc-100 dark:border-white/5' : ''}`}>
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${aSt.cls}`} />
                 <div className="flex-1 min-w-0">
-                  {a.message?.name && (
-                    <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200 truncate">{a.message.name}</p>
-                  )}
-                  {a.message?.subject && (
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate font-mono">{a.message.subject}</p>
-                  )}
-                  {!a.message?.name && !a.message?.subject && (
-                    <p className="text-[11px] text-zinc-400">Email sin nombre</p>
-                  )}
+                  {a.message?.name && <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200 truncate">{a.message.name}</p>}
+                  {a.message?.subject && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate font-mono">{a.message.subject}</p>}
+                  {!a.message?.name && !a.message?.subject && <p className="text-[11px] text-zinc-400">Email sin nombre</p>}
                 </div>
                 {a.message?.template_id && (
                   <button
@@ -620,14 +613,14 @@ function FlowRow({ f, apiKey, onPreview }: {
             );
           })}
         </div>
-      )}
+      </div>
     </div>
   );
-}
+});
 
 // ─── Calendar View ────────────────────────────────────────────────────────────
 
-function CalendarView({
+const CalendarView = memo(function CalendarView({
   campaigns,
   onPreview,
   onCancel,
@@ -648,45 +641,48 @@ function CalendarView({
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const firstDayIndex = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+  const { days, monthYearLabel, todayStr } = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const firstDayIndex = new Date(y, m, 1).getDay();
+    const d: (Date | null)[] = [];
+    for (let i = 0; i < firstDayIndex; i++) d.push(null);
+    for (let n = 1; n <= daysInMonth; n++) d.push(new Date(y, m, n));
+    return {
+      days: d,
+      monthYearLabel: currentDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }),
+      todayStr: new Date().toLocaleDateString('sv-SE'),
+    };
+  }, [currentDate]);
 
-  const days = [];
-  for (let i = 0; i < firstDayIndex; i++) {
-    days.push(null);
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    days.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), d));
-  }
-
-  const getCampaignsForDate = (date: Date) => {
-    const dStr = date.toLocaleDateString('sv-SE');
-    return campaigns.filter(c => {
+  // Index campaigns by date string for O(1) lookup per day
+  const campaignsByDate = useMemo(() => {
+    const map = new Map<string, KvCampaign[]>();
+    for (const c of campaigns) {
       const dateVal = c.send_time ?? c.scheduled_at;
-      if (!dateVal) return false;
-      return new Date(dateVal).toLocaleDateString('sv-SE') === dStr;
-    });
-  };
+      if (!dateVal) continue;
+      const key = new Date(dateVal).toLocaleDateString('sv-SE');
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    return map;
+  }, [campaigns]);
 
-  const monthYearLabel = currentDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+  const selectedDateCampaigns = useMemo(() =>
+    selectedDateStr ? (campaignsByDate.get(selectedDateStr) ?? []) : [],
+    [campaignsByDate, selectedDateStr]
+  );
 
-  const selectedDateCampaigns = selectedDateStr 
-    ? campaigns.filter(c => {
-        const dateVal = c.send_time ?? c.scheduled_at;
-        if (!dateVal) return false;
-        return new Date(dateVal).toLocaleDateString('sv-SE') === selectedDateStr;
-      })
-    : [];
-
-  const scheduledCampaigns = campaigns
-    .filter(c => c.status === 'Scheduled')
-    .sort((a, b) => {
-      const aTime = new Date(a.send_time ?? a.scheduled_at ?? '').getTime();
-      const bTime = new Date(b.send_time ?? b.scheduled_at ?? '').getTime();
-      return aTime - bTime;
-    });
-
-  const todayStr = new Date().toLocaleDateString('sv-SE');
+  const scheduledCampaigns = useMemo(() =>
+    campaigns
+      .filter(c => c.status === 'Scheduled')
+      .sort((a, b) =>
+        new Date(a.send_time ?? a.scheduled_at ?? '').getTime() -
+        new Date(b.send_time ?? b.scheduled_at ?? '').getTime()
+      ),
+    [campaigns]
+  );
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -721,7 +717,7 @@ function CalendarView({
         <div className="grid grid-cols-7 gap-1 text-center">
           {days.map((day, idx) => {
             if (!day) return <div key={`empty-${idx}`} className="min-h-[60px] sm:min-h-[90px] md:min-h-[110px] xl:min-h-[120px] border border-dashed border-zinc-100 dark:border-white/[0.03] rounded-xl sm:rounded-2xl opacity-20" />;
-            const dayCamp = getCampaignsForDate(day);
+            const dayCamp = campaignsByDate.get(day.toLocaleDateString('sv-SE')) ?? [];
             const isToday = day.toLocaleDateString('sv-SE') === todayStr;
             const isSelected = day.toLocaleDateString('sv-SE') === selectedDateStr;
 
@@ -890,7 +886,7 @@ function CalendarView({
       </div>
     </div>
   );
-}
+});
 
 // ─── Preview overlay (original database page compatibility) ───────────────────
 
@@ -1049,36 +1045,6 @@ export default function EmailMarketingPage() {
   const [flows, setFlows]             = useState<KvFlow[]>([]);
   const [preview, setPreview]         = useState<{ templateId: string; title: string; subject?: string } | null>(null);
 
-  // Loading progress bar simulation
-  const [progress, setProgress] = useState(0);
-  const [isDoneLoading, setIsDoneLoading] = useState(false);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (loading && (apiKey ? campaigns.length === 0 && flows.length === 0 : assignments.length === 0)) {
-      setProgress(0);
-      setIsDoneLoading(false);
-      interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) {
-            clearInterval(interval);
-            return 95;
-          }
-          const increment = Math.floor(Math.random() * 8) + 4; // increment 4% to 12%
-          return Math.min(prev + increment, 95);
-        });
-      }, 70);
-    } else if (!loading) {
-      setProgress(100);
-      const timeout = setTimeout(() => {
-        setIsDoneLoading(true);
-      }, 500); // Allow progress bar transition to 100% and fade out transition
-      return () => clearTimeout(timeout);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [loading, apiKey]);
 
   const sync = useCallback(async (key: string) => {
     if (!key) return;
@@ -1116,23 +1082,20 @@ export default function EmailMarketingPage() {
         for (const e of emails as EmailEntry[]) map[e.file] = e;
         setEmailMap(map);
         setLoading(false);
-      }).catch(e => {
-        console.error(e);
-        setLoading(false);
-      });
+      }).catch(() => setLoading(false));
     }
   }, [activeProfile?.id, apiKey, sync]);
 
-  if (!isDoneLoading) {
+  if (loading) {
     return (
       <div className="relative w-full min-h-[400px]">
         <TopLoadingBar loading={true} />
         <div className="space-y-6 pt-2">
           <div className="h-8 w-52 bg-zinc-100 dark:bg-zinc-800 rounded-xl" />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {[1,2,3].map(n => <div key={n} className="h-[220px] bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px]" />)}
+          <div className="grid grid-cols-3 gap-3">
+            {[1,2,3].map(n => <div key={n} className="h-[80px] bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-2xl" />)}
           </div>
-          <div className="h-[380px] bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px]" />
+          <div className="h-[480px] bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[24px]" />
         </div>
       </div>
     );
@@ -1217,82 +1180,76 @@ export default function EmailMarketingPage() {
           ))}
         </div>
 
-        {/* Manual Sync Loading overlay */}
-        {loading && (
-          <AppleLoader variant="inline" title="Sincronizando campañas..." />
-        )}
+        {/* Tab content — keyed to animate on tab change */}
+        <div key={tab} className="animate-in fade-in duration-150">
+          {tab === 'calendar' && (
+            <CalendarView
+              campaigns={campaigns}
+              onPreview={(tId, title, subject) => setPreview({ templateId: tId, title, subject })}
+            />
+          )}
 
-        {/* Calendar tab */}
-        {!loading && tab === 'calendar' && (
-          <CalendarView
-            campaigns={campaigns}
-            onPreview={(tId, title, subject) => setPreview({ templateId: tId, title, subject })}
-          />
-        )}
+          {tab === 'campaigns' && (
+            <div className="space-y-3">
+              {campaigns.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  {campaignStatuses.map(s => {
+                    const st = s === 'All' ? null : CAMP_STATUS[s];
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => setStatusFilter(s)}
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
+                          statusFilter === s
+                            ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow'
+                            : 'bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        {s === 'All' ? 'Todas' : (st?.label ?? s)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {filteredCampaigns.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
+                  <Mail className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-sm">No hay campañas.</p>
+                </div>
+              )}
+              {filteredCampaigns.map(c => (
+                <CampaignCard
+                  key={c.id}
+                  c={c}
+                  onPreview={() => c.message?.template_id && setPreview({
+                    templateId: c.message.template_id,
+                    title: c.name,
+                    subject: c.message.subject,
+                  })}
+                />
+              ))}
+            </div>
+          )}
 
-        {/* Campaigns tab */}
-        {!loading && tab === 'campaigns' && (
-          <div className="space-y-3">
-            {/* Status filter */}
-            {campaigns.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap">
-                {campaignStatuses.map(s => {
-                  const st = s === 'All' ? null : CAMP_STATUS[s];
-                  return (
-                    <button
-                      key={s}
-                      onClick={() => setStatusFilter(s)}
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
-                        statusFilter === s
-                          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow'
-                          : 'bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10'
-                      }`}
-                    >
-                      {s === 'All' ? 'Todas' : (st?.label ?? s)}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {filteredCampaigns.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-                <Mail className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-sm">No hay campañas{statusFilter !== 'All' ? ` con estado "${CAMP_STATUS[statusFilter]?.label ?? statusFilter}"` : ''}.</p>
-              </div>
-            )}
-            {filteredCampaigns.map(c => (
-              <CampaignCard
-                key={c.id}
-                c={c}
-                onPreview={() => c.message?.template_id && setPreview({
-                  templateId: c.message.template_id,
-                  title: c.name,
-                  subject: c.message.subject,
-                })}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Flows tab */}
-        {!loading && tab === 'flows' && (
-          <div className="space-y-2">
-            {flows.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-                <Workflow className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-sm">No hay flows.</p>
-              </div>
-            )}
-            {flows.map(f => (
-              <FlowRow
-                key={f.id}
-                f={f}
-                apiKey={apiKey}
-                onPreview={(tId, title, subject) => setPreview({ templateId: tId, title, subject })}
-              />
-            ))}
-          </div>
-        )}
+          {tab === 'flows' && (
+            <div className="space-y-2">
+              {flows.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
+                  <Workflow className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-sm">No hay flows activos.</p>
+                </div>
+              )}
+              {flows.map(f => (
+                <FlowRow
+                  key={f.id}
+                  f={f}
+                  apiKey={apiKey}
+                  onPreview={(tId, title, subject) => setPreview({ templateId: tId, title, subject })}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Preview Modal for Klaviyo Emails */}
         {preview && (
