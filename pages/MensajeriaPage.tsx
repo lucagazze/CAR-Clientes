@@ -51,7 +51,7 @@ const fmtSeconds = (s: number) => {
   return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m` : `${Math.round(s)}s`;
 };
 
-const renderMessageContent = (msg: any, contactName = 'Cliente') => {
+const renderMessageContent = (msg: any, contactName = 'Cliente', onImageClick?: (url: string) => void) => {
   if (!msg) return null;
 
   // 1. Check if it's an email content type with HTML content
@@ -111,7 +111,7 @@ const renderMessageContent = (msg: any, contactName = 'Cliente') => {
                     src={url} 
                     alt="Adjunto" 
                     className="max-h-48 rounded-xl object-cover cursor-pointer hover:opacity-95 transition-opacity border border-zinc-200 dark:border-zinc-700"
-                    onClick={() => window.open(url, '_blank')}
+                    onClick={() => onImageClick ? onImageClick(url) : window.open(url, '_blank')}
                   />
                   <a 
                     href={url} 
@@ -125,10 +125,13 @@ const renderMessageContent = (msg: any, contactName = 'Cliente') => {
               );
             }
 
-            if (fType.includes('audio') || url.match(/\.(mp3|wav|ogg|m4a)/i)) {
+            if (fType.includes('audio') || url.match(/\.(mp3|wav|ogg|oga|opus|m4a)/i)) {
               return (
-                <div key={idx} className="mt-1">
+                <div key={idx} className="mt-1 flex flex-col gap-1">
                   <audio src={url} controls className="max-w-full h-8" />
+                  <a href={url} download target="_blank" rel="noreferrer" className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline px-1 w-fit font-bold" onClick={e => e.stopPropagation()}>
+                    Descargar audio
+                  </a>
                 </div>
               );
             }
@@ -189,8 +192,18 @@ export default function MensajeriaPage() {
 
   const [conversations, setConversations] = useState<any[]>([]);
   const [backgroundConversations, setBackgroundConversations] = useState<any[]>([]);
-  const [convMeta, setConvMeta] = useState<{ all_count: number; unassigned_count: number; assigned_count: number } | null>(null);
-  const [channelMetas, setChannelMetas] = useState<Record<string, { all_count: number; unassigned_count: number; assigned_count: number }>>({});
+  const [convMeta, setConvMeta] = useState<{ all_count: number; unassigned_count: number; assigned_count: number } | null>(() => {
+    try {
+      const saved = sessionStorage.getItem(`car_conv_meta_${profile?.id || 'default'}`);
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [channelMetas, setChannelMetas] = useState<Record<string, { all_count: number; unassigned_count: number; assigned_count: number }>>(() => {
+    try {
+      const saved = sessionStorage.getItem(`car_channel_metas_${profile?.id || 'default'}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
   const [inboxes, setInboxes] = useState<any[]>([]);
   const [loadingSuggestion, setLoadingSuggestion] = useState<string | null>(null);
   const [assignFilter, setAssignFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
@@ -198,6 +211,7 @@ export default function MensajeriaPage() {
   const [listCollapsed, setListCollapsed] = useState(false);
   const [mobileShowChat, setMobileShowChat] = useState(false);
   const [swipeTouchStartX, setSwipeTouchStartX] = useState<number | null>(null);
+  const [activeImagePreview, setActiveImagePreview] = useState<string | null>(null);
   
   // Sidebar State Variables
   const [showSidebar, setShowSidebar] = useState(false);
@@ -264,6 +278,21 @@ export default function MensajeriaPage() {
 
   const isConvUnread = useCallback((c: any) => {
     if (!c) return false;
+
+    // Check if the last non-activity message is outgoing (message_type === 1)
+    const sortedMsgs = [...(c.messages || [])].sort((x, y) => {
+      const timeX = typeof x.created_at === 'number' ? x.created_at : new Date(x.created_at).getTime() / 1000;
+      const timeY = typeof y.created_at === 'number' ? y.created_at : new Date(y.created_at).getTime() / 1000;
+      return timeX - timeY;
+    });
+    const lastRealMsg = [...sortedMsgs].reverse().find((m: any) => m?.message_type !== 2) || 
+                        c.last_non_activity_message || 
+                        (sortedMsgs.length > 0 ? sortedMsgs[sortedMsgs.length - 1] : null);
+
+    if (lastRealMsg && lastRealMsg.message_type === 1) {
+      return false; // Outgoing message means we already replied
+    }
+
     const isManualUnread = manuallyUnread.has(c.id);
     const unread = isManualUnread ? Math.max(1, c.unread_count || 0) : (c.unread_count || 0);
     return unread > 0 || isManualUnread;
@@ -313,11 +342,13 @@ export default function MensajeriaPage() {
         const overallMetaRes = await chatwoot.getConversationsMeta(cwUrl, cwToken, statusFilter).catch(() => null);
         const mOverall = overallMetaRes?.meta || overallMetaRes;
         if (mOverall) {
-          setConvMeta({
+          const newMeta = {
             all_count: mOverall.all_count ?? 0,
             unassigned_count: mOverall.unassigned_count ?? 0,
             assigned_count: mOverall.assigned_count ?? 0
-          });
+          };
+          setConvMeta(newMeta);
+          try { sessionStorage.setItem(`car_conv_meta_${profile?.id || 'default'}`, JSON.stringify(newMeta)); } catch {}
         }
 
         if (inboxes.length === 0) return;
@@ -347,13 +378,14 @@ export default function MensajeriaPage() {
           }
         }));
         setChannelMetas(metas);
+        try { sessionStorage.setItem(`car_channel_metas_${profile?.id || 'default'}`, JSON.stringify(metas)); } catch {}
       } catch (err) {
         console.error('Error loading channel metas:', err);
       }
     };
 
     loadChannelMetas();
-  }, [cwUrl, cwToken, inboxes, statusFilter]);
+  }, [cwUrl, cwToken, inboxes, statusFilter, profile?.id]);
 
   const fetchAllOpenConversationsInBackground = useCallback(async () => {
     if (!cwUrl || !cwToken) return;
@@ -1145,11 +1177,27 @@ export default function MensajeriaPage() {
   };
 
   const getChannelCount = (channelKey: string) => {
-    const listToCount = backgroundConversations.length > 0 ? backgroundConversations : conversations;
-    if (channelKey === 'all') {
-      return listToCount.filter(isConvUnread).length;
+    if (backgroundConversations.length > 0) {
+      const listToCount = backgroundConversations;
+      let count = 0;
+      if (channelKey === 'all') {
+        count = listToCount.filter(isConvUnread).length;
+      } else {
+        count = listToCount.filter(c => getChannel(c) === channelKey && isConvUnread(c)).length;
+      }
+      try {
+        const saved = sessionStorage.getItem(`car_unread_counts_${profile?.id || 'default'}`);
+        const currentCache = saved ? JSON.parse(saved) : {};
+        const nextCache = { ...currentCache, [channelKey]: count };
+        sessionStorage.setItem(`car_unread_counts_${profile?.id || 'default'}`, JSON.stringify(nextCache));
+      } catch {}
+      return count;
     }
-    return listToCount.filter(c => getChannel(c) === channelKey && isConvUnread(c)).length;
+    try {
+      const saved = sessionStorage.getItem(`car_unread_counts_${profile?.id || 'default'}`);
+      const cache = saved ? JSON.parse(saved) : {};
+      return cache[channelKey] || 0;
+    } catch { return 0; }
   };
 
   const CHANNEL_ICON: Record<string, string> = { whatsapp: '📱', instagram: '📸', facebook: '📘', email: '📧', other: '💬' };
@@ -1316,16 +1364,16 @@ export default function MensajeriaPage() {
   });
 
   const totalCount = channelFilter === 'all'
-    ? (convMeta?.all_count !== undefined ? convMeta.all_count : conversations.length)
-    : (channelMetas[channelFilter]?.all_count !== undefined ? channelMetas[channelFilter].all_count : channelFilteredRaw.length);
+    ? (convMeta?.all_count !== undefined ? convMeta.all_count : 0)
+    : (channelMetas[channelFilter]?.all_count !== undefined ? channelMetas[channelFilter].all_count : 0);
 
   const unassignedCount = channelFilter === 'all'
-    ? (convMeta?.unassigned_count !== undefined ? convMeta.unassigned_count : conversations.filter(c => !c.meta?.assignee).length)
-    : (channelMetas[channelFilter]?.unassigned_count !== undefined ? channelMetas[channelFilter].unassigned_count : channelFilteredRaw.filter(c => !c.meta?.assignee).length);
+    ? (convMeta?.unassigned_count !== undefined ? convMeta.unassigned_count : 0)
+    : (channelMetas[channelFilter]?.unassigned_count !== undefined ? channelMetas[channelFilter].unassigned_count : 0);
 
   const assignedCount = channelFilter === 'all'
-    ? (convMeta?.assigned_count !== undefined ? convMeta.assigned_count : conversations.filter(c => !!c.meta?.assignee).length)
-    : (channelMetas[channelFilter]?.assigned_count !== undefined ? channelMetas[channelFilter].assigned_count : channelFilteredRaw.filter(c => !!c.meta?.assignee).length);
+    ? (convMeta?.assigned_count !== undefined ? convMeta.assigned_count : 0)
+    : (channelMetas[channelFilter]?.assigned_count !== undefined ? channelMetas[channelFilter].assigned_count : 0);
 
   const adjustMobileTextarea = useCallback(() => {
     requestAnimationFrame(() => {
@@ -1786,7 +1834,7 @@ export default function MensajeriaPage() {
                               ? `bg-blue-600 text-white shadow-sm ${msg.pending ? 'opacity-60' : ''}`
                               : 'bg-white dark:bg-zinc-800 border border-zinc-200/60 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 shadow-sm'
                         }`}>
-                          {renderMessageContent(msg, contact(selected).name)}
+                          {renderMessageContent(msg, contact(selected).name, setActiveImagePreview)}
                           {failedMsgIds.has(msg.id) && (
                             <div className="flex items-center gap-1 mt-1 text-[10px] text-red-500 font-bold">
                               <AlertCircle className="w-3 h-3" /> Error al enviar
@@ -2011,6 +2059,43 @@ export default function MensajeriaPage() {
               </button>
             )
           )}
+        </div>
+      )}
+
+      {/* Keyboard listener for Escape to close image preview */}
+      {(() => {
+        React.useEffect(() => {
+          const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setActiveImagePreview(null);
+          };
+          window.addEventListener('keydown', handleKeyDown);
+          return () => window.removeEventListener('keydown', handleKeyDown);
+        }, []);
+        return null;
+      })()}
+
+      {/* Fullscreen Image Preview Modal */}
+      {activeImagePreview && (
+        <div 
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onClick={() => setActiveImagePreview(null)}
+        >
+          <button 
+            onClick={() => setActiveImagePreview(null)} 
+            className="absolute top-4 right-4 p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all hover:scale-105 active:scale-95 z-50"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <div 
+            className="relative max-w-full max-h-full flex items-center justify-center animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <img 
+              src={activeImagePreview} 
+              alt="Preview" 
+              className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl border border-white/10"
+            />
+          </div>
         </div>
       )}
     </div>
