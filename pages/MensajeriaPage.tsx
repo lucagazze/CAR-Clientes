@@ -195,6 +195,7 @@ export default function MensajeriaPage() {
   const [assignFilter, setAssignFilter] = useState<'all' | 'mine' | 'unassigned'>('all');
   const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'instagram' | 'facebook' | 'email' | 'other'>('all');
   const [listCollapsed, setListCollapsed] = useState(false);
+  const [mobileShowChat, setMobileShowChat] = useState(false);
   
   // Sidebar State Variables
   const [showSidebar, setShowSidebar] = useState(false);
@@ -360,32 +361,12 @@ export default function MensajeriaPage() {
         setConvMeta({ all_count: meta.all_count ?? 0, unassigned_count: meta.unassigned_count ?? 0, assigned_count: meta.assigned_count ?? 0 });
       }
 
-      let allConvs = [...firstPayload];
-      setConversations(allConvs);
-      // Show first page immediately — stop spinner here
-      setLoading(false);
-
-      // Load remaining pages in background using loadingMore indicator
-      if (firstHasMore) {
-        setLoadingMore(true);
-        let page = 2;
-        let more = true;
-        while (more && page <= 20) {
-          const { payload, hasMore: nextMore } = await chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, page, inboxId);
-          const existingIds = new Set(allConvs.map((c: any) => c.id));
-          const newOnes = payload.filter((c: any) => !existingIds.has(c.id));
-          allConvs = [...allConvs, ...newOnes];
-          setConversations([...allConvs]);
-          more = nextMore;
-          page++;
-        }
-        setCurrentPage(page - 1);
-        setLoadingMore(false);
-      }
-
-      setHasMore(false);
+      setConversations(firstPayload);
+      setHasMore(firstHasMore);
+      setCurrentPage(1);
     } catch (e: any) {
       setError(e.message);
+    } finally {
       setLoading(false);
     }
   }, [cwUrl, cwToken, statusFilter, channelFilter, getInboxIdForChannel]);
@@ -557,6 +538,7 @@ export default function MensajeriaPage() {
     if (!cwUrl || !cwToken) return;
     setExpanded(false);
     setSelected(conv);
+    setMobileShowChat(true);
     // Clear "manually unread" when opening
     setManuallyUnread(prev => { const s = new Set(prev); s.delete(conv.id); return s; });
     setMessages([]);
@@ -1345,7 +1327,7 @@ export default function MensajeriaPage() {
       <div className="flex flex-1 overflow-hidden">
 
         <div className={`
-          ${listCollapsed ? 'hidden' : expanded ? 'w-full' : selected ? 'hidden md:flex md:w-[320px]' : 'w-full md:w-[320px]'}
+          ${listCollapsed ? 'hidden' : expanded ? 'w-full' : mobileShowChat ? 'hidden md:flex md:w-[320px]' : 'w-full md:w-[320px]'}
           flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-300
         `}>
 
@@ -1485,6 +1467,17 @@ export default function MensajeriaPage() {
               );
             })}
 
+            {/* Scroll sentinel — loads more when reached */}
+            {hasMore && (
+              <div className="flex items-center justify-center py-3 text-[10px] text-zinc-400 gap-1.5">
+                {loadingMore ? (
+                  <><Loader2 className="w-3 h-3 animate-spin" /> Cargando más...</>
+                ) : (
+                  <span className="opacity-50">↓ Más conversaciones</span>
+                )}
+              </div>
+            )}
+
           </div>
 
           {/* Mobile Floating Bottom Bar */}
@@ -1541,7 +1534,7 @@ export default function MensajeriaPage() {
         </div>
 
         {/* RIGHT: chat panel */}
-        <div className={`${selected ? 'flex' : 'hidden md:flex'} flex-1 flex overflow-hidden bg-zinc-50 dark:bg-zinc-900/30`}>
+        <div className={`${mobileShowChat || selected ? 'flex' : 'hidden md:flex'} flex-1 flex overflow-hidden bg-zinc-50 dark:bg-zinc-900/30`}>
 
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
@@ -1555,7 +1548,7 @@ export default function MensajeriaPage() {
                 {/* Chat header */}
                 <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center gap-3 flex-shrink-0">
                   <button
-                    onClick={() => setSelected(null)}
+                    onClick={() => { setSelected(null); setMobileShowChat(false); }}
                     className="md:hidden p-1.5 -ml-1 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
