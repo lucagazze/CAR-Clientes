@@ -620,6 +620,37 @@ export default function MensajeriaPage() {
     }
   }, [messages]);
 
+  // Mobile keyboard handling: adjust chat height when virtual keyboard appears
+  useEffect(() => {
+    if (!mobileShowChat) return;
+    const vv = (window as any).visualViewport as VisualViewport | null;
+    if (!vv) return;
+
+    const handleViewport = () => {
+      const chatEl = document.getElementById('mobile-chat-panel');
+      if (chatEl) {
+        // Set exact height = visual viewport height (shrinks when keyboard opens)
+        chatEl.style.height = vv.height + 'px';
+        chatEl.style.top = vv.offsetTop + 'px';
+      }
+      // Scroll messages to bottom so typed text is visible
+      setTimeout(() => {
+        messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: 'instant' as ScrollBehavior });
+      }, 50);
+    };
+
+    vv.addEventListener('resize', handleViewport);
+    vv.addEventListener('scroll', handleViewport);
+    handleViewport(); // init
+    return () => {
+      vv.removeEventListener('resize', handleViewport);
+      vv.removeEventListener('scroll', handleViewport);
+      // Reset when keyboard closes
+      const chatEl = document.getElementById('mobile-chat-panel');
+      if (chatEl) { chatEl.style.height = ''; chatEl.style.top = ''; }
+    };
+  }, [mobileShowChat]);
+
   const loadCannedResponses = useCallback(async () => {
     if (!profile?.id) return;
     setLoadingCanned(true);
@@ -1558,7 +1589,9 @@ export default function MensajeriaPage() {
             : selected
             ? 'hidden md:flex md:flex-1 bg-zinc-50 dark:bg-zinc-900/30'
             : 'hidden md:flex md:flex-1 bg-zinc-50 dark:bg-zinc-900/30'}
-        `}>
+        `}
+          id={mobileShowChat && selected ? 'mobile-chat-panel' : undefined}
+        >
 
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
@@ -1700,6 +1733,7 @@ export default function MensajeriaPage() {
                           value={reply}
                           onChange={e => { setReply(e.target.value); adjustMobileTextarea(); }}
                           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(e as any); }}}
+                          onFocus={() => setTimeout(() => { messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: 'smooth' }); }, 350)}
                           placeholder={transcribing ? 'Transcribiendo...' : isRecording ? '● Grabando...' : 'Mensaje...'}
                           rows={1}
                           disabled={transcribing}
