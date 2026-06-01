@@ -678,6 +678,8 @@ export default function MensajeriaPage() {
         chatwoot.markAsRead(cwUrl, cwToken, conv.id).catch(() => {});
         setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
         setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
+        // Instantly refresh global badge + tab title
+        window.dispatchEvent(new Event('car_manually_unread_update'));
       }
     } catch (e: any) {
       setMessages([]);
