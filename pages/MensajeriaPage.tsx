@@ -1208,16 +1208,17 @@ export default function MensajeriaPage() {
       <div className="flex items-center gap-2 p-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex-shrink-0 w-full animate-in fade-in duration-200">
         {/* Left Section: Status filter + Channel Filter Pills (Desktop only) */}
         <div className="hidden md:flex items-center gap-2 overflow-x-auto no-scrollbar flex-1">
-          {/* Status filter — always leftmost */}
+          {/* Ventana Abierta filter — always leftmost */}
           <button
-            onClick={() => setStatusFilter(s => s === 'open' ? 'all' : 'open')}
+            onClick={() => setCanReplyOnly(v => !v)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 whitespace-nowrap border flex-shrink-0 ${
-              statusFilter === 'open'
-                ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
-                : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
+              canReplyOnly
+                ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/10'
+                : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-emerald-700 dark:hover:text-emerald-400'
             }`}
           >
-            {statusFilter === 'open' ? '● Abiertos' : '○ Abiertos'}
+            <Clock className="w-3.5 h-3.5" />
+            Ventana Abierta
           </button>
 
           <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0" />
@@ -1289,19 +1290,6 @@ export default function MensajeriaPage() {
               </div>
             </div>
           </div>
-
-          {/* 24-hour window filter (Desktop only) */}
-          <button 
-            onClick={() => setCanReplyOnly(v => !v)}
-            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black border transition-all duration-200 select-none ${
-              canReplyOnly 
-                ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/10' 
-                : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-emerald-700 dark:hover:text-emerald-400'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Ventana Abierta</span>
-          </button>
 
           {/* Expand button (Desktop only) */}
           <button 
