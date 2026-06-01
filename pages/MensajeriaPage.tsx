@@ -321,6 +321,8 @@ export default function MensajeriaPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  // true when user has manually scrolled up — prevents auto-scroll-to-bottom on image load
+  const userScrolledUpRef = useRef(false);
 
   const selectedRef = useRef<any>(null);
   selectedRef.current = selected;
@@ -681,6 +683,7 @@ export default function MensajeriaPage() {
     setMessages([]);
     setHasMoreMessages(false);
     isLoadingOlderRef.current = false;
+    userScrolledUpRef.current = false;
     pendingScrollRestoreRef.current = null;
     setReply('');
     setSendError(null);
@@ -803,10 +806,9 @@ export default function MensajeriaPage() {
       return;
     }
 
-    // Auto-scroll to bottom only if user is already near the bottom
-    if (!isLoadingOlderRef.current) {
-      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
-      if (isAtBottom) container.scrollTop = container.scrollHeight;
+    // Auto-scroll to bottom if user hasn't manually scrolled up
+    if (!isLoadingOlderRef.current && !userScrolledUpRef.current) {
+      container.scrollTop = container.scrollHeight;
     }
   }, [messages]);
 
@@ -865,6 +867,31 @@ export default function MensajeriaPage() {
       }
     }
   }, [selected?.id, loadingMsgs, messages.length]);
+
+  // Scroll to bottom when images/videos inside messages finish loading
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || loadingMsgs || messages.length === 0) return;
+
+    const scrollToBottomIfNotScrolledUp = () => {
+      if (!userScrolledUpRef.current && !isLoadingOlderRef.current && messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    };
+
+    const mediaElements = container.querySelectorAll('img, video, audio');
+    mediaElements.forEach(el => {
+      el.addEventListener('load', scrollToBottomIfNotScrolledUp);
+      el.addEventListener('loadedmetadata', scrollToBottomIfNotScrolledUp);
+    });
+
+    return () => {
+      mediaElements.forEach(el => {
+        el.removeEventListener('load', scrollToBottomIfNotScrolledUp);
+        el.removeEventListener('loadedmetadata', scrollToBottomIfNotScrolledUp);
+      });
+    };
+  }, [messages, loadingMsgs]);
 
   const loadCannedResponses = useCallback(async () => {
     if (!profile?.id) return;
@@ -1973,7 +2000,12 @@ export default function MensajeriaPage() {
                   ref={messagesContainerRef}
                   className="flex-1 overflow-y-auto px-4 md:px-5 py-4 md:space-y-3 space-y-2 bg-zinc-50/50 dark:bg-zinc-950"
                   onScroll={(e) => {
-                    if (e.currentTarget.scrollTop < 80 && hasMoreMessages && !isLoadingOlderRef.current) {
+                    const el = e.currentTarget;
+                    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+                    // Track manual scroll position: > 150px from bottom = user scrolled up
+                    userScrolledUpRef.current = distFromBottom > 150;
+                    // Load older messages when near top
+                    if (el.scrollTop < 80 && hasMoreMessages && !isLoadingOlderRef.current) {
                       loadOlderMessages();
                     }
                   }}
