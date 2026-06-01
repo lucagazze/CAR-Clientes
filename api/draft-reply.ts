@@ -226,16 +226,16 @@ Rules:
    - If there is no specific matching link in the custom links list but there is information in the business brain, explain it briefly and invite them to use the main store URL: ${canonicalSiteUrl}.
 4. Do not use placeholders like [price] or [link]. The reply must be ready to send.
 5. Output ONLY the final drafted text, without explanations, quotes, or prefixes.
-${isDM ? '6. Take into account the full conversation history above to understand the context, what has already been discussed, and what the customer needs next.' : ''}`;
+${isDM ? '6. CRITICAL: Analyze the conversation history block above. Identify what has already been discussed or offered (such as previous product recommendations, shipping info, or links). Do NOT repeat explanations, greetings, or links that have already been sent in the recent messages. Build upon the previous agent responses and answer the customer\'s latest query/need directly.' : ''}`;
 
 
-    // 4. Call AI API — Gemini 2.0 Flash preferred, fallback to OpenAI gpt-4.1-mini
+    // 4. Call AI API — Gemini 2.0 Flash preferred, fallback to OpenAI gpt-4o-mini
     const userPrompt = `${isDM ? 'Mensaje del cliente en el DM' : 'Comentario del cliente'}: "${itemText}"\nGenerá el borrador de respuesta para @${username} en el mismo idioma del mensaje:`;
     let draftText = '';
 
     if (geminiKey) {
       const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -265,7 +265,7 @@ ${isDM ? '6. Take into account the full conversation history above to understand
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` },
         body: JSON.stringify({
-          model: 'gpt-4.1-mini',
+          model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemMessage },
             { role: 'user', content: userPrompt },
