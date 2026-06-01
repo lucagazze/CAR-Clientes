@@ -1,7 +1,32 @@
+// ─── sessionStorage result cache — survives page refreshes, cleared on tab close ───
+const EC_PREFIX = 'ec:';
+const EC_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function ecGetCached(key: string): any | null {
+  try {
+    const raw = sessionStorage.getItem(EC_PREFIX + key);
+    if (!raw) return null;
+    const { data, timestamp } = JSON.parse(raw) as { data: any; timestamp: number };
+    if (Date.now() - timestamp > EC_TTL_MS) { sessionStorage.removeItem(EC_PREFIX + key); return null; }
+    return data;
+  } catch { return null; }
+}
+
+function ecSetCache(key: string, data: any) {
+  try {
+    sessionStorage.setItem(EC_PREFIX + key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch { /* silently skip if storage full */ }
+}
+
 const BASE = '/api/shopify';
+
 
 export const ecommerce = {
   getShopifyOrders: async (domain: string, token: string, since: string, until: string) => {
+    const cacheKey = `orders:${domain}:${since}:${until}`;
+    const cached = ecGetCached(cacheKey);
+    if (cached) return cached;
+
     try {
       const sinceIso = new Date(`${since}T00:00:00Z`).toISOString();
       const untilIso = new Date(`${until}T23:59:59Z`).toISOString();
@@ -46,6 +71,7 @@ export const ecommerce = {
         nextUrl = nextLink;
       }
 
+      ecSetCache(cacheKey, allOrders);
       return allOrders;
     } catch (e) {
       console.error('[Shopify] Fetch Exception:', e);
@@ -61,11 +87,12 @@ export const ecommerce = {
   getDashboardData: async (platform: string, domain: string, token: string, since: string, until: string) => {
     if (platform !== 'shopify') return null;
 
-    // Fetch orders and analytics in parallel
-    const [orders, analyticsData] = await Promise.all([
-      ecommerce.getShopifyOrders(domain, token, since, until),
-      ecommerce.getShopifyAnalytics(domain, token, since, until) as Promise<any>,
-    ]);
+    const cacheKey = `dashboard:${domain}:${since}:${until}`;
+    const cached = ecGetCached(cacheKey);
+    if (cached) return cached;
+
+    // Fetch orders (analytics endpoint is always null on standard plans — skip it)
+    const orders = await ecommerce.getShopifyOrders(domain, token, since, until);
 
     if (!orders) return null;
 
@@ -123,14 +150,10 @@ export const ecommerce = {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
 
-    // Use real analytics data if available, otherwise estimate
+    // Estimate sessions from orders (ShopifyQL not available on standard plans)
     const BASE_CONV_RATE = 2.56;
-    const totalSessions = analyticsData?.totalSessions 
-      ? analyticsData.totalSessions 
-      : (ordersCount > 0 ? Math.round(ordersCount / (BASE_CONV_RATE / 100)) : 0);
-    const conversionRate = analyticsData?.conversionRate 
-      ? analyticsData.conversionRate
-      : (totalSessions > 0 ? parseFloat(((ordersCount / totalSessions) * 100).toFixed(2)) : 0);
+    const totalSessions = ordersCount > 0 ? Math.round(ordersCount / (BASE_CONV_RATE / 100)) : 0;
+    const conversionRate = totalSessions > 0 ? parseFloat(((ordersCount / totalSessions) * 100).toFixed(2)) : 0;
 
     // Build daily data — distribute real sessions proportionally by order volume if analytics available
     const dailySorted = Object.keys(dailyData).sort();
@@ -138,14 +161,8 @@ export const ecommerce = {
 
     const daily = dailySorted.map(date => {
       const dOrders = dailyData[date].orders;
-      // Use real per-day sessions if available from ShopifyQL
-      const dSessions = analyticsData?.dailySessions?.[date] != null
-        ? analyticsData.dailySessions[date]
-        : (dOrders > 0 ? Math.round(dOrders / (BASE_CONV_RATE / 100)) : 0);
-      // Use real per-day conversion rate if available, else derive from sessions/orders
-      const dConvRate = analyticsData?.dailyConvRate?.[date] != null
-        ? analyticsData.dailyConvRate[date]
-        : (dSessions > 0 ? parseFloat(((dOrders / dSessions) * 100).toFixed(2)) : 0);
+      const dSessions = dOrders > 0 ? Math.round(dOrders / (BASE_CONV_RATE / 100)) : 0;
+      const dConvRate = dSessions > 0 ? parseFloat(((dOrders / dSessions) * 100).toFixed(2)) : 0;
       return {
         date,
         revenue: dailyData[date].revenue,
@@ -156,7 +173,7 @@ export const ecommerce = {
       };
     });
 
-    return {
+    const result = {
       revenue: totalRevenue,
       orders: ordersCount,
       aov,
@@ -175,5 +192,8 @@ export const ecommerce = {
       topProducts,
       daily,
     };
+
+    ecSetCache(cacheKey, result);
+    return result;
   }
 };

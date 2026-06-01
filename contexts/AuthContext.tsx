@@ -18,8 +18,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const loadedUserIdRef = React.useRef<string | null>(null);
 
   const loadProfile = async (userId: string, email?: string) => {
+    if (loadedUserIdRef.current === userId) return;
+    loadedUserIdRef.current = userId;
+
     const retries = 3;
     for (let i = 0; i < retries; i++) {
       try {
@@ -37,6 +41,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error(`Error loading profile (attempt ${i + 1}/${retries}):`, err);
         if (i === retries - 1) {
           setProfile(null);
+          loadedUserIdRef.current = null;
           throw err;
         }
         await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -59,6 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loadProfile(session.user.id, session.user.email).finally(() => setLoading(false));
       } else {
         setProfile(null);
+        loadedUserIdRef.current = null;
         setLoading(false);
       }
     });

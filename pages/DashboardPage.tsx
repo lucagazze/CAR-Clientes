@@ -462,6 +462,139 @@ const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
   );
 };
 
+const MiniCal = ({
+  year,
+  month,
+  since,
+  until,
+  hovering,
+  onDay,
+  onHover,
+  onPrev,
+  onNext,
+}: any) => {
+  const touchStart = React.useRef<number>(0);
+  const handleTouchStart = (e: React.TouchEvent) => { touchStart.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diff = touchStart.current - e.changedTouches[0].clientX;
+    if (diff > 40 && onNext) onNext();
+    if (diff < -40 && onPrev) onPrev();
+  };
+
+  const days: any[] = [];
+  const first = new Date(year, month, 1).getDay();
+  const startOffset = first === 0 ? 6 : first - 1;
+  for (let i = 0; i < startOffset; i++) days.push(null);
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  for (let i = 1; i <= lastDay; i++) {
+    const d = new Date(year, month, i);
+    days.push(d.toISOString().split("T")[0]);
+  }
+  const MONTHS_ES = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ];
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const prevDate = React.useRef(new Date(year, month, 1).getTime());
+  const current = new Date(year, month, 1).getTime();
+  let animClass = 'animate-in fade-in zoom-in-95 duration-200';
+  if (current > prevDate.current) {
+     animClass = 'animate-in fade-in slide-in-from-right-16 duration-300';
+  } else if (current < prevDate.current) {
+     animClass = 'animate-in fade-in slide-in-from-left-16 duration-300';
+  }
+  
+  React.useEffect(() => {
+    prevDate.current = current;
+  }, [current]);
+
+  return (
+    <div className="w-[240px] overflow-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <div className="flex items-center mb-4 px-1">
+        <div className="w-8 flex justify-start">
+          {onPrev && (
+            <button
+              onClick={onPrev}
+              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors group"
+            >
+              <ChevronDown className="w-4 h-4 rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+            </button>
+          )}
+        </div>
+        <span className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 flex-1 text-center">
+          {MONTHS_ES[month]} {year}
+        </span>
+        <div className="w-8 flex justify-end">
+          {onNext && (
+            <button
+              onClick={onNext}
+              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors group"
+            >
+              <ChevronDown className="w-4 h-4 -rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+            </button>
+          )}
+        </div>
+      </div>
+      <div key={`${year}-${month}`} className={`grid grid-cols-7 gap-y-1 ${animClass}`}>
+        {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+          <div
+            key={i}
+            className="text-[10px] font-bold text-zinc-300 text-center pb-2 uppercase tracking-tighter"
+          >
+            {d}
+          </div>
+        ))}
+        {days.map((d, i) => {
+          if (!d) return <div key={`empty-${i}`} />;
+          const isToday = d === todayStr;
+          const isFuture = d > todayStr;
+          const isSelected = d === since || d === until;
+          const isInRange = since && until && d > since && d < until;
+          const isHovering =
+            since &&
+            !until &&
+            hovering &&
+            ((d > since && d <= hovering) || (d < since && d >= hovering));
+
+          return (
+            <button
+              key={d}
+              onMouseEnter={() => !isFuture && onHover(d)}
+              onClick={() => !isFuture && onDay(d)}
+              disabled={isFuture}
+              className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center
+                ${
+                  isSelected
+                    ? "bg-blue-600 text-white rounded-full z-10 shadow-md shadow-blue-200 dark:shadow-none"
+                    : isInRange || isHovering
+                      ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600"
+                      : isFuture
+                        ? "text-zinc-200 dark:text-zinc-800 cursor-default"
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full"
+                }
+                ${isToday && !isSelected ? "text-blue-600 dark:text-blue-500 ring-1 ring-blue-100 dark:ring-blue-900/30" : ""}
+              `}
+            >
+              {d.split("-")[2]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export default function DashboardPage() {
   const { profile: authProfile } = useAuth();
   const { darkMode } = useTheme();
@@ -943,139 +1076,6 @@ export default function DashboardPage() {
       return `${day} ${month}`;
     }
     return `${day} ${month} ${year}`;
-  };
-
-  const MiniCal = ({
-    year,
-    month,
-    since,
-    until,
-    hovering,
-    onDay,
-    onHover,
-    onPrev,
-    onNext,
-  }: any) => {
-    const touchStart = React.useRef<number>(0);
-    const handleTouchStart = (e: React.TouchEvent) => { touchStart.current = e.touches[0].clientX; };
-    const handleTouchEnd = (e: React.TouchEvent) => {
-      const diff = touchStart.current - e.changedTouches[0].clientX;
-      if (diff > 40 && onNext) onNext();
-      if (diff < -40 && onPrev) onPrev();
-    };
-
-    const days: any[] = [];
-    const first = new Date(year, month, 1).getDay();
-    const startOffset = first === 0 ? 6 : first - 1;
-    for (let i = 0; i < startOffset; i++) days.push(null);
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    for (let i = 1; i <= lastDay; i++) {
-      const d = new Date(year, month, i);
-      days.push(d.toISOString().split("T")[0]);
-    }
-    const MONTHS_ES = [
-      "Enero",
-      "Febrero",
-      "Marzo",
-      "Abril",
-      "Mayo",
-      "Junio",
-      "Julio",
-      "Agosto",
-      "Septiembre",
-      "Octubre",
-      "Noviembre",
-      "Diciembre",
-    ];
-    const todayStr = new Date().toISOString().split("T")[0];
-
-    const prevDate = React.useRef(new Date(year, month, 1).getTime());
-    const current = new Date(year, month, 1).getTime();
-    let animClass = 'animate-in fade-in zoom-in-95 duration-200';
-    if (current > prevDate.current) {
-       animClass = 'animate-in fade-in slide-in-from-right-16 duration-300';
-    } else if (current < prevDate.current) {
-       animClass = 'animate-in fade-in slide-in-from-left-16 duration-300';
-    }
-    
-    React.useEffect(() => {
-      prevDate.current = current;
-    }, [current]);
-
-    return (
-      <div className="w-[240px] overflow-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <div className="flex items-center mb-4 px-1">
-          <div className="w-8 flex justify-start">
-            {onPrev && (
-              <button
-                onClick={onPrev}
-                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors group"
-              >
-                <ChevronDown className="w-4 h-4 rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
-              </button>
-            )}
-          </div>
-          <span className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 flex-1 text-center">
-            {MONTHS_ES[month]} {year}
-          </span>
-          <div className="w-8 flex justify-end">
-            {onNext && (
-              <button
-                onClick={onNext}
-                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors group"
-              >
-                <ChevronDown className="w-4 h-4 -rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
-              </button>
-            )}
-          </div>
-        </div>
-        <div key={`${year}-${month}`} className={`grid grid-cols-7 gap-y-1 ${animClass}`}>
-          {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
-            <div
-              key={i}
-              className="text-[10px] font-bold text-zinc-300 text-center pb-2 uppercase tracking-tighter"
-            >
-              {d}
-            </div>
-          ))}
-          {days.map((d, i) => {
-            if (!d) return <div key={`empty-${i}`} />;
-            const isToday = d === todayStr;
-            const isFuture = d > todayStr;
-            const isSelected = d === since || d === until;
-            const isInRange = since && until && d > since && d < until;
-            const isHovering =
-              since &&
-              !until &&
-              hovering &&
-              ((d > since && d <= hovering) || (d < since && d >= hovering));
-
-            return (
-              <button
-                key={d}
-                onMouseEnter={() => !isFuture && onHover(d)}
-                onClick={() => !isFuture && onDay(d)}
-                disabled={isFuture}
-                className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center
-                  ${
-                    isSelected
-                      ? "bg-blue-600 text-white rounded-full z-10 shadow-md shadow-blue-200 dark:shadow-none"
-                      : isInRange || isHovering
-                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600"
-                        : isFuture
-                          ? "text-zinc-200 dark:text-zinc-800 cursor-default"
-                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full"
-                  }
-                  ${isToday && !isSelected ? "text-blue-600 dark:text-blue-500 ring-1 ring-blue-100 dark:ring-blue-900/30" : ""}
-                `}
-              >
-                {d.split("-")[2]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
   };
 
   if (!profile) {

@@ -13,6 +13,32 @@ export const initMetaToken = async (): Promise<void> => {
 };
 
 const getToken = () => (import.meta as any).env.VITE_META_ADS_TOKEN || localStorage.getItem('meta_ads_token') || '';
+
+// ─── sessionStorage result cache — survives page refreshes, cleared on tab close ───
+const META_PREFIX = 'meta:';
+const META_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function metaGetCached(key: string): any | null {
+  try {
+    const raw = sessionStorage.getItem(META_PREFIX + key);
+    if (!raw) return null;
+    const { data, timestamp } = JSON.parse(raw) as { data: any; timestamp: number };
+    if (Date.now() - timestamp > META_TTL_MS) {
+      sessionStorage.removeItem(META_PREFIX + key);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function metaSetCache(key: string, data: any) {
+  try {
+    sessionStorage.setItem(META_PREFIX + key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch { /* silently skip if storage full */ }
+}
+
 export const META_AD_ACCOUNT = 'act_2136106490563351';
 const BASE = 'https://graph.facebook.com/v21.0';
 
@@ -324,6 +350,11 @@ export const metaAds = {
   // ── INSIGHTS ──────────────────────────────────────────────
   getInsights: async (accountId: string, fields: string[] | string, preset?: DatePreset, range?: { since: string, until: string }, timeIncrement?: number, signal?: AbortSignal) => {
     const fieldsStr = Array.isArray(fields) ? fields.join(',') : fields;
+    const rangeKey = range ? `${range.since}_${range.until}` : (preset || '');
+    const cacheKey = `insights:${accountId}:${fieldsStr}:${rangeKey}:${timeIncrement || ''}`;
+    const cached = metaGetCached(cacheKey);
+    if (cached) return cached;
+
     let url = `${BASE}/${accountId}/insights?fields=${fieldsStr}&access_token=${getToken()}&limit=500`;
     if (range) url += `&time_range={"since":"${range.since}","until":"${range.until || range.since}"}`;
     else if (preset) url += `&date_preset=${preset}`;
@@ -360,7 +391,7 @@ export const metaAds = {
     };
 
     if (timeIncrement === 1) {
-      return data.data.map((d: any) => ({
+      const resultList = data.data.map((d: any) => ({
         ...d,
         spend: parseFloat(d.spend || 0),
         reach: parseInt(d.reach || 0),
@@ -369,10 +400,12 @@ export const metaAds = {
         roas: parseFloat(d.purchase_roas?.[0]?.value || 0),
         date: d.date_start
       })).sort((a: any, b: any) => a.date.localeCompare(b.date));
+      metaSetCache(cacheKey, resultList);
+      return resultList;
     }
     
     const insights = data.data[0] || {};
-    return {
+    const resultObj = {
       ...insights,
       spend: parseFloat(insights.spend || 0),
       reach: parseInt(insights.reach || 0),
@@ -380,6 +413,8 @@ export const metaAds = {
       purchase_value: extractValue(insights.action_values),
       roas: parseFloat(insights.purchase_roas?.[0]?.value || 0)
     };
+    metaSetCache(cacheKey, resultObj);
+    return resultObj;
   },
 
   getInsightsDaily: async (accountId: string, fields: string[] | string, preset?: DatePreset, range?: { since: string, until: string }, signal?: AbortSignal) => {
