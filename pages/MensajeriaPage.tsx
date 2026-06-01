@@ -664,11 +664,16 @@ export default function MensajeriaPage() {
     setExpanded(false);
     setSelected(conv);
     if (window.innerWidth < 768) setMobileShowChat(true);
-    // Instantly decrement sidebar badge if this conversation was unread
+    // Instantly mark as read — both visual (list item) and badge
     const wasUnread = isConvUnread(conv);
-    // Clear "manually unread" when opening
     setManuallyUnread(prev => { const s = new Set(prev); s.delete(conv.id); return s; });
+    setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
+    setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
     if (wasUnread) markRead();
+    // Fire API in background — don't block the UI
+    if (conv.unread_count > 0 || wasUnread) {
+      chatwoot.markAsRead(cwUrl, cwToken, conv.id).catch(() => {});
+    }
     setMessages([]);
     setReply('');
     setSendError(null);
@@ -678,12 +683,6 @@ export default function MensajeriaPage() {
       const msgs = await chatwoot.getMessages(cwUrl, cwToken, conv.id);
       const sorted = msgs.sort((a: any, b: any) => a.created_at - b.created_at);
       setMessages(sorted);
-      // Sync read state with Chatwoot
-      if (conv.unread_count > 0) {
-        chatwoot.markAsRead(cwUrl, cwToken, conv.id).catch(() => {});
-        setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
-        setBackgroundConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c));
-      }
     } catch (e: any) {
       setMessages([]);
     } finally {
