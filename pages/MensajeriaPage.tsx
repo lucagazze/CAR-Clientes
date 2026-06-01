@@ -1380,7 +1380,7 @@ export default function MensajeriaPage() {
               const activityTimestamp = lastRealMsg?.created_at || conv?.last_non_activity_message?.created_at || conv?.last_activity_at || conv?.created_at;
               return (
                 <div key={conv.id}
-                  onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, conv }); }}
+                  onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, conv }); setSelectedIds(prev => { const next = new Set(prev); next.has(conv.id) ? next.delete(conv.id) : next.add(conv.id); return next; }); }}
                   onClick={() => loadMessages(conv)}
                   className={`mx-2 my-0.5 px-3 py-2.5 flex items-start gap-2.5 transition-all duration-200 cursor-pointer rounded-xl group/conv ${
                     isSelected 
@@ -1390,13 +1390,12 @@ export default function MensajeriaPage() {
                         : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/30'
                   }`}
                 >
-                  {/* Checkbox */}
-                  <div className={`flex-shrink-0 mt-2.5 ${selectedIds.size > 0 ? 'opacity-100' : 'opacity-0 group-hover/conv:opacity-100'} transition-opacity`}
-                    onClick={e => { e.stopPropagation(); toggleSelect(conv.id, e); }}>
-                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${selectedIds.has(conv.id) ? 'bg-blue-600 border-blue-600' : 'border-zinc-300 dark:border-zinc-650'}`}>
-                      {selectedIds.has(conv.id) && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 5l2.5 2.5L8 3" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  {/* Selection dot — only visible when this conv is selected */}
+                  {selectedIds.has(conv.id) && (
+                    <div className="flex-shrink-0 mt-2.5 w-4 h-4 rounded bg-blue-600 flex items-center justify-center">
+                      <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 5l2.5 2.5L8 3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </div>
-                  </div>
+                  )}
                   
                   {/* Card content click target */}
                   <div className="flex-1 flex items-start gap-2.5 min-w-0">
