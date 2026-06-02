@@ -908,34 +908,49 @@ export default function AdminPage() {
     if (!editingClient) return;
     setSavingConfig(true);
     try {
+      // Core fields — definitely exist in DB
+      const corePayload: Record<string, any> = {
+        business_name: editForm.business_name || null,
+        plan: editForm.plan || null,
+        active: editForm.active,
+        meta_account_id: editForm.meta_account_id || null,
+        ig_business_id: editForm.ig_business_id || null,
+        ig_username: editForm.ig_username || null,
+        klaviyo_api_key: editForm.klaviyo_api_key || null,
+        chatwoot_url: editForm.chatwoot_url || null,
+        chatwoot_token: editForm.chatwoot_token || null,
+        ecommerce_platform: editForm.ecommerce_platform || null,
+        shopify_domain: editForm.shopify_domain || null,
+        shopify_access_token: editForm.shopify_access_token || null,
+        wordpress_url: editForm.wordpress_url || null,
+        woo_consumer_key: editForm.woo_consumer_key || null,
+        woo_consumer_secret: editForm.woo_consumer_secret || null,
+        fb_page_id: editForm.fb_page_id || null,
+        fb_page_name: editForm.fb_page_name || null,
+        fb_page_access_token: editForm.fb_page_access_token || null,
+      };
+
       const { error } = await supabase
         .from("car_clients")
-        .update({
-          business_name: editForm.business_name || null,
-          industry: editForm.industry || null,
-          plan: editForm.plan || null,
-          active: editForm.active,
-          meta_account_id: editForm.meta_account_id || null,
-          ig_business_id: editForm.ig_business_id || null,
-          ig_username: editForm.ig_username || null,
-          klaviyo_api_key: editForm.klaviyo_api_key || null,
-          chatwoot_url: editForm.chatwoot_url || null,
-          chatwoot_token: editForm.chatwoot_token || null,
-          ecommerce_platform: editForm.ecommerce_platform || null,
-          shopify_domain: editForm.shopify_domain || null,
-          shopify_access_token: editForm.shopify_access_token || null,
-          tiendanube_store_id: editForm.tiendanube_store_id || null,
-          tiendanube_access_token: editForm.tiendanube_access_token || null,
-          wordpress_url: editForm.wordpress_url || null,
-          woo_consumer_key: editForm.woo_consumer_key || null,
-          woo_consumer_secret: editForm.woo_consumer_secret || null,
-          fb_page_id: editForm.fb_page_id || null,
-          fb_page_name: editForm.fb_page_name || null,
-          fb_page_access_token: editForm.fb_page_access_token || null,
-        })
+        .update(corePayload)
         .eq("id", editingClient.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[saveConfig] Supabase error:', JSON.stringify(error));
+        throw new Error(error.message || error.details || JSON.stringify(error));
+      }
+
+      // Optional fields — update separately, ignore if column doesn't exist
+      const optionalFields: Record<string, any> = {
+        industry: editForm.industry || null,
+        tiendanube_store_id: editForm.tiendanube_store_id || null,
+        tiendanube_access_token: editForm.tiendanube_access_token || null,
+      };
+      for (const [key, val] of Object.entries(optionalFields)) {
+        try {
+          await supabase.from("car_clients").update({ [key]: val }).eq("id", editingClient.id);
+        } catch (_) { /* column may not exist yet */ }
+      }
 
       const isValidUuid = (v?: string) => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
       if (editForm.new_password && supabaseAdmin) {
