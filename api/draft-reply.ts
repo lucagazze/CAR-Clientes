@@ -44,17 +44,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Fetch client from Supabase
     const { data: client, error: dbError } = await supabase
       .from('car_clients')
-      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, wordpress_url, woo_consumer_key, woo_consumer_secret, business_description, custom_instructions, scraped_content, instagram_context, website_url, meta_account_id')
+      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url, meta_account_id, klaviyo_api_key')
       .eq('id', clientId)
       .maybeSingle();
 
-    if (dbError || !client) {
-      return res.status(404).json({ error: 'Client not found' });
+    if (dbError) {
+      console.error('[draft-reply] DB error:', JSON.stringify(dbError));
+      return res.status(500).json({ error: 'DB error', detail: dbError.message });
+    }
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found', id: clientId });
     }
 
     const {
       business_name, shopify_domain, shopify_access_token,
-      wordpress_url, woo_consumer_key, woo_consumer_secret,
       business_description, custom_instructions, scraped_content, instagram_context,
       website_url,
     } = client as any;
@@ -172,7 +175,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (_) { /* ignore */ }
     }
 
-    // WooCommerce catalog
+    // WooCommerce catalog (columns may not exist in DB, skip if undefined)
+    const woo_consumer_key = undefined;
+    const woo_consumer_secret = undefined;
+    const wordpress_url = undefined;
     if (wordpress_url && woo_consumer_key && woo_consumer_secret) {
       try {
         const base = (wordpress_url as string).replace(/\/$/, '');
