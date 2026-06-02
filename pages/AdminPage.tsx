@@ -1281,25 +1281,26 @@ export default function AdminPage() {
                         </span>
                       )}
 
-                      {/* Meta / Instagram Connection info */}
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {c.fb_page_id && (c as any).fb_page_access_token ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20" title={`Página: ${c.fb_page_name || 'Desconocida'}`}>
-                            <Facebook className="w-2.5 h-2.5" />
-                            {c.fb_page_name || 'FB Conectado'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/30">
-                            <Facebook className="w-2.5 h-2.5" />
-                            Meta desconectado
-                          </span>
-                        )}
-                        {c.ig_username && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-500/10 border border-pink-100 dark:border-pink-500/20">
-                            <Instagram className="w-2.5 h-2.5" />
-                            @{c.ig_username}
-                          </span>
-                        )}
+                      {/* Connection badges grid */}
+                      <div className="flex items-center gap-1 mt-2 flex-wrap">
+                        {/* Meta Ads */}
+                        <span title="Cuenta Publicitaria Meta" className={`w-5 h-5 rounded flex items-center justify-center text-[8px] font-black ${c.meta_account_id ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>M</span>
+                        {/* Facebook Page */}
+                        <span title={c.fb_page_id && (c as any).fb_page_access_token ? `Facebook: ${c.fb_page_name || c.fb_page_id}` : 'Facebook no conectado'} className={`w-5 h-5 rounded flex items-center justify-center ${c.fb_page_id && (c as any).fb_page_access_token ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>
+                          <Facebook className="w-2.5 h-2.5" />
+                        </span>
+                        {/* Instagram */}
+                        <span title={c.ig_username ? `Instagram: @${c.ig_username}` : 'Instagram no conectado'} className={`w-5 h-5 rounded flex items-center justify-center ${c.ig_username ? 'bg-pink-100 dark:bg-pink-950 text-pink-600 dark:text-pink-400' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>
+                          <Instagram className="w-2.5 h-2.5" />
+                        </span>
+                        {/* Tienda */}
+                        <span title={c.ecommerce_platform ? `Tienda: ${c.ecommerce_platform}${c.shopify_domain ? ` (${c.shopify_domain})` : ''}` : 'Sin tienda'} className={`w-5 h-5 rounded flex items-center justify-center text-[8px] font-black ${c.ecommerce_platform && (c.shopify_access_token || (c as any).tiendanube_access_token) ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>
+                          {c.ecommerce_platform === 'shopify' ? 'S' : c.ecommerce_platform === 'tiendanube' ? 'TN' : 'T'}
+                        </span>
+                        {/* Klaviyo */}
+                        <span title={c.klaviyo_api_key ? 'Klaviyo conectado' : 'Klaviyo no conectado'} className={`w-5 h-5 rounded flex items-center justify-center text-[8px] font-black ${c.klaviyo_api_key ? 'bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>K</span>
+                        {/* Chatwoot */}
+                        <span title={c.chatwoot_url ? 'Chatwoot conectado' : 'Chatwoot no conectado'} className={`w-5 h-5 rounded flex items-center justify-center text-[8px] font-black ${c.chatwoot_url ? 'bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>C</span>
                       </div>
                     </div>
                   </div>

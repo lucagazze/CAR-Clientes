@@ -57,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Fetch client settings from Supabase
     const { data: client, error: dbError } = await supabase
       .from('car_clients')
-      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url')
+      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url, meta_account_id')
       .eq('id', clientId)
       .maybeSingle();
 
@@ -65,16 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Client not found or database error' });
     }
 
-    // Fetch meta_account_id for live catalog
-    let meta_account_id: string | null = null;
-    try {
-      const { data: metaRow } = await supabase
-        .from('car_clients')
-        .select('meta_account_id')
-        .eq('id', clientId)
-        .maybeSingle();
-      meta_account_id = metaRow?.meta_account_id ?? null;
-    } catch { /* skip */ }
+    const meta_account_id: string | null = (client as any).meta_account_id ?? null;
 
     // Fetch custom client links from Supabase
     let clientLinks: any[] = [];
@@ -208,11 +199,43 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
       }
     }
 
+    // Also fetch from Shopify to fill gaps Meta catalog might miss
+    if (shopify_domain && shopify_access_token) {
+      try {
+        const domain = shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const sRes = await fetch(`https://${domain}/admin/api/2024-01/products.json?limit=250&fields=title,handle,variants,status,product_type`, {
+          headers: { 'X-Shopify-Access-Token': shopify_access_token, 'Accept': 'application/json' },
+        });
+        if (sRes.ok) {
+          const sData: any = await sRes.json();
+          const shopifyProducts = (sData.products || []).filter((p: any) => p.status === 'active');
+          // Merge: add Shopify products not already in Meta catalog
+          for (const sp of shopifyProducts) {
+            const alreadyIn = parsedCatalog.some(p => p.title.toLowerCase() === sp.title.toLowerCase());
+            if (!alreadyIn) {
+              const vs = sp.variants || [];
+              const prices = [...new Set(vs.map((v: any) => v.price).filter(Boolean))];
+              const priceStr = prices.length === 1 ? `$${prices[0]}` : prices.length > 1 ? `$${Math.min(...prices.map(Number))}-$${Math.max(...prices.map(Number))}` : 'Consultar';
+              parsedCatalog.push({
+                title: sp.title,
+                price: priceStr,
+                url: '',
+                handle: sp.handle,
+                type: sp.product_type || '',
+                variants: vs.map((v: any) => v.title).filter((t: string) => t && t !== 'Default Title'),
+              });
+            }
+          }
+        }
+      } catch (e) { /* Shopify fallback failed */ }
+    }
+
     if (parsedCatalog.length > 0) {
-      productsContext = `Catálogo de productos en tiempo real (${parsedCatalog.length} productos disponibles):\n${
+      productsContext = `Catálogo completo de productos (${parsedCatalog.length} productos — fuentes: Meta + Shopify):\n${
         parsedCatalog.map(p => {
+          const varStr = p.variants?.length > 0 ? ` | Variantes: ${p.variants.join(', ')}` : '';
           const typeStr = p.type ? ` | Categoría: ${p.type}` : '';
-          return `- ${p.title}: ${p.price}${typeStr}. Link: ${buildProductLink(p)}`;
+          return `- ${p.title}: ${p.price}${varStr}${typeStr}. Link: ${buildProductLink(p)}`;
         }).join('\n')}`;
     }
 
