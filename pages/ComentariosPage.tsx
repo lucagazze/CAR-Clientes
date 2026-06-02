@@ -41,6 +41,7 @@ type PostItem = {
   raw: any;
   mediaType?: string;
   mediaUrl?: string;
+  isAd?: boolean;
 };
 
 export default function ComentariosPage() {
@@ -52,6 +53,7 @@ export default function ComentariosPage() {
   const fbPageId = (profile as any)?.fb_page_id;
   const igId = (profile as any)?.ig_business_id;
   const igUsername = (profile as any)?.ig_username;
+  const metaAccountId = (profile as any)?.meta_account_id;
 
   const [loading, setLoading] = useState(true);
   const [igError, setIgError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export default function ComentariosPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [posts, setPosts] = useState<PostItem[]>([]);
-  const [platformFilter, setPlatformFilter] = useState<'all' | 'instagram' | 'facebook'>('all');
+  const [platformFilter, setPlatformFilter] = useState<'all' | 'instagram' | 'facebook' | 'ads'>('all');
   const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('pending');
 
   // Slide-over state
@@ -293,7 +295,7 @@ export default function ComentariosPage() {
     setIgError(null);
     setFbError(null);
 
-    const processMediaRes = (igRes: any, fbRes: any) => {
+    const processMediaRes = (igRes: any, fbRes: any, activeAds: any[] = [], adsComments: any[] = []) => {
       const items: PostItem[] = [];
 
       // Instagram
@@ -301,7 +303,6 @@ export default function ComentariosPage() {
       igMedia.forEach((post: any) => {
         const rawComments = post.comments?.data || [];
         const userComments = rawComments.filter((c: any) => c.username !== igUsername);
-        if (userComments.length === 0) return;
         const pending = userComments.filter((c: any) => isCommentPending(c, 'instagram'));
         items.push({
           id: post.id,
@@ -324,7 +325,6 @@ export default function ComentariosPage() {
       fbMedia.forEach((post: any) => {
         const rawComments = post.comments?.data || [];
         const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
-        if (userComments.length === 0) return;
         const normalized = userComments.map((c: any, i: number) => ({
           ...c,
           username: c.from?.name || c.name || c.username || `Comentarista ${i + 1}`,
@@ -348,25 +348,80 @@ export default function ComentariosPage() {
         });
       });
 
+      // Ads
+      adsComments.forEach(({ storyId, comments: rawComments }) => {
+        const matchingAd = activeAds.find((ad: any) => ad.creative.effective_object_story_id === storyId);
+        if (!matchingAd) return;
+
+        const isIgAd = !!matchingAd.creative?.instagram_permalink_url;
+        const userComments = rawComments.filter((c: any) => {
+          return isIgAd ? c.username !== igUsername : c.from?.id !== fbPageId;
+        });
+
+        const normalized = userComments.map((c: any, i: number) => ({
+          ...c,
+          username: c.username || c.from?.name || `Usuario ${i + 1}`,
+          text: c.text || c.message || '',
+          from: c.from || null,
+        }));
+
+        const pending = normalized.filter((c: any) => isCommentPending(c, isIgAd ? 'instagram' : 'facebook'));
+
+        items.push({
+          id: storyId,
+          platform: isIgAd ? 'instagram' : 'facebook',
+          thumbnail: matchingAd.creative.thumbnail_url || matchingAd.creative.image_url || null,
+          caption: matchingAd.creative.name || matchingAd.name || 'Anuncio',
+          permalink: matchingAd.creative.instagram_permalink_url || matchingAd.preview_shareable_link || null,
+          timestamp: new Date().toISOString(),
+          totalComments: normalized.length,
+          pendingComments: pending.length,
+          comments: normalized,
+          raw: matchingAd,
+          isAd: true,
+        });
+      });
+
       items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       return items;
     };
 
     const load = async () => {
       try {
-        // Step 1: Fast initial fetch of 12 items
-        const [igMediaRes12, fbMediaRes12] = await Promise.all([
+        // Step 1: Fast initial fetch of 12 items + ads list
+        const [igMediaRes12, fbMediaRes12, adsRes] = await Promise.all([
           igId
             ? metaAds.getInstagramMedia(igId, 12).catch(err => { setIgError(err.message); return []; })
             : Promise.resolve([]),
           fbPageId
             ? metaAds.getFacebookPageFeed(fbPageId, 12).catch(err => { setFbError(err.message); return []; })
             : Promise.resolve([]),
+          metaAccountId
+            ? metaAds.getAccountAds(metaAccountId).catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
         ]);
 
         if (!active) return;
 
-        const initialItems = processMediaRes(igMediaRes12, fbMediaRes12);
+        const ads = adsRes?.data || [];
+        const activeAds = ads.filter((ad: any) => ad.status === 'ACTIVE' && ad.creative?.effective_object_story_id);
+        const uniqueStoryIds = Array.from(new Set(activeAds.map((ad: any) => ad.creative.effective_object_story_id))) as string[];
+
+        let adsCommentsResults12: any[] = [];
+        if (uniqueStoryIds.length > 0) {
+          const topStoryIds = uniqueStoryIds.slice(0, 15);
+          const commentsPromises = topStoryIds.map(async (storyId) => {
+            try {
+              const res = await metaAds.getAdCreativeComments(storyId);
+              return { storyId, comments: res.data || [] };
+            } catch {
+              return { storyId, comments: [] };
+            }
+          });
+          adsCommentsResults12 = await Promise.all(commentsPromises);
+        }
+
+        const initialItems = processMediaRes(igMediaRes12, fbMediaRes12, activeAds, adsCommentsResults12);
         setPosts(initialItems);
         setLoading(false);
 
@@ -385,7 +440,21 @@ export default function ComentariosPage() {
 
         if (!active) return;
 
-        const allItems = processMediaRes(igMediaRes50, fbMediaRes50);
+        let adsCommentsResults50: any[] = [];
+        if (uniqueStoryIds.length > 0) {
+          const topStoryIds = uniqueStoryIds.slice(0, 30);
+          const commentsPromises = topStoryIds.map(async (storyId) => {
+            try {
+              const res = await metaAds.getAdCreativeComments(storyId);
+              return { storyId, comments: res.data || [] };
+            } catch {
+              return { storyId, comments: [] };
+            }
+          });
+          adsCommentsResults50 = await Promise.all(commentsPromises);
+        }
+
+        const allItems = processMediaRes(igMediaRes50, fbMediaRes50, activeAds, adsCommentsResults50);
         setPosts(allItems);
         sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: allItems }));
 
@@ -398,7 +467,7 @@ export default function ComentariosPage() {
 
     load();
     return () => { active = false; };
-  }, [clientId, igId, fbPageId, igUsername, refreshKey, isCommentPending]);
+  }, [clientId, igId, fbPageId, igUsername, metaAccountId, refreshKey, isCommentPending]);
 
   // Open post slide-over — reload comments from API for freshness
   const openPost = async (post: PostItem) => {
@@ -413,7 +482,19 @@ export default function ComentariosPage() {
     // Reload fresh comments from API
     setLoadingComments(true);
     try {
-      if (post.platform === 'instagram') {
+      if (post.isAd) {
+        const res = await metaAds.getAdCreativeComments(post.id);
+        const isIgAd = post.platform === 'instagram';
+        const fresh = (res.data || []).filter((c: any) => {
+          return isIgAd ? c.username !== igUsername : c.from?.id !== fbPageId;
+        }).map((c: any, i: number) => ({
+          ...c,
+          username: c.username || c.from?.name || `Usuario ${i + 1}`,
+          text: c.text || c.message || '',
+          from: c.from || null,
+        }));
+        setComments(fresh);
+      } else if (post.platform === 'instagram') {
         const res = await metaAds.getInstagramMediaComments(post.id);
         const fresh = (res.data || []).filter((c: any) => c.username !== igUsername);
         setComments(fresh);
@@ -523,6 +604,9 @@ export default function ComentariosPage() {
         if (p.id !== selectedPost.id) return p;
         return { ...p, pendingComments: Math.max(0, p.pendingComments - 1) };
       }));
+
+      // Dispatch comments update to refresh sidebar badge
+      window.dispatchEvent(new Event('car_comments_update'));
     } catch (err: any) {
       // 3. On error: remove the optimistic reply and restore text
       setComments(prev => prev.map(c => {
@@ -559,7 +643,9 @@ export default function ComentariosPage() {
 
   const filteredPosts = useMemo(() => {
     let list = posts;
-    if (platformFilter !== 'all') list = list.filter(p => p.platform === platformFilter);
+    if (platformFilter === 'instagram') list = list.filter(p => p.platform === 'instagram' && !p.isAd);
+    else if (platformFilter === 'facebook') list = list.filter(p => p.platform === 'facebook' && !p.isAd);
+    else if (platformFilter === 'ads') list = list.filter(p => p.isAd);
     if (statusFilter === 'pending') list = list.filter(p => p.pendingComments > 0);
     return list;
   }, [posts, platformFilter, statusFilter]);
@@ -618,7 +704,7 @@ export default function ComentariosPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
-        {(['all', 'instagram', 'facebook'] as const).map(p => (
+        {(['all', 'instagram', 'facebook', 'ads'] as const).map(p => (
           <button
             key={p}
             onClick={() => setPlatformFilter(p)}
@@ -626,11 +712,12 @@ export default function ComentariosPage() {
               platformFilter === p
                 ? p === 'instagram' ? 'bg-pink-500 text-white border-pink-500'
                   : p === 'facebook' ? 'bg-blue-500 text-white border-blue-500'
+                  : p === 'ads' ? 'bg-amber-500 text-white border-amber-500'
                   : 'bg-violet-600 text-white border-violet-600'
                 : 'bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-350'
             }`}
           >
-            {p === 'all' ? 'Todas las plataformas' : p === 'instagram' ? '📷 Instagram' : '💬 Facebook'}
+            {p === 'all' ? 'Todas las plataformas' : p === 'instagram' ? '📷 Instagram' : p === 'facebook' ? '💬 Facebook' : '🎯 Anuncios (Ads)'}
           </button>
         ))}
         <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-0.5 rounded-xl ml-auto">
@@ -715,6 +802,13 @@ export default function ComentariosPage() {
                     : <span className="text-[10px] font-black">f</span>
                   }
                 </div>
+
+                {/* Ad badge */}
+                {post.isAd && (
+                  <div className="absolute bottom-2 left-2 bg-violet-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-md uppercase tracking-wider">
+                    Anuncio
+                  </div>
+                )}
 
                 {/* Pending badge */}
                 {post.pendingComments > 0 && (

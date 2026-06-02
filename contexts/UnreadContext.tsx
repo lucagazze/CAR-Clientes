@@ -2,12 +2,15 @@ import React, { createContext, useContext, useEffect, useState, useRef, useCallb
 import { useAuth } from './AuthContext';
 import { useViewAs } from './ViewAsContext';
 import { chatwoot } from '../services/chatwoot';
+import { metaAds } from '../services/metaAds';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UnreadContextType {
   /** Number of open conversations (badge count shown in sidebar) */
   unreadCount: number;
+  /** Number of pending comments on IG, FB, and Ads */
+  pendingCommentsCount: number;
   /** Manually refresh the count (called e.g. after sending a message) */
   refresh: () => void;
   /** Instantly decrement badge by 1 when a conversation is opened — no network round-trip */
@@ -16,6 +19,7 @@ interface UnreadContextType {
 
 const UnreadContext = createContext<UnreadContextType>({
   unreadCount: 0,
+  pendingCommentsCount: 0,
   refresh: () => {},
   markRead: () => {},
 });
@@ -43,11 +47,13 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const profile = isViewingAs ? viewAsProfile : authProfile;
 
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingCommentsCount, setPendingCommentsCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Reset to 0 immediately when switching profiles — no stale count from previous client
   useEffect(() => {
     setUnreadCount(0);
+    setPendingCommentsCount(0);
     document.title = 'Portal C.A.R | Algoritmia';
   }, [profile?.id]);
 
@@ -221,12 +227,147 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [profile?.chatwoot_url, profile?.chatwoot_token]);
 
+  const fetchCommentsCount = useCallback(async () => {
+    if (!profile) return;
+    const fbPageId = (profile as any)?.fb_page_id;
+    const igId = (profile as any)?.ig_business_id;
+    const igUsername = (profile as any)?.ig_username;
+    const metaAccountId = (profile as any)?.meta_account_id;
+
+    if (!fbPageId && !igId) {
+      setPendingCommentsCount(0);
+      return;
+    }
+
+    try {
+      let total = 0;
+
+      // 1. Fetch Instagram media posts with comments and replies inline
+      let igPosts: any[] = [];
+      if (igId) {
+        try {
+          const res = await metaAds.getInstagramMedia(igId, 12);
+          igPosts = res?.data || res || [];
+        } catch (e) {
+          console.error('Error fetching IG media for unread count:', e);
+        }
+      }
+
+      // 2. Fetch Facebook feed with comments and replies inline
+      let fbPosts: any[] = [];
+      if (fbPageId) {
+        try {
+          const res = await metaAds.getFacebookPageFeed(fbPageId, 12);
+          fbPosts = res?.data || res || [];
+        } catch (e) {
+          console.error('Error fetching FB feed for unread count:', e);
+        }
+      }
+
+      // Helper to check if a comment is pending
+      const isCommentPendingLocal = (comment: any, isIg: boolean) => {
+        const isFromPage = isIg 
+          ? comment.username === igUsername 
+          : comment.from?.id === fbPageId;
+        if (isFromPage) return false;
+
+        const replies = comment.replies?.data || [];
+        if (replies.length === 0) return true;
+
+        const sorted = [...replies].sort((a, b) =>
+          new Date(a.timestamp || a.created_time).getTime() - new Date(b.timestamp || b.created_time).getTime()
+        );
+        const latest = sorted[sorted.length - 1];
+        const latestIsMe = isIg
+          ? latest.username === igUsername
+          : latest.from?.id === fbPageId;
+        return !latestIsMe;
+      };
+
+      // Count pending comments in Instagram posts
+      igPosts.forEach((post: any) => {
+        const rawComments = post.comments?.data || [];
+        const userComments = rawComments.filter((c: any) => c.username !== igUsername);
+        const pending = userComments.filter((c: any) => isCommentPendingLocal(c, true));
+        total += pending.length;
+      });
+
+      // Count pending comments in Facebook posts
+      fbPosts.forEach((post: any) => {
+        const rawComments = post.comments?.data || [];
+        const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
+        const pending = userComments.filter((c: any) => isCommentPendingLocal(c, false));
+        total += pending.length;
+      });
+
+      // 3. Fetch Ads comments if metaAccountId is present
+      if (metaAccountId) {
+        try {
+          const adsRes = await metaAds.getAccountAds(metaAccountId);
+          const ads = adsRes?.data || [];
+          const activeAds = ads.filter((ad: any) => ad.status === 'ACTIVE' && ad.creative?.effective_object_story_id);
+          const uniqueStoryIds = Array.from(new Set(activeAds.map((ad: any) => ad.creative.effective_object_story_id))) as string[];
+
+          if (uniqueStoryIds.length > 0) {
+            // Fetch comments for top 10 unique story IDs
+            const storyIdsToFetch = uniqueStoryIds.slice(0, 10);
+            const commentsPromises = storyIdsToFetch.map(async (storyId) => {
+              try {
+                const res = await metaAds.getAdCreativeComments(storyId);
+                return res.data || [];
+              } catch {
+                return [];
+              }
+            });
+            const results = await Promise.all(commentsPromises);
+            results.forEach((rawComments, index) => {
+              const storyId = storyIdsToFetch[index];
+              const matchingAd = activeAds.find((ad: any) => ad.creative.effective_object_story_id === storyId);
+              const isIgAd = !!matchingAd?.creative?.instagram_permalink_url;
+              const userComments = rawComments.filter((c: any) => {
+                return isIgAd ? c.username !== igUsername : c.from?.id !== fbPageId;
+              });
+              const pending = userComments.filter((c: any) => isCommentPendingLocal(c, isIgAd));
+              total += pending.length;
+            });
+          }
+        } catch (e) {
+          console.error('Error fetching Ads for unread count:', e);
+        }
+      }
+
+      setPendingCommentsCount(total);
+    } catch (e) {
+      console.error('Error in fetchCommentsCount:', e);
+    }
+  }, [profile?.id, profile?.fb_page_id, (profile as any)?.ig_business_id, (profile as any)?.ig_username, profile?.meta_account_id]);
+
+  // Sync comments update event
+  useEffect(() => {
+    const handleCommentsUpdate = () => {
+      fetchCommentsCount();
+    };
+    window.addEventListener('car_comments_update', handleCommentsUpdate);
+
+    return () => {
+      window.removeEventListener('car_comments_update', handleCommentsUpdate);
+    };
+  }, [fetchCommentsCount]);
+
+  // Poll comments every 5 minutes
+  useEffect(() => {
+    if (!profile?.id) return;
+    fetchCommentsCount();
+    const interval = setInterval(fetchCommentsCount, 300_000);
+    return () => clearInterval(interval);
+  }, [profile?.id, fetchCommentsCount]);
+
   const markRead = useCallback(() => {
     setUnreadCount(prev => Math.max(0, prev - 1));
   }, []);
 
   return (
-    <UnreadContext.Provider value={{ unreadCount, refresh: fetchCount, markRead }}>
+    <UnreadContext.Provider value={{ unreadCount, pendingCommentsCount, refresh: fetchCount, markRead }}>
       {children}
     </UnreadContext.Provider>
   );

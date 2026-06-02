@@ -21,7 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const { viewAsProfile, setViewAsProfile, isViewingAs } = useViewAs();
-  const { unreadCount } = useUnread();
+  const { unreadCount, pendingCommentsCount } = useUnread();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Use viewAsProfile if active, otherwise use real profile
@@ -31,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const principalItems = [
     { path: '/',                 icon: Home,          label: 'Inicio' },
     { path: '/mensajeria',       icon: MessageSquare, label: 'Mensajería', badge: unreadCount },
+    { path: '/comentarios',      icon: MessageCircle, label: 'Comentarios', badge: pendingCommentsCount },
     { path: '/redes-sociales',   icon: Instagram,     label: 'Redes Sociales' },
     { path: '/contactos',        icon: Users,          label: 'Contactos' },
   ];
