@@ -665,6 +665,52 @@ export default function DashboardPage() {
   const { setViewAsProfile } = useViewAs();
   const [selectedMetaGoal, setSelectedMetaGoal] = useState<'purchases' | 'leads' | 'messages'>('purchases');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [fulfillingOrder, setFulfillingOrder] = useState(false);
+
+  const toggleFulfillment = async () => {
+    if (!selectedOrder || fulfillingOrder) return;
+    const prof: any = profile;
+    if (!prof?.shopify_domain || !prof?.shopify_access_token) return;
+    const domain = prof.shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const token = prof.shopify_access_token;
+    const isFulfilled = selectedOrder.fulfillment_status === 'fulfilled';
+    setFulfillingOrder(true);
+    try {
+      if (!isFulfilled) {
+        // Get fulfillment order ID first
+        const foRes = await fetch(`https://${domain}/admin/api/2024-01/orders/${selectedOrder.id}/fulfillment_orders.json`, {
+          headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+        });
+        const foData = await foRes.json();
+        const fulfillmentOrderId = foData.fulfillment_orders?.[0]?.id;
+        if (!fulfillmentOrderId) throw new Error('No fulfillment order found');
+        await fetch(`https://${domain}/admin/api/2024-01/fulfillments.json`, {
+          method: 'POST',
+          headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fulfillment: { line_items_by_fulfillment_order: [{ fulfillment_order_id: fulfillmentOrderId }], notify_customer: false } }),
+        });
+        setSelectedOrder((prev: any) => ({ ...prev, fulfillment_status: 'fulfilled' }));
+      } else {
+        // Cancel all fulfillments
+        const fRes = await fetch(`https://${domain}/admin/api/2024-01/orders/${selectedOrder.id}/fulfillments.json`, {
+          headers: { 'X-Shopify-Access-Token': token },
+        });
+        const fData = await fRes.json();
+        for (const f of fData.fulfillments || []) {
+          await fetch(`https://${domain}/admin/api/2024-01/fulfillments/${f.id}/cancel.json`, {
+            method: 'POST',
+            headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+          });
+        }
+        setSelectedOrder((prev: any) => ({ ...prev, fulfillment_status: null }));
+      }
+    } catch (e) {
+      console.error('Fulfillment error:', e);
+      alert('Error al cambiar estado de envío');
+    } finally {
+      setFulfillingOrder(false);
+    }
+  };
 
   const hasTag = (tag: string) => {
     const tags = (profile as any)?.client_tags;
@@ -2211,12 +2257,25 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-              <button 
-                onClick={() => setSelectedOrder(null)} 
-                className="p-1.5 text-zinc-450 hover:text-zinc-700 dark:hover:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {(profile as any)?.shopify_domain && (
+                  <a
+                    href={`https://${(profile as any).shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/admin/orders/${selectedOrder.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border border-zinc-200 dark:border-zinc-700"
+                  >
+                    Ver en Shopify
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="p-1.5 text-zinc-450 hover:text-zinc-700 dark:hover:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Content */}
@@ -2301,21 +2360,25 @@ export default function DashboardPage() {
                           : 'Pendiente'}
                   </span>
                 </div>
-                <div className="flex-1 p-3 rounded-xl border border-zinc-150/60 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-900/10 flex items-center justify-between">
+                <div className="flex-1 p-3 rounded-xl border border-zinc-150/60 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-900/10 flex items-center justify-between gap-2">
                   <span className="text-[11px] font-bold text-zinc-450 dark:text-zinc-550">Estado de Envío</span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    selectedOrder.fulfillment_status === 'fulfilled'
-                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-500/15"
-                      : selectedOrder.fulfillment_status === 'partial'
-                        ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-500/15"
-                        : "bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-450 border border-zinc-200/10"
-                  }`}>
-                    {selectedOrder.fulfillment_status === 'fulfilled' 
-                      ? 'Enviado' 
+                  <button
+                    onClick={toggleFulfillment}
+                    disabled={fulfillingOrder}
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all hover:opacity-80 active:scale-95 disabled:opacity-50 ${
+                      selectedOrder.fulfillment_status === 'fulfilled'
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-500/15"
+                        : selectedOrder.fulfillment_status === 'partial'
+                          ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-500/15"
+                          : "bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-450 border border-zinc-200/10"
+                    }`}
+                  >
+                    {fulfillingOrder ? '...' : selectedOrder.fulfillment_status === 'fulfilled'
+                      ? 'Enviado ✓'
                       : selectedOrder.fulfillment_status === 'partial'
                         ? 'Parcial'
                         : 'No enviado'}
-                  </span>
+                  </button>
                 </div>
               </div>
 
