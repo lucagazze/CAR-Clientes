@@ -470,85 +470,55 @@ export default function CerebroPage() {
           </div>
         </div>
 
-        {/* ── CATALOG SECTION ── */}
-        {((profile as any)?.meta_account_id || (profile as any)?.shopify_domain) && (
+        {/* ── CATALOG SECTION (read-only for client) ── */}
+        {catalog.length > 0 && (
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                    <ShoppingBag className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-[15px] font-black text-zinc-900 dark:text-white">Catálogo de Productos</h2>
-                    <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
-                      {catalog.length > 0
-                        ? `${catalog.length} productos · ${catalogSource || ''} · ${catalogSyncedAt ? new Date(catalogSyncedAt).toLocaleDateString('es-AR') : ''}`
-                        : (profile as any)?.meta_account_id
-                          ? 'Fuente: Meta Catalog (disponible) · Sin sincronizar aún'
-                          : 'Fuente: Shopify · Sin sincronizar aún'}
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <ShoppingBag className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <button
-                  onClick={handleSyncCatalog}
-                  disabled={syncingCatalog}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[12px] font-black transition-all active:scale-95"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${syncingCatalog ? 'animate-spin' : ''}`} />
-                  {syncingCatalog ? 'Sincronizando...' : catalog.length > 0 ? 'Re-sincronizar' : 'Sincronizar catálogo'}
-                </button>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[15px] font-black text-zinc-900 dark:text-white">Catálogo de Productos</h2>
+                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                      {catalog.length} productos ✓
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
+                    {catalogSyncedAt ? `Actualizado ${new Date(catalogSyncedAt).toLocaleDateString('es-AR')}` : 'Conectado'}
+                    {catalogSource ? ` · ${catalogSource}` : ''}
+                  </p>
+                </div>
               </div>
             </div>
-
-            {catalog.length > 0 && (
-              <div className="p-6 space-y-4">
-                <input
-                  type="text"
-                  placeholder="Buscar producto..."
-                  value={catalogSearch}
-                  onChange={e => setCatalogSearch(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[12px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 outline-none focus:border-emerald-500 transition-colors"
-                />
-                <div className="space-y-2 max-h-80 overflow-y-auto">
-                  {catalog
-                    .filter(p => !catalogSearch || p.title.toLowerCase().includes(catalogSearch.toLowerCase()) || (p.type || '').toLowerCase().includes(catalogSearch.toLowerCase()))
-                    .map((p, i) => (
-                      <div key={i} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-[12px] font-bold text-zinc-900 dark:text-white truncate">{p.title}</p>
-                            {p.source === 'meta' && (
-                              <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 shrink-0">META</span>
-                            )}
-                          </div>
-                          {p.variants?.length > 0 && (
-                            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                              <Tag className="w-2.5 h-2.5 inline mr-1" />
-                              {p.variants.join(' · ')}
-                            </p>
-                          )}
-                          {p.type && (
-                            <p className="text-[10px] text-zinc-400 truncate">{p.type}</p>
-                          )}
-                        </div>
-                        <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 shrink-0">{p.price}</span>
+            <div className="p-4 space-y-3">
+              <input
+                type="text"
+                placeholder="Buscar producto..."
+                value={catalogSearch}
+                onChange={e => setCatalogSearch(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[12px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 outline-none focus:border-emerald-500 transition-colors"
+              />
+              <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                {catalog
+                  .filter(p => !catalogSearch || p.title.toLowerCase().includes(catalogSearch.toLowerCase()) || (p.type || '').toLowerCase().includes(catalogSearch.toLowerCase()))
+                  .map((p, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800">
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold text-zinc-900 dark:text-white truncate">{p.title}</p>
+                        {p.variants?.length > 0 && (
+                          <p className="text-[10px] text-zinc-400 truncate">{p.variants.join(' · ')}</p>
+                        )}
                       </div>
-                    ))}
-                </div>
+                      <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 shrink-0">{p.price}</span>
+                    </div>
+                  ))}
                 {catalog.filter(p => !catalogSearch || p.title.toLowerCase().includes(catalogSearch.toLowerCase())).length === 0 && (
                   <p className="text-[12px] text-zinc-400 text-center py-4">Sin resultados para "{catalogSearch}"</p>
                 )}
               </div>
-            )}
-
-            {catalog.length === 0 && !syncingCatalog && (
-              <div className="p-8 text-center">
-                <Package className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
-                <p className="text-[13px] font-bold text-zinc-500">Sin catálogo sincronizado</p>
-                <p className="text-[11px] text-zinc-400 mt-1">Sincronizá el catálogo para que la IA conozca todos tus productos al responder</p>
-              </div>
-            )}
+            </div>
           </div>
         )}
 

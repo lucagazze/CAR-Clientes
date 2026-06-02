@@ -738,6 +738,7 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al sincronizar');
       setCatalogSyncResult({ count: data.count, source: data.source, synced_at: data.synced_at });
+      setEditingClient((prev: any) => prev ? { ...prev, catalog_synced_at: data.synced_at } : prev);
       showToast(`Catálogo sincronizado: ${data.count} productos · ${data.source}`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Error al sincronizar catálogo', 'error');
