@@ -1,3 +1,4 @@
+// draft-reply v2 — redeploy 2026-06-02
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 

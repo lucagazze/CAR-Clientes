@@ -677,29 +677,27 @@ export default function DashboardPage() {
     setFulfillingOrder(true);
     try {
       if (!isFulfilled) {
-        // Get fulfillment order ID first
-        const foRes = await fetch(`https://${domain}/admin/api/2024-01/orders/${selectedOrder.id}/fulfillment_orders.json`, {
-          headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
-        });
+        // Get fulfillment order ID first (proxied through /api/shopify)
+        const shopifyHeaders = { 'X-Shopify-Access-Token': token, 'X-Shop-Domain': domain, 'Content-Type': 'application/json' };
+        const foRes = await fetch(`/api/shopify/orders/${selectedOrder.id}/fulfillment_orders.json`, { headers: shopifyHeaders });
         const foData = await foRes.json();
         const fulfillmentOrderId = foData.fulfillment_orders?.[0]?.id;
         if (!fulfillmentOrderId) throw new Error('No fulfillment order found');
-        await fetch(`https://${domain}/admin/api/2024-01/fulfillments.json`, {
+        await fetch(`/api/shopify/fulfillments.json`, {
           method: 'POST',
-          headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+          headers: shopifyHeaders,
           body: JSON.stringify({ fulfillment: { line_items_by_fulfillment_order: [{ fulfillment_order_id: fulfillmentOrderId }], notify_customer: false } }),
         });
         setSelectedOrder((prev: any) => ({ ...prev, fulfillment_status: 'fulfilled' }));
       } else {
         // Cancel all fulfillments
-        const fRes = await fetch(`https://${domain}/admin/api/2024-01/orders/${selectedOrder.id}/fulfillments.json`, {
-          headers: { 'X-Shopify-Access-Token': token },
-        });
+        const shopifyHeaders = { 'X-Shopify-Access-Token': token, 'X-Shop-Domain': domain, 'Content-Type': 'application/json' };
+        const fRes = await fetch(`/api/shopify/orders/${selectedOrder.id}/fulfillments.json`, { headers: shopifyHeaders });
         const fData = await fRes.json();
         for (const f of fData.fulfillments || []) {
-          await fetch(`https://${domain}/admin/api/2024-01/fulfillments/${f.id}/cancel.json`, {
+          await fetch(`/api/shopify/fulfillments/${f.id}/cancel.json`, {
             method: 'POST',
-            headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+            headers: shopifyHeaders,
           });
         }
         setSelectedOrder((prev: any) => ({ ...prev, fulfillment_status: null }));

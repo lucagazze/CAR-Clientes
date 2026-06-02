@@ -45,7 +45,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const activosItems = [
     { path: '/admin/meta',         icon: Target,        label: 'Creativos Ads' },
-    { path: '/creativos-tester',   icon: Zap,           label: 'Creativos Tester' },
     { path: '/email-marketing',    icon: Send,          label: 'Email Marketing' },
   ];
 

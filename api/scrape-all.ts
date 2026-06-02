@@ -58,13 +58,15 @@ function prioritizeLinks(links: string[]): string[] {
   const keywords = [
     /envio/i, /shipping/i, /entrega/i,
     /devoluc/i, /refund/i, /cambio/i, /retorn/i,
-    /faq/i, /pregunta/i, /ayuda/i, /soporte/i,
-    /nosotros/i, /about/i, /quienes/i, /contacto/i, /contact/i
+    /faq/i, /pregunta/i, /ayuda/i, /soporte/i, /help/i,
+    /nosotros/i, /about/i, /quienes/i, /contacto/i, /contact/i,
+    /product/i, /tienda/i, /shop/i, /catalog/i, /collection/i,
+    /precio/i, /price/i, /tarifa/i,
+    /garantia/i, /warranty/i,
+    /politic/i, /terms/i, /condicion/i,
   ];
-  const matches = links.filter(link => {
-    return keywords.some(regex => regex.test(link));
-  });
-  return [...new Set(matches)].slice(0, 5);
+  const matches = links.filter(link => keywords.some(regex => regex.test(link)));
+  return [...new Set(matches)].slice(0, 10);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -122,6 +124,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(JSON.parse(text));
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Analysis failed' });
+    }
+  }
+
+  // ── PRODUCT ANALYSIS — SAVE TO DB ────────────────────────────────────────
+  if (type === 'save-analysis') {
+    const { data: analysisData } = req.body as any;
+    if (!clientId || !analysisData) return res.status(400).json({ error: 'Missing clientId or data' });
+    try {
+      // Delete existing entry for this client, then insert fresh
+      await supabase.from('car_user_activity').delete().eq('client_id', clientId).eq('action', 'product_analysis_cache');
+      const { error } = await supabase.from('car_user_activity').insert({
+        client_id: clientId,
+        action: 'product_analysis_cache',
+        metadata: { results: analysisData, calculated_at: new Date().toISOString() },
+        created_at: new Date().toISOString(),
+      });
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ saved: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── PRODUCT ANALYSIS — LOAD FROM DB ──────────────────────────────────────
+  if (type === 'load-analysis') {
+    if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
+    try {
+      const { data, error } = await supabase
+        .from('car_user_activity')
+        .select('metadata, created_at')
+        .eq('client_id', clientId)
+        .eq('action', 'product_analysis_cache')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return res.status(500).json({ error: error.message });
+      if (!data) return res.status(200).json({ found: false });
+      return res.status(200).json({
+        found: true,
+        results: (data.metadata as any)?.results || [],
+        calculated_at: (data.metadata as any)?.calculated_at || data.created_at,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
     }
   }
 
@@ -558,27 +604,56 @@ Organízala en estas secciones:
 
         const openaiWebRes = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openAiKey}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openAiKey}` },
           body: JSON.stringify({
             model: 'gpt-4o-mini',
             messages: [
               {
                 role: 'system',
-                content: `Analiza el texto de la web del negocio "${business_name}" y genera una base de conocimiento estructurada y limpia en español.
-Organízala en estas secciones:
-1. INFORMACIÓN GENERAL (Descripción del negocio, qué vende y marca)
-2. CATÁLOGO / PRODUCTOS DESTACADOS
-3. POLÍTICAS DE ENVÍO Y ENTREGAS (Tiempos, zonas, costos)
-4. POLÍTICAS DE CAMBIOS Y DEVOLUCIONES (Condiciones, plazos)
-5. PREGUNTAS FRECUENTES Y CONTACTO (Horarios, medios de soporte)`
+                content: `Sos un experto en análisis de negocios. Analiza el texto extraído del sitio web del negocio "${business_name}" y genera una base de conocimiento exhaustiva y estructurada en español.
+
+Extraé y organiza TODA la información disponible en estas secciones:
+
+1. DESCRIPCIÓN DEL NEGOCIO
+   - Qué es, qué vende, desde cuándo, dónde opera, diferencial de la marca
+   - Nombres de las personas del equipo (dueños, vendedores, atención al cliente)
+   - Canales de contacto: teléfono, email, WhatsApp, dirección física si hay
+
+2. CATÁLOGO COMPLETO DE PRODUCTOS / SERVICIOS
+   - Nombre de cada producto/servicio con descripción breve
+   - Precios exactos si están mencionados (incluyendo moneda)
+   - Variantes disponibles (talles, colores, medidas, etc.)
+   - Materiales, calidad, origen
+
+3. ENVÍOS Y ENTREGAS
+   - Tiempos de entrega por zona (capital, interior, internacional)
+   - Costos de envío
+   - A partir de qué monto hay envío gratis
+   - Couriers o transportistas que usan
+   - Horarios de despacho
+
+4. CAMBIOS, DEVOLUCIONES Y GARANTÍAS
+   - Plazo para hacer cambios/devoluciones
+   - Condiciones y excepciones
+   - Cómo iniciar un reclamo
+   - Garantía de productos
+
+5. FORMAS DE PAGO Y FINANCIACIÓN
+   - Métodos de pago aceptados (tarjetas, transferencia, efectivo, etc.)
+   - Cuotas sin interés disponibles
+   - Descuentos por forma de pago
+
+6. PREGUNTAS FRECUENTES Y DATOS CLAVE
+   - Preguntas más comunes que tendría un cliente nuevo
+   - Respuestas exactas que da el negocio
+   - Información de atención al cliente (horarios, respuesta típica)
+
+Sé exhaustivo. Si el sitio tiene precios, incluilos. Si tiene horarios, incluilos. Si hay nombres de personas, incluilos. No inventes información que no esté en el texto.`
               },
               { role: 'user', content: combinedText }
             ],
-            temperature: 0.3,
-            max_tokens: 1500,
+            temperature: 0.2,
+            max_tokens: 2500,
           }),
         });
 

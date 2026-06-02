@@ -119,32 +119,66 @@ export default function TiendaPage() {
   const [productLoading, setProductLoading] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
-  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
+  const [modalProduct, setModalProduct] = useState<any>(null);
   const [productCacheDate, setProductCacheDate] = useState<Date | null>(null);
+
+  const saveAnalysisToDB = async (results: any[], clientId: string) => {
+    try {
+      await fetch('/api/scrape-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'save-analysis', clientId, data: results }),
+      });
+    } catch { /* ignore — localStorage fallback already saved */ }
+  };
 
   const loadProductAnalysis = async (forceRefresh = false) => {
     const p = profile as any;
     if (!p?.shopify_domain || !p?.shopify_access_token) return;
-    // On first load (not force), try localStorage cache
+
     if (!forceRefresh) {
+      // 1. Try localStorage (instant)
       try {
         const raw = localStorage.getItem(`pa:${p.shopify_domain}`);
         if (raw) {
           const { data, ts } = JSON.parse(raw) as { data: any[]; ts: number };
-          if (Date.now() - ts < 24 * 60 * 60 * 1000) {
-            setProductAnalysis(data);
-            setProductCacheDate(new Date(ts));
+          setProductAnalysis(data);
+          setProductCacheDate(new Date(ts));
+          return;
+        }
+      } catch { /* ignore */ }
+
+      // 2. Try DB (persisted across devices/sessions)
+      try {
+        const dbRes = await fetch('/api/scrape-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'load-analysis', clientId: p.id }),
+        });
+        if (dbRes.ok) {
+          const dbData = await dbRes.json();
+          if (dbData.found && dbData.results?.length) {
+            setProductAnalysis(dbData.results);
+            const calcDate = new Date(dbData.calculated_at);
+            setProductCacheDate(calcDate);
+            try { localStorage.setItem(`pa:${p.shopify_domain}`, JSON.stringify({ data: dbData.results, ts: calcDate.getTime() })); } catch { }
             return;
           }
         }
       } catch { /* ignore */ }
     }
+
+    // 3. Run full analysis
     setProductLoading(true);
     setProductError(null);
     try {
       const results = await ecommerce.analyzeProducts(p.shopify_domain, p.shopify_access_token, forceRefresh);
       setProductAnalysis(results);
-      setProductCacheDate(new Date());
+      const now = new Date();
+      setProductCacheDate(now);
+      // Save to localStorage + DB
+      try { localStorage.setItem(`pa:${p.shopify_domain}`, JSON.stringify({ data: results, ts: now.getTime() })); } catch { }
+      if (p.id) saveAnalysisToDB(results, p.id);
     } catch (err: any) {
       setProductError(err.message || 'Error al analizar productos');
     } finally {
@@ -390,85 +424,50 @@ export default function TiendaPage() {
                 </div>
               </div>
 
-              {/* Legend */}
-              <div className="flex items-center gap-4 text-[11px] text-zinc-400 font-medium">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />EP: % primeras compras</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />2ª: tasa de retorno</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Vel: días a recompra</span>
-              </div>
-
               {/* Products list */}
               <div className="space-y-2">
                 {productAnalysis
                   .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
                   .map(p => {
                     const score = totalScore(p);
-                    const isExpanded = expandedProduct === p.name;
+                    const epScore = scoreEP(p.entryPointPct);
+                    const spScore = scoreSP(p.secondPurchasePct);
+                    const rdScore = scoreRD(p.repurchaseDays);
+                    const badgeCls = (s: string) => s === 'pass' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : s === 'warn' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300' : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400';
                     return (
-                      <div key={p.name} className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-xl overflow-hidden">
-                        <div
-                          className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors"
-                          onClick={() => setExpandedProduct(isExpanded ? null : p.name)}
-                        >
+                      <div
+                        key={p.name}
+                        className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-xl cursor-pointer hover:border-pink-200 dark:hover:border-pink-900/50 hover:shadow-sm transition-all"
+                        onClick={() => setModalProduct(p)}
+                      >
+                        <div className="flex items-center gap-3 px-4 py-3.5">
                           {/* Score dot */}
-                          <div className={`w-2 h-2 rounded-full shrink-0 ${score === 3 ? 'bg-emerald-500' : score === 2 ? 'bg-blue-500' : score === 1 ? 'bg-amber-500' : 'bg-zinc-300'}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${score === 3 ? 'bg-emerald-500' : score === 2 ? 'bg-blue-500' : score === 1 ? 'bg-amber-500' : 'bg-zinc-300'}`} />
 
                           {/* Name + orders */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[13px] font-bold text-zinc-900 dark:text-white truncate">{p.name}</span>
-                              <span className="text-[10px] text-zinc-400 font-medium shrink-0">{p.totalOrders} pedidos</span>
-                            </div>
+                            <span className="text-[13px] font-bold text-zinc-900 dark:text-white">{p.name}</span>
+                            <span className="text-[11px] text-zinc-400 font-medium ml-2">{p.totalOrders} pedidos</span>
                           </div>
 
-                          {/* Metric badges */}
-                          <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-                            <ScoreBadge score={scoreEP(p.entryPointPct)} label={`EP ${p.entryPointPct}%`} />
-                            <ScoreBadge score={scoreSP(p.secondPurchasePct)} label={`2ª ${p.secondPurchasePct}%`} />
-                            <ScoreBadge score={scoreRD(p.repurchaseDays)} label={p.repurchaseDays > 0 ? `${p.repurchaseDays}d` : 'Sin datos'} />
+                          {/* Metric chips — full labels, high contrast */}
+                          <div className="hidden sm:flex items-center gap-2 shrink-0">
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badgeCls(epScore)}`}>
+                              {p.entryPointPct}% primer pedido
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badgeCls(spScore)}`}>
+                              {p.secondPurchasePct}% vuelven
+                            </span>
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badgeCls(rdScore)}`}>
+                              {p.repurchaseDays > 0 ? `${p.repurchaseDays} días` : 'sin retorno'}
+                            </span>
                           </div>
 
                           {/* Total badge */}
                           <TotalBadge score={score} />
 
-                          <ChevronRight className={`w-3.5 h-3.5 text-zinc-300 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          <ChevronRight className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
                         </div>
-
-                        {isExpanded && (
-                          <div className="px-4 pb-4 pt-1 border-t border-zinc-50 dark:border-zinc-800 space-y-4">
-                            {/* Metrics grid */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                              {[
-                                { label: 'Entry Point', value: `${p.entryPointPct}%`, sub: `${p.firstPurchases} primeras compras`, score: scoreEP(p.entryPointPct), help: '% de veces que este producto inicia la relación con un cliente nuevo' },
-                                { label: '2ª Compra', value: `${p.secondPurchasePct}%`, sub: 'clientes que volvieron', score: scoreSP(p.secondPurchasePct), help: 'De los que compraron primero este producto, cuántos volvieron a comprar' },
-                                { label: 'Velocidad', value: p.repurchaseDays > 0 ? `${p.repurchaseDays} días` : '—', sub: 'promedio hasta 2ª compra', score: scoreRD(p.repurchaseDays), help: 'Días promedio entre 1ª y 2ª compra del cliente' },
-                                { label: 'AOV Combinado', value: p.combinedAOV > 0 ? `$${p.combinedAOV.toFixed(0)}` : '—', sub: `Precio: $${p.avgPrice.toFixed(0)}`, score: 'neutral', help: 'Gasto total promedio del pedido que incluye este producto' },
-                              ].map(m => (
-                                <div key={m.label} className="bg-zinc-50 dark:bg-zinc-800/40 rounded-lg p-3">
-                                  <p className="text-[10px] text-zinc-400 font-medium mb-0.5">{m.label}</p>
-                                  <p className="text-[16px] font-black text-zinc-900 dark:text-white">{m.value}</p>
-                                  <p className="text-[10px] text-zinc-400 mt-0.5">{m.sub}</p>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Cross-sell */}
-                            {p.crossSell?.length > 0 && (
-                              <div>
-                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Después compran</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {p.crossSell.map((cs: any) => (
-                                    <div key={cs.name} className="flex items-center gap-1.5 bg-pink-50 dark:bg-pink-950/20 border border-pink-100 dark:border-pink-900/30 rounded-lg px-2.5 py-1.5">
-                                      <ChevronRight className="w-3 h-3 text-pink-400" />
-                                      <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 max-w-[180px] truncate">{cs.name}</span>
-                                      <span className="text-[10px] font-bold text-pink-600 dark:text-pink-400">{cs.pct}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -863,6 +862,111 @@ export default function TiendaPage() {
             )}
           </div>
         ) : null
+      )}
+
+      {/* Product Analysis Modal */}
+      {modalProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setModalProduct(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl max-w-[680px] w-full flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full shrink-0 ${totalScore(modalProduct) === 3 ? 'bg-emerald-500' : totalScore(modalProduct) === 2 ? 'bg-blue-500' : totalScore(modalProduct) === 1 ? 'bg-amber-500' : 'bg-zinc-300'}`} />
+                <div>
+                  <h3 className="text-[15px] font-black text-zinc-900 dark:text-white leading-tight">{modalProduct.name}</h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">{modalProduct.totalOrders} pedidos analizados · Precio promedio: ${modalProduct.avgPrice?.toFixed(2)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <TotalBadge score={totalScore(modalProduct)} />
+                <button onClick={() => setModalProduct(null)} className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto p-5 space-y-5">
+              {/* 4 metric cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: 'Primer Pedido',
+                    value: `${modalProduct.entryPointPct}%`,
+                    sub: `de ${modalProduct.totalOrders} pedidos`,
+                    detail: `${modalProduct.firstPurchases} clientes lo compraron como primera compra`,
+                    score: scoreEP(modalProduct.entryPointPct),
+                    what: '¿Con qué frecuencia es la primera compra de un cliente nuevo?'
+                  },
+                  {
+                    label: 'Vuelven a Comprar',
+                    value: `${modalProduct.secondPurchasePct}%`,
+                    sub: 'de quienes lo compraron primero',
+                    detail: 'De los que empezaron con este producto, cuántos hicieron una 2ª compra',
+                    score: scoreSP(modalProduct.secondPurchasePct),
+                    what: '¿Qué tan bien retiene clientes este producto?'
+                  },
+                  {
+                    label: 'Días hasta 2ª Compra',
+                    value: modalProduct.repurchaseDays > 0 ? `${modalProduct.repurchaseDays} días` : 'Sin datos',
+                    sub: 'promedio',
+                    detail: 'Tiempo promedio entre la 1ª y la 2ª compra del cliente',
+                    score: scoreRD(modalProduct.repurchaseDays),
+                    what: '¿Qué tan rápido vuelve el dinero al negocio?'
+                  },
+                  {
+                    label: 'Ticket del Pedido',
+                    value: modalProduct.combinedAOV > 0 ? `$${modalProduct.combinedAOV.toFixed(0)}` : '—',
+                    sub: `precio solo: $${modalProduct.avgPrice?.toFixed(0)}`,
+                    detail: 'Gasto total del pedido cuando incluye este producto (con otros items)',
+                    score: 'neutral',
+                    what: '¿Cuánto gasta el cliente en el pedido que contiene este producto?'
+                  },
+                ].map(m => {
+                  const bgMap: Record<string, string> = { pass: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40', warn: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40', fail: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40', neutral: 'bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700' };
+                  const valMap: Record<string, string> = { pass: 'text-emerald-700 dark:text-emerald-300', warn: 'text-amber-700 dark:text-amber-300', fail: 'text-red-700 dark:text-red-400', neutral: 'text-zinc-900 dark:text-white' };
+                  return (
+                    <div key={m.label} className={`rounded-xl p-3.5 border ${bgMap[m.score] || bgMap.neutral}`}>
+                      <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1">{m.label}</p>
+                      <p className={`text-[22px] font-black leading-none ${valMap[m.score] || valMap.neutral}`}>{m.value}</p>
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">{m.sub}</p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-2 leading-snug italic">{m.what}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* What this means */}
+              <div className="bg-zinc-50 dark:bg-zinc-800/40 rounded-xl p-4">
+                <p className="text-[11px] font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-wide mb-2">Qué significa esto</p>
+                <p className="text-[12px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                  De cada {Math.round(100 / Math.max(modalProduct.entryPointPct, 1))} pedidos de este producto, {Math.round(modalProduct.entryPointPct / 100)} es la primera compra de ese cliente.{' '}
+                  {modalProduct.secondPurchasePct > 0 ? `El ${modalProduct.secondPurchasePct}% de esos clientes volvió a comprar${modalProduct.repurchaseDays > 0 ? `, en promedio a los ${modalProduct.repurchaseDays} días` : ''}.` : 'Ninguno volvió a comprar en el período analizado.'}
+                  {modalProduct.combinedAOV > modalProduct.avgPrice ? ` El ticket promedio del pedido que lo incluye es $${modalProduct.combinedAOV.toFixed(0)} — $${(modalProduct.combinedAOV - modalProduct.avgPrice).toFixed(0)} más que el precio del producto solo.` : ''}
+                </p>
+              </div>
+
+              {/* Cross-sell */}
+              {modalProduct.crossSell?.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-wide mb-3">Después de comprar esto, compran</p>
+                  <div className="flex flex-wrap gap-2">
+                    {modalProduct.crossSell.map((cs: any) => (
+                      <div key={cs.name} className="flex items-center gap-2 bg-pink-50 dark:bg-pink-950/20 border border-pink-200 dark:border-pink-900/30 rounded-xl px-3 py-2">
+                        <ChevronRight className="w-3 h-3 text-pink-400 shrink-0" />
+                        <span className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200">{cs.name}</span>
+                        <span className="text-[11px] font-black text-pink-600 dark:text-pink-400">{cs.pct}% de clientes</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Accuracy note */}
+              <div className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-snug border-t border-zinc-100 dark:border-zinc-800 pt-3">
+                <strong>Sobre la precisión:</strong> Estos datos son 100% reales — se calculan de todos tus pedidos de los últimos 2 años. El Entry Point, la tasa de 2ª compra y los días son métricas exactas basadas en el historial de compras por email del cliente. El cross-sell muestra qué productos compraron en pedidos posteriores.
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Order Detail Modal */}

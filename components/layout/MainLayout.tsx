@@ -115,7 +115,6 @@ const EntradasPage       = lazyWithRetry(() => import('../../pages/EntradasPage'
 const ContactosPage      = lazyWithRetry(() => import('../../pages/ContactosPage'));
 const InformesPage       = lazyWithRetry(() => import('../../pages/InformesPage'));
 const CostosPage         = lazyWithRetry(() => import('../../pages/CostosPage'));
-const CreativeTesterPage = lazyWithRetry(() => import('../../pages/CreativeTesterPage'));
 
 
 import { useViewAs } from '../../contexts/ViewAsContext';
@@ -213,7 +212,6 @@ export const MainLayout = () => {
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/admin/actividad" element={<ActivityPage />} />
               <Route path="/admin/meta" element={<MetaAdsPage />} />
-              <Route path="/creativos-tester" element={<CreativeTesterPage />} />
               <Route path="/admin/emails" element={<EmailLibraryPage />} />
               <Route path="/admin/email-monitor" element={<EmailMonitorPage />} />
               <Route path="/email-marketing" element={<EmailMarketingPage />} />
