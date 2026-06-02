@@ -539,6 +539,7 @@ export default function ComentariosPage() {
 
   // Open post slide-over — reload comments from API for freshness
   const openPost = async (post: PostItem) => {
+    console.log('[openPost] id:', post.id, '| platform:', post.platform, '| isAd:', post.isAd, '| permalink:', post.permalink);
     setSelectedPost(post);
     setComments(post.comments);
     setOpenReplies({});
@@ -552,20 +553,23 @@ export default function ComentariosPage() {
     if (post.platform === 'instagram' && (!post.permalink || post.permalink.includes('facebook.com') || post.permalink.includes('ads/'))) {
       metaAds.getInstagramMediaPermalink(post.id, fbPageId || undefined)
         .then((res: any) => {
+          console.log('[permalink fetch] res:', res);
           const url = res?.permalink
             || (res?.shortcode ? `https://www.instagram.com/p/${res.shortcode}/` : null);
+          console.log('[permalink fetch] resolved url:', url);
           if (url) setSelectedPost(prev => prev ? { ...prev, permalink: url } : prev);
         })
-        .catch(() => {
-          // Last resort: if we have igId and media ID looks numeric, try via IG account
+        .catch((err: any) => {
+          console.warn('[permalink fetch] failed:', err);
           if (igId) {
             metaAds.getInstagramMediaPermalink(post.id)
               .then((res: any) => {
+                console.log('[permalink fetch fallback] res:', res);
                 const url = res?.permalink
                   || (res?.shortcode ? `https://www.instagram.com/p/${res.shortcode}/` : null);
                 if (url) setSelectedPost(prev => prev ? { ...prev, permalink: url } : prev);
               })
-              .catch(() => {});
+              .catch((err2: any) => console.warn('[permalink fetch fallback] also failed:', err2));
           }
         });
     }
@@ -1054,7 +1058,9 @@ export default function ComentariosPage() {
                   Generar borradores para todos ({comments.filter(c => isCommentPending(c, selectedPost.platform)).length})
                 </button>
                 {selectedPost.permalink && (
-                  <a href={selectedPost.permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl text-[11px] text-zinc-600 dark:text-zinc-300 font-bold border border-zinc-200 dark:border-zinc-700 transition-all">
+                  <a href={selectedPost.permalink} target="_blank" rel="noreferrer"
+                    title={selectedPost.permalink}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl text-[11px] text-zinc-600 dark:text-zinc-300 font-bold border border-zinc-200 dark:border-zinc-700 transition-all">
                     Ver original <ArrowUpRight className="w-3 h-3" />
                   </a>
                 )}
