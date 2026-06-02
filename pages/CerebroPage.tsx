@@ -3,9 +3,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { db } from '../services/db';
 import { useToast } from '../components/Toast';
-import { 
-  Brain, Globe, Save, RefreshCw, Sparkles, FileText, CheckCircle2, 
-  ShieldAlert, ArrowUpRight, Instagram, Facebook, Calendar, AlertCircle
+import {
+  Brain, Globe, Save, RefreshCw, Sparkles, FileText, CheckCircle2,
+  ShieldAlert, ArrowUpRight, Instagram, Facebook, Calendar, AlertCircle,
+  ShoppingBag, Package, Tag
 } from 'lucide-react';
 import { AppleLoader } from '../components/ui/AppleLoader';
 
@@ -26,9 +27,13 @@ export default function CerebroPage() {
   const [saving, setSaving] = useState(false);
   const [scanningAll, setScanningAll] = useState(false);
   const [activeTab, setActiveTab] = useState<'web' | 'social'>('web');
-
-  // Scanning progress steps for visual premium feedback
   const [scanStep, setScanStep] = useState<string>('');
+
+  // Catalog state
+  const [catalog, setCatalog] = useState<any[]>([]);
+  const [catalogSyncedAt, setCatalogSyncedAt] = useState<string | null>(null);
+  const [syncingCatalog, setSyncingCatalog] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
 
   useEffect(() => {
     if (!profile) return;
@@ -38,6 +43,12 @@ export default function CerebroPage() {
     setScrapedContent(profile.scraped_content || '');
     setInstagramContext(profile.instagram_context || '');
     setBrainUpdatedAt(profile.brain_updated_at || null);
+    // Load cached catalog
+    const pc = (profile as any).products_catalog;
+    if (pc) {
+      try { setCatalog(JSON.parse(pc)); } catch {}
+    }
+    setCatalogSyncedAt((profile as any).catalog_synced_at || null);
     setLoading(false);
   }, [profile]);
 
@@ -61,6 +72,27 @@ export default function CerebroPage() {
       showToast('Error al guardar la configuración: ' + err.message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSyncCatalog = async () => {
+    if (!profile) return;
+    setSyncingCatalog(true);
+    try {
+      const res = await fetch('/api/sync-catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: profile.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al sincronizar');
+      setCatalog(data.catalog || []);
+      setCatalogSyncedAt(data.synced_at);
+      showToast(`Catálogo sincronizado: ${data.count} productos activos`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Error al sincronizar catálogo', 'error');
+    } finally {
+      setSyncingCatalog(false);
     }
   };
 
@@ -435,6 +467,82 @@ export default function CerebroPage() {
             </div>
           </div>
         </div>
+
+        {/* ── CATALOG SECTION ── */}
+        {(profile as any)?.shopify_domain && (
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                    <ShoppingBag className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-black text-zinc-900 dark:text-white">Catálogo de Productos</h2>
+                    <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
+                      {catalog.length > 0
+                        ? `${catalog.length} productos activos${catalogSyncedAt ? ` · Sincronizado ${new Date(catalogSyncedAt).toLocaleDateString('es-AR')}` : ''}`
+                        : 'Sin catálogo sincronizado aún'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSyncCatalog}
+                  disabled={syncingCatalog}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[12px] font-black transition-all active:scale-95"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingCatalog ? 'animate-spin' : ''}`} />
+                  {syncingCatalog ? 'Sincronizando...' : catalog.length > 0 ? 'Re-sincronizar' : 'Sincronizar catálogo'}
+                </button>
+              </div>
+            </div>
+
+            {catalog.length > 0 && (
+              <div className="p-6 space-y-4">
+                <input
+                  type="text"
+                  placeholder="Buscar producto..."
+                  value={catalogSearch}
+                  onChange={e => setCatalogSearch(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[12px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 outline-none focus:border-emerald-500 transition-colors"
+                />
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {catalog
+                    .filter(p => !catalogSearch || p.title.toLowerCase().includes(catalogSearch.toLowerCase()) || (p.type || '').toLowerCase().includes(catalogSearch.toLowerCase()))
+                    .map((p, i) => (
+                      <div key={i} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-bold text-zinc-900 dark:text-white truncate">{p.title}</p>
+                          {p.variants?.length > 0 && (
+                            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                              <Tag className="w-2.5 h-2.5 inline mr-1" />
+                              {p.variants.join(' · ')}
+                            </p>
+                          )}
+                          {p.type && (
+                            <p className="text-[10px] text-zinc-400 truncate">{p.type}</p>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 shrink-0">{p.price}</span>
+                      </div>
+                    ))}
+                </div>
+                {catalog.filter(p => !catalogSearch || p.title.toLowerCase().includes(catalogSearch.toLowerCase())).length === 0 && (
+                  <p className="text-[12px] text-zinc-400 text-center py-4">Sin resultados para "{catalogSearch}"</p>
+                )}
+              </div>
+            )}
+
+            {catalog.length === 0 && !syncingCatalog && (
+              <div className="p-8 text-center">
+                <Package className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
+                <p className="text-[13px] font-bold text-zinc-500">Sin catálogo sincronizado</p>
+                <p className="text-[11px] text-zinc-400 mt-1">Sincronizá el catálogo para que la IA conozca todos tus productos al responder</p>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

@@ -57,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Fetch client settings from Supabase
     const { data: client, error: dbError } = await supabase
       .from('car_clients')
-      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url')
+      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url, products_catalog, catalog_synced_at')
       .eq('id', clientId)
       .maybeSingle();
 
@@ -79,16 +79,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[Draft Reply] Error fetching client links:', err);
     }
 
-    const { 
-      business_name, 
-      ecommerce_platform, 
-      shopify_domain, 
+    const {
+      business_name,
+      ecommerce_platform,
+      shopify_domain,
       shopify_access_token,
       business_description,
       custom_instructions,
       scraped_content,
       instagram_context,
-      website_url
+      website_url,
+      products_catalog,
+      catalog_synced_at,
     } = client;
 
     // Compiled business brain context
@@ -127,27 +129,6 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
       console.error('[Draft Reply] Error fetching historical replies:', err);
     }
 
-    // 2. Fetch Shopify products if platform is Shopify
-    let products: any[] = [];
-    if (ecommerce_platform === 'shopify' && shopify_domain && shopify_access_token) {
-      try {
-        const cleanDomain = shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const shopifyUrl = `https://${cleanDomain}/admin/api/2024-01/products.json?limit=250&fields=title,handle,variants`;
-        const shopifyRes = await fetch(shopifyUrl, {
-          headers: {
-            'X-Shopify-Access-Token': shopify_access_token,
-            'Accept': 'application/json',
-          }
-        });
-        if (shopifyRes.ok) {
-          const json = await shopifyRes.json();
-          products = json.products || [];
-        }
-      } catch (err) {
-        console.error('[Shopify Draft] Error fetching products:', err);
-      }
-    }
-
     const formatToWwwLink = (url: string): string => {
       if (!url) return '';
       let clean = url.replace(/^https?:\/\//i, '').trim();
@@ -155,37 +136,54 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
       return `www.${clean}`;
     };
 
-    // 3. Construct the prompt
-    // Use the exact website_url saved in the brain as the canonical link.
-    // Falls back to constructing from shopify_domain if website_url is not set.
     const cleanDomainForLink = shopify_domain ? shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
-    // The canonical site URL: prefer the manually saved website_url from the brain.
     const canonicalSiteUrl = formatToWwwLink(website_url || cleanDomainForLink);
 
-    const productsContext = products.length > 0
-      ? `Catálogo de productos de la tienda:\n${products.map(p => {
-          const variantsList = p.variants?.map((v: any) => {
-            const priceStr = v.price ? `${v.price}` : '';
-            const titleStr = v.title && v.title !== 'Default Title' ? v.title : '';
-            return { title: titleStr, price: priceStr };
-          }) || [];
+    // 2. Build products context — use cached catalog first, fallback to live Shopify fetch
+    let productsContext = 'No hay catálogo de productos configurado.';
 
-          let priceText = '';
-          if (variantsList.length === 0) {
-            priceText = 'Precio: Consultar';
-          } else if (variantsList.length === 1 && !variantsList[0].title) {
-            priceText = `Precio: $${variantsList[0].price || 'Consultar'}`;
-          } else {
-            const uniquePrices = Array.from(new Set(variantsList.map((v: any) => v.price).filter(Boolean)));
-            if (uniquePrices.length === 1) {
-              priceText = `Precio: $${uniquePrices[0]} (Variantes/Talles disponibles: ${variantsList.map((v: any) => v.title).join(', ')})`;
-            } else {
-              priceText = `Variantes/Talles y Precios: ${variantsList.map((v: any) => `${v.title || 'Única'} a $${v.price}`).join(', ')}`;
-            }
+    if (products_catalog) {
+      // Use pre-synced catalog from Supabase (fast, always available)
+      try {
+        const catalog: any[] = JSON.parse(products_catalog);
+        if (catalog.length > 0) {
+          const syncDate = catalog_synced_at ? new Date(catalog_synced_at).toLocaleDateString('es-AR') : 'desconocida';
+          productsContext = `Catálogo de productos sincronizado (${catalog.length} productos, actualizado: ${syncDate}):\n${catalog.map(p => {
+            const variantStr = p.variants?.length > 0 ? ` | Variantes: ${p.variants.join(', ')}` : '';
+            const typeStr = p.type ? ` | Categoría: ${p.type}` : '';
+            return `- ${p.title}: ${p.price}${variantStr}${typeStr}. Link: ${canonicalSiteUrl}/products/${p.handle}`;
+          }).join('\n')}`;
+        }
+      } catch (e) {
+        console.error('[Draft Reply] Error parsing cached catalog:', e);
+      }
+    }
+
+    // Fallback: live fetch from Shopify if no cache
+    if (productsContext === 'No hay catálogo de productos configurado.' && ecommerce_platform === 'shopify' && shopify_domain && shopify_access_token) {
+      try {
+        const cleanDomain = shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const shopifyRes = await fetch(`https://${cleanDomain}/admin/api/2024-01/products.json?limit=250&fields=title,handle,variants,status`, {
+          headers: { 'X-Shopify-Access-Token': shopify_access_token, 'Accept': 'application/json' },
+        });
+        if (shopifyRes.ok) {
+          const json = await shopifyRes.json();
+          const products = (json.products || []).filter((p: any) => p.status === 'active');
+          if (products.length > 0) {
+            productsContext = `Catálogo de productos (${products.length} activos — se recomienda sincronizar el catálogo para mayor velocidad):\n${products.map((p: any) => {
+              const vs = p.variants || [];
+              const prices = [...new Set(vs.map((v: any) => v.price).filter(Boolean))];
+              const priceStr = prices.length === 1 ? `$${prices[0]}` : prices.length > 1 ? `$${Math.min(...prices.map(Number))}-$${Math.max(...prices.map(Number))}` : 'Consultar';
+              const variantTitles = vs.map((v: any) => v.title).filter((t: string) => t && t !== 'Default Title');
+              const variantStr = variantTitles.length > 0 ? ` | Variantes: ${variantTitles.join(', ')}` : '';
+              return `- ${p.title}: ${priceStr}${variantStr}. Link: ${canonicalSiteUrl}/products/${p.handle}`;
+            }).join('\n')}`;
           }
-          return `- ${p.title}: ${priceText}. Link de compra EXACTO: ${canonicalSiteUrl}/products/${p.handle}`;
-        }).join('\n')}`
-      : 'No hay catálogo de productos de Shopify configurado.';
+        }
+      } catch (err) {
+        console.error('[Draft Reply] Live Shopify fetch failed:', err);
+      }
+    }
 
     const linksContext = clientLinks.length > 0
       ? `Enlaces directos y páginas de interés del sitio web:\n${clientLinks.map(l => `- Para "${l.title}": usar el enlace EXACTO: ${formatToWwwLink(l.url)}`).join('\n')}`
