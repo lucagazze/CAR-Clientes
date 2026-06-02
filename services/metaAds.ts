@@ -562,7 +562,7 @@ export const metaAds = {
 
   getFacebookPageFeed: (pageId: string, limit = 8, after?: string) => {
     const params: Record<string, string> = {
-      fields: 'id,message,created_time,full_picture,permalink_url,likes.summary(true),comments.limit(50){id,message,created_time,from{id,name},like_count,replies{id,message,from{id,name},created_time}},attachments{media,type}',
+      fields: 'id,message,created_time,full_picture,permalink_url,likes.summary(true),comments.limit(50){id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies{id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}},attachments{media,type}',
       limit: String(limit),
     };
     if (after) params.after = after;
@@ -573,7 +573,7 @@ export const metaAds = {
     // Extract page ID from FB post ID format "{pageId}_{uniqueId}" to ensure page token is used.
     // Page Access Token is required for from.name — user token silently drops names (privacy).
     const pageId = postId.includes('_') ? postId.split('_')[0] : '';
-    const fields = 'id,message,created_time,from{id,name},like_count,replies.limit(100){id,message,from{id,name},created_time}';
+    const fields = 'id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies.limit(100){id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}';
     if (pageId) {
       return apiGetPage(pageId, `${postId}/comments`, { fields, limit: '100' });
     }
@@ -678,9 +678,12 @@ export const metaAds = {
   // Helper to fetch comments of an Ad's creative
   getAdCreativeComments: (storyId: string) =>
     apiGetPageActive(`${storyId}/comments`, {
-      fields: 'id,text,message,timestamp,created_time,from{id,name},username,like_count,replies{id,text,message,from{id,name},username,timestamp,created_time}',
+      fields: 'id,text,message,timestamp,created_time,from{id,name},username,like_count,attachment{media{image{src}},type,url},replies{id,text,message,from{id,name},username,timestamp,created_time,attachment{media{image{src}},type,url}}',
       limit: '100',
     }),
+
+  getFacebookUserName: (userId: string, pageId: string) =>
+    apiGetPage(pageId, userId, { fields: 'name' }),
 
   likeComment: async (commentId: string, platform: 'instagram' | 'facebook', igUserId?: string) => {
     if (platform === 'instagram' && igUserId) {

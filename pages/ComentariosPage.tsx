@@ -347,11 +347,12 @@ export default function ComentariosPage() {
         const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
         const resolveFbName = (c: any, fb: string) =>
           c.username || c.from?.username || c.from?.name || c.name ||
-          (c.from?.id ? `fb_${String(c.from.id).slice(-5)}` : fb);
+          (c.from?.id ? `Usuario ${String(c.from.id).slice(-6)}` : fb);
         const normalized = userComments.map((c: any, i: number) => ({
           ...c,
           username: resolveFbName(c, `Comentarista ${i + 1}`),
           text: c.text || c.message || '',
+          attachment: c.attachment || null,
           from: c.from || null,
           replies: c.replies
             ? {
@@ -360,6 +361,7 @@ export default function ComentariosPage() {
                   username: resolveFbName(r, `Usuario ${ri + 1}`),
                   text: r.text || r.message || '',
                   timestamp: r.timestamp || r.created_time || '',
+                  attachment: r.attachment || null,
                   from: r.from || null,
                 })),
               }
@@ -570,19 +572,17 @@ export default function ComentariosPage() {
     // Reload fresh comments from API
     setLoadingComments(true);
     try {
-      // Resolve best display name — use short FB ID when name is unavailable (privacy)
       const resolveName = (c: any, fallback: string) =>
         c.username || c.from?.username || c.from?.name || c.name ||
-        (c.from?.id ? `fb_${String(c.from.id).slice(-5)}` : fallback);
+        (c.from?.id ? `Usuario ${String(c.from.id).slice(-6)}` : fallback);
 
-      // Normalize a comment or reply to a consistent shape
       const normalizeComment = (c: any, idx: number) => ({
         ...c,
         username: resolveName(c, `Usuario ${idx + 1}`),
         text: c.text || c.message || '',
         timestamp: c.timestamp || c.created_time || new Date().toISOString(),
+        attachment: c.attachment || null,
         from: c.from || null,
-        // Normalize nested replies too
         replies: c.replies
           ? {
               data: (c.replies.data || []).map((r: any, ri: number) => ({
@@ -590,6 +590,7 @@ export default function ComentariosPage() {
                 username: resolveName(r, `Usuario ${ri + 1}`),
                 text: r.text || r.message || '',
                 timestamp: r.timestamp || r.created_time || new Date().toISOString(),
+                attachment: r.attachment || null,
                 from: r.from || null,
               })),
             }
@@ -1212,10 +1213,23 @@ export default function ComentariosPage() {
                             </div>
                           </div>
 
-                          {/* Comment text */}
-                          <p className="text-[13px] text-zinc-800 dark:text-zinc-100 leading-relaxed font-medium ml-9">
-                            {comment.text || comment.message}
-                          </p>
+                          {/* Comment text / sticker / gift */}
+                          {comment.attachment?.media?.image?.src ? (
+                            <div className="ml-9 mt-1">
+                              <img
+                                src={comment.attachment.media.image.src}
+                                alt={comment.attachment.type || 'sticker'}
+                                className="max-w-[100px] max-h-[100px] rounded-lg object-contain"
+                              />
+                              {(comment.text || comment.message) && (
+                                <p className="text-[13px] text-zinc-800 dark:text-zinc-100 leading-relaxed font-medium mt-1">{comment.text || comment.message}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-[13px] text-zinc-800 dark:text-zinc-100 leading-relaxed font-medium ml-9">
+                              {comment.text || comment.message}
+                            </p>
+                          )}
 
                           {/* Existing replies */}
                           {replies.length > 0 && (
