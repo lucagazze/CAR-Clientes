@@ -151,7 +151,13 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
           productsContext = `Catálogo de productos sincronizado (${catalog.length} productos, actualizado: ${syncDate}):\n${catalog.map(p => {
             const variantStr = p.variants?.length > 0 ? ` | Variantes: ${p.variants.join(', ')}` : '';
             const typeStr = p.type ? ` | Categoría: ${p.type}` : '';
-            return `- ${p.title}: ${p.price}${variantStr}${typeStr}. Link: ${canonicalSiteUrl}/products/${p.handle}`;
+            // Use direct URL from Meta catalog if available, else reconstruct from handle
+            const productLink = p.url
+              ? p.url.replace(/^https?:\/\//i, 'www.').replace(/^www\.www\./, 'www.')
+              : p.handle
+                ? `${canonicalSiteUrl}/products/${p.handle}`
+                : canonicalSiteUrl;
+            return `- ${p.title}: ${p.price}${variantStr}${typeStr}. Link: ${productLink}`;
           }).join('\n')}`;
         }
       } catch (e) {
