@@ -63,7 +63,7 @@ export const DashboardMetric = ({
             </div>
           )}
         </div>
-        <div className="h-8 sm:h-10 flex-1 min-w-0 max-w-[250px] ml-2 sm:ml-6 opacity-60 group-hover:opacity-100 transition-opacity">
+        <div className="h-8 sm:h-10 flex-1 min-w-0 max-w-[250px] ml-2 sm:ml-6 opacity-70">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data}>
               <Area

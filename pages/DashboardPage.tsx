@@ -113,7 +113,7 @@ const ShopifyMetric = ({
         sm:[&:nth-child(odd)]:border-r sm:[&:nth-child(even)]:border-r
         sm:[&:nth-child(3n)]:border-r-0
         xl:border-b-0 xl:border-r xl:last:border-r-0
-        transition-spring hover-scale-spring text-left group relative overflow-visible
+        transition-all text-left group relative overflow-visible
         ${active ? activeBgClass : "hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 hover:shadow-[inset_0_0_20px_rgba(0,0,0,0.02)] dark:hover:shadow-none"}`}
     >
       <div className="flex items-center justify-between mb-2 w-full">
@@ -237,7 +237,7 @@ const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-8 shadow-sm mt-4 transition-spring hover-scale-spring">
+    <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-8 shadow-sm mt-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">
           Evolución de {label}
