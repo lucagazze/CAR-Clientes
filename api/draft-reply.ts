@@ -139,55 +139,67 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
     const cleanDomainForLink = shopify_domain ? shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
     const canonicalSiteUrl = formatToWwwLink(website_url || cleanDomainForLink);
 
-    // 2. Build products context — use cached catalog first, fallback to live Shopify fetch
-    let productsContext = 'No hay catálogo de productos configurado.';
+    // 2. Build products context from synced Meta catalog
+    let parsedCatalog: any[] = [];
+    let productsContext = 'No hay catálogo de productos sincronizado.';
 
     if (products_catalog) {
-      // Use pre-synced catalog from Supabase (fast, always available)
       try {
-        const catalog: any[] = JSON.parse(products_catalog);
-        if (catalog.length > 0) {
-          const syncDate = catalog_synced_at ? new Date(catalog_synced_at).toLocaleDateString('es-AR') : 'desconocida';
-          productsContext = `Catálogo de productos sincronizado (${catalog.length} productos, actualizado: ${syncDate}):\n${catalog.map(p => {
-            const variantStr = p.variants?.length > 0 ? ` | Variantes: ${p.variants.join(', ')}` : '';
-            const typeStr = p.type ? ` | Categoría: ${p.type}` : '';
-            // Use direct URL from Meta catalog if available, else reconstruct from handle
-            const productLink = p.url
-              ? p.url.replace(/^https?:\/\//i, 'www.').replace(/^www\.www\./, 'www.')
-              : p.handle
-                ? `${canonicalSiteUrl}/products/${p.handle}`
-                : canonicalSiteUrl;
-            return `- ${p.title}: ${p.price}${variantStr}${typeStr}. Link: ${productLink}`;
-          }).join('\n')}`;
-        }
+        parsedCatalog = JSON.parse(products_catalog);
       } catch (e) {
         console.error('[Draft Reply] Error parsing cached catalog:', e);
       }
     }
 
-    // Fallback: live fetch from Shopify if no cache
-    if (productsContext === 'No hay catálogo de productos configurado.' && ecommerce_platform === 'shopify' && shopify_domain && shopify_access_token) {
-      try {
-        const cleanDomain = shopify_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const shopifyRes = await fetch(`https://${cleanDomain}/admin/api/2024-01/products.json?limit=250&fields=title,handle,variants,status`, {
-          headers: { 'X-Shopify-Access-Token': shopify_access_token, 'Accept': 'application/json' },
-        });
-        if (shopifyRes.ok) {
-          const json = await shopifyRes.json();
-          const products = (json.products || []).filter((p: any) => p.status === 'active');
-          if (products.length > 0) {
-            productsContext = `Catálogo de productos (${products.length} activos — se recomienda sincronizar el catálogo para mayor velocidad):\n${products.map((p: any) => {
-              const vs = p.variants || [];
-              const prices = [...new Set(vs.map((v: any) => v.price).filter(Boolean))];
-              const priceStr = prices.length === 1 ? `$${prices[0]}` : prices.length > 1 ? `$${Math.min(...prices.map(Number))}-$${Math.max(...prices.map(Number))}` : 'Consultar';
-              const variantTitles = vs.map((v: any) => v.title).filter((t: string) => t && t !== 'Default Title');
-              const variantStr = variantTitles.length > 0 ? ` | Variantes: ${variantTitles.join(', ')}` : '';
-              return `- ${p.title}: ${priceStr}${variantStr}. Link: ${canonicalSiteUrl}/products/${p.handle}`;
-            }).join('\n')}`;
+    const buildProductLink = (p: any) =>
+      p.url
+        ? p.url.replace(/^https?:\/\//i, 'www.').replace(/^www\.www\./, 'www.')
+        : p.handle ? `${canonicalSiteUrl}/products/${p.handle}` : canonicalSiteUrl;
+
+    if (parsedCatalog.length > 0) {
+      const syncDate = catalog_synced_at ? new Date(catalog_synced_at).toLocaleDateString('es-AR') : 'desconocida';
+      productsContext = `Catálogo completo de productos (${parsedCatalog.length} productos, actualizado: ${syncDate}):\n${
+        parsedCatalog.map(p => {
+          const variantStr = p.variants?.length > 0 ? ` | Variantes: ${p.variants.join(', ')}` : '';
+          const typeStr = p.type ? ` | Categoría: ${p.type}` : '';
+          return `- ${p.title}: ${p.price}${variantStr}${typeStr}. Link: ${buildProductLink(p)}`;
+        }).join('\n')}`;
+    }
+
+    // 3. If the message asks about a specific product, fetch its page for full description
+    let productPageContext = '';
+    if (parsedCatalog.length > 0) {
+      const msgLower = itemText.toLowerCase();
+      const matched = parsedCatalog.find(p => {
+        const titleWords = p.title.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+        return titleWords.some((w: string) => msgLower.includes(w));
+      });
+
+      if (matched?.url) {
+        try {
+          const pageRes = await fetch(matched.url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AlgorBot/1.0)' },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (pageRes.ok) {
+            const html = await pageRes.text();
+            // Extract text: remove scripts, styles, nav, footer, header tags
+            const clean = html
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<(nav|header|footer|aside)[^>]*>[\s\S]*?<\/\1>/gi, '')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\s{2,}/g, ' ')
+              .trim();
+            // Take first 2000 chars of meaningful content
+            const excerpt = clean.slice(0, 2000);
+            if (excerpt.length > 100) {
+              productPageContext = `\nCONTENIDO DE LA PÁGINA DEL PRODUCTO "${matched.title}" (${buildProductLink(matched)}):\n${excerpt}\n`;
+            }
           }
+        } catch (err) {
+          // Page fetch failed — continue without it
         }
-      } catch (err) {
-        console.error('[Draft Reply] Live Shopify fetch failed:', err);
       }
     }
 
@@ -213,6 +225,11 @@ ${brainContext || 'Sin información adicional cargada.'}
 CATÁLOGO DE PRODUCTOS
 ════════════════════════════════════════
 ${productsContext}
+${productPageContext ? `════════════════════════════════════════
+DESCRIPCIÓN COMPLETA DEL PRODUCTO CONSULTADO
+════════════════════════════════════════
+${productPageContext}
+Usá esta información para dar una respuesta detallada y precisa sobre el producto.` : ''}
 
 ════════════════════════════════════════
 ENLACES Y PÁGINAS DEL SITIO
