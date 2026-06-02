@@ -525,6 +525,9 @@ export const metaAds = {
     return apiGetPageActive(`${igId}/media`, params);
   },
 
+  getInstagramMediaPermalink: (mediaId: string) =>
+    apiGetPageActive(mediaId, { fields: 'permalink,shortcode' }),
+
   getInstagramMediaComments: (mediaId: string) =>
     apiGetPageActive(`${mediaId}/comments`, {
       fields: 'id,text,timestamp,username,like_count,replies.limit(100){id,text,timestamp,username,from}',

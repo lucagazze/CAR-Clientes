@@ -412,7 +412,7 @@ export default function ComentariosPage() {
           thumbnail: matchingAd.creative.thumbnail_url || matchingAd.creative.image_url || null,
           caption: matchingAd.creative.name || matchingAd.name || 'Anuncio',
           permalink: isIgAd
-            ? (matchingAd.creative.instagram_permalink_url || matchingAd.preview_shareable_link || null)
+            ? (matchingAd.creative.instagram_permalink_url || null)
             : (() => {
                 const sid = matchingAd.creative.effective_object_story_id;
                 if (!sid) return null;
@@ -545,6 +545,16 @@ export default function ComentariosPage() {
     setLikedIds({});
     setPlayingVideoId(null);
     setCommentFilter('pending');
+
+    // For IG ads/posts without a valid Instagram permalink, fetch it from the media ID
+    if (post.platform === 'instagram' && (!post.permalink || post.permalink.includes('facebook.com') || post.permalink.includes('ads/'))) {
+      metaAds.getInstagramMediaPermalink(post.id)
+        .then((res: any) => {
+          const url = res?.permalink;
+          if (url) setSelectedPost(prev => prev ? { ...prev, permalink: url } : prev);
+        })
+        .catch(() => {});
+    }
 
     // Reload fresh comments from API
     setLoadingComments(true);
