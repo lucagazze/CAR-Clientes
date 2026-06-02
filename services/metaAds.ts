@@ -527,8 +527,8 @@ export const metaAds = {
 
   getInstagramMediaComments: (mediaId: string) =>
     apiGetPageActive(`${mediaId}/comments`, {
-      fields: 'id,text,timestamp,username,like_count,replies{id,text,timestamp,username}',
-      limit: '50',
+      fields: 'id,text,timestamp,username,like_count,replies.limit(100){id,text,timestamp,username,from}',
+      limit: '100',
     }),
 
   replyToInstagramComment: async (commentId: string, message: string) => {
@@ -566,8 +566,8 @@ export const metaAds = {
 
   getFacebookPostComments: (postId: string) =>
     apiGetPageActive(`${postId}/comments`, {
-      fields: 'id,message,created_time,from,like_count,replies{id,message,from,created_time}',
-      limit: '50',
+      fields: 'id,message,created_time,from,like_count,replies.limit(100){id,message,from,created_time}',
+      limit: '100',
     }),
 
   replyToFacebookComment: async (commentId: string, message: string) => {

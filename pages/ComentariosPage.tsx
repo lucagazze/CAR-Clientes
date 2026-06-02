@@ -241,21 +241,31 @@ export default function ComentariosPage() {
     );
   };
 
-  // Helper: is comment pending?
-  const isCommentPending = useCallback((comment: any, postPlatform: 'instagram' | 'facebook') => {
-    const isFromPage = (comment.username && igUsername && comment.username.toLowerCase() === igUsername.toLowerCase()) || 
-                       (comment.from?.id === fbPageId);
-    if (isFromPage) return false;
+  // Helper: is a username/from the page?
+  const isFromPage = useCallback((entry: any) => {
+    if (!entry) return false;
+    // Instagram: match username
+    if (igUsername && entry.username && entry.username.toLowerCase() === igUsername.toLowerCase()) return true;
+    // Facebook / any: match page ID
+    if (fbPageId && entry.from?.id && String(entry.from.id) === String(fbPageId)) return true;
+    // Also handle metaAccountId match as fallback
+    if (metaAccountId && entry.from?.id && String(entry.from.id) === String(metaAccountId)) return true;
+    return false;
+  }, [igUsername, fbPageId, metaAccountId]);
+
+  // Helper: is comment pending? = last message in thread was from customer (not page)
+  const isCommentPending = useCallback((comment: any, _postPlatform: 'instagram' | 'facebook') => {
+    // If the top-level comment itself is from the page, not pending
+    if (isFromPage(comment)) return false;
     const replies = comment.replies?.data || [];
-    if (replies.length === 0) return true;
+    if (replies.length === 0) return true; // no reply yet → pending
+    // Sort replies oldest→newest, check if last one is from page
     const sorted = [...replies].sort((a, b) =>
-      new Date(a.timestamp || a.created_time).getTime() - new Date(b.timestamp || b.created_time).getTime()
+      new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
     );
     const latest = sorted[sorted.length - 1];
-    const latestIsMe = (latest.username && igUsername && latest.username.toLowerCase() === igUsername.toLowerCase()) || 
-                       (latest.from?.id === fbPageId);
-    return !latestIsMe;
-  }, [igUsername, fbPageId]);
+    return !isFromPage(latest);
+  }, [isFromPage]);
 
   // Track fb page id
   useEffect(() => {
@@ -335,6 +345,17 @@ export default function ComentariosPage() {
           username: c.username || c.from?.username || c.from?.name || c.name || `Comentarista ${i + 1}`,
           text: c.text || c.message || '',
           from: c.from || null,
+          replies: c.replies
+            ? {
+                data: (c.replies.data || []).map((r: any, ri: number) => ({
+                  ...r,
+                  username: r.username || r.from?.username || r.from?.name || `Usuario ${ri + 1}`,
+                  text: r.text || r.message || '',
+                  timestamp: r.timestamp || r.created_time || '',
+                  from: r.from || null,
+                })),
+              }
+            : { data: [] },
         }));
         const pending = normalized.filter((c: any) => isCommentPending(c, 'facebook'));
         items.push({
@@ -513,39 +534,48 @@ export default function ComentariosPage() {
     // Reload fresh comments from API
     setLoadingComments(true);
     try {
+      // Normalize a comment or reply to a consistent shape
+      const normalizeComment = (c: any, idx: number) => ({
+        ...c,
+        username: c.username || c.from?.username || c.from?.name || `Usuario ${idx + 1}`,
+        text: c.text || c.message || '',
+        timestamp: c.timestamp || c.created_time || new Date().toISOString(),
+        from: c.from || null,
+        // Normalize nested replies too
+        replies: c.replies
+          ? {
+              data: (c.replies.data || []).map((r: any, ri: number) => ({
+                ...r,
+                username: r.username || r.from?.username || r.from?.name || `Usuario ${ri + 1}`,
+                text: r.text || r.message || '',
+                timestamp: r.timestamp || r.created_time || new Date().toISOString(),
+                from: r.from || null,
+              })),
+            }
+          : { data: [] },
+      });
+
       if (post.isAd) {
         const res = await metaAds.getAdCreativeComments(post.id);
-        const isIgAd = post.platform === 'instagram';
-        const fresh = (res.data || []).filter((c: any) => {
-          return isIgAd 
-            ? (c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true) 
-            : c.from?.id !== fbPageId;
-        }).map((c: any, i: number) => ({
-          ...c,
-          username: c.username || c.from?.username || c.from?.name || `Usuario ${i + 1}`,
-          text: c.text || c.message || '',
-          timestamp: c.timestamp || c.created_time || new Date().toISOString(),
-          from: c.from || null,
-        }));
+        const fresh = (res.data || [])
+          .filter((c: any) => !isFromPage(c))
+          .map(normalizeComment);
         setComments(fresh);
       } else if (post.platform === 'instagram') {
         const res = await metaAds.getInstagramMediaComments(post.id);
-        const fresh = (res.data || []).filter((c: any) => 
-          c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true
-        );
+        const fresh = (res.data || [])
+          .filter((c: any) => !isFromPage(c))
+          .map(normalizeComment);
         setComments(fresh);
       } else {
         const res = await metaAds.getFacebookPostComments(post.id);
-        const normalized = (res.data || []).map((c: any, i: number) => ({
-          ...c,
-          username: c.username || c.from?.username || c.from?.name || `Comentarista ${i + 1}`,
-          text: c.text || c.message || '',
-          from: c.from || null,
-        })).filter((c: any) => c.from?.id !== fbPageId);
-        setComments(normalized);
+        const fresh = (res.data || [])
+          .filter((c: any) => !isFromPage(c))
+          .map(normalizeComment);
+        setComments(fresh);
       }
     } catch (err) {
-      console.error('Error refreshing comments:', err);
+      // Keep initial comments on error
     } finally {
       setLoadingComments(false);
     }
