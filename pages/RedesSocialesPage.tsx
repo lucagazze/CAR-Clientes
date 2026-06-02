@@ -541,7 +541,10 @@ export default function RedesSocialesPage() {
 
   const openCommentsModal = (postId: string, permalink: string, type: 'instagram' | 'facebook') => {
     setSelectedPostId(postId);
-    setSelectedPostPermalink(permalink);
+    const normalizedPermalink = type === 'instagram' && permalink
+      ? permalink.replace('www.instagram.com/reel/', 'www.instagram.com/p/').replace('www.instagram.com/tv/', 'www.instagram.com/p/')
+      : permalink;
+    setSelectedPostPermalink(normalizedPermalink);
     setSelectedPostType(type);
     setReplyingTo(null);
     setCommentInput('');
