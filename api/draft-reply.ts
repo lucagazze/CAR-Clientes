@@ -102,8 +102,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       scraped_content,
       instagram_context,
       website_url,
-      products_catalog,
-      catalog_synced_at,
     } = client;
 
     // Compiled business brain context
