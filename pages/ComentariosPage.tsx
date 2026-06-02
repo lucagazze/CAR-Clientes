@@ -539,7 +539,6 @@ export default function ComentariosPage() {
 
   // Open post slide-over — reload comments from API for freshness
   const openPost = async (post: PostItem) => {
-    console.log('[openPost] id:', post.id, '| platform:', post.platform, '| isAd:', post.isAd, '| permalink:', post.permalink);
     setSelectedPost(post);
     setComments(post.comments);
     setOpenReplies({});
@@ -549,28 +548,18 @@ export default function ComentariosPage() {
     setPlayingVideoId(null);
     setCommentFilter('pending');
 
-    // For IG posts/ads without a valid Instagram permalink, fetch it using the client's page token
-    if (post.platform === 'instagram' && (!post.permalink || post.permalink.includes('facebook.com') || post.permalink.includes('ads/'))) {
-      metaAds.getInstagramMediaPermalink(post.id, fbPageId || undefined)
+    // Always fetch fresh IG permalink from API — don't trust stored value (could be stale or wrong ad creative URL)
+    if (post.platform === 'instagram') {
+      const capturedId = post.id;
+      metaAds.getInstagramMediaPermalink(capturedId, fbPageId || undefined)
         .then((res: any) => {
-          console.log('[permalink fetch] res:', res);
           const url = res?.permalink
             || (res?.shortcode ? `https://www.instagram.com/p/${res.shortcode}/` : null);
-          console.log('[permalink fetch] resolved url:', url);
-          if (url) setSelectedPost(prev => prev ? { ...prev, permalink: url } : prev);
+          // Guard against race condition: only update if this post is still selected
+          if (url) setSelectedPost(prev => prev?.id === capturedId ? { ...prev, permalink: url } : prev);
         })
-        .catch((err: any) => {
-          console.warn('[permalink fetch] failed:', err);
-          if (igId) {
-            metaAds.getInstagramMediaPermalink(post.id)
-              .then((res: any) => {
-                console.log('[permalink fetch fallback] res:', res);
-                const url = res?.permalink
-                  || (res?.shortcode ? `https://www.instagram.com/p/${res.shortcode}/` : null);
-                if (url) setSelectedPost(prev => prev ? { ...prev, permalink: url } : prev);
-              })
-              .catch((err2: any) => console.warn('[permalink fetch fallback] also failed:', err2));
-          }
+        .catch(() => {
+          // Fallback: keep existing permalink (already shown if valid)
         });
     }
 
