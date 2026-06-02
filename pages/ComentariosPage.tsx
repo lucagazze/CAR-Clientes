@@ -482,7 +482,7 @@ export default function ComentariosPage() {
           const topTargets = uniqueTargets.slice(0, 20);
           const commentsPromises = topTargets.map(async (target) => {
             try {
-              const res = await metaAds.getAdCreativeComments(target.storyId);
+              const res = await metaAds.getAdCreativeComments(target.storyId, target.platform);
               return { storyId: target.storyId, platform: target.platform, comments: res.data || [] };
             } catch {
               return { storyId: target.storyId, platform: target.platform, comments: [] };
@@ -496,7 +496,7 @@ export default function ComentariosPage() {
         setLoading(false);
 
         // Update cache with initial items
-        sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: initialItems }));
+        try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: initialItems.map(p => ({ ...p, comments: [] })) })); } catch { /* quota exceeded — skip cache */ }
 
         // Step 2: Background deep fetch of 50 items
         const [igMediaRes50, fbMediaRes50] = await Promise.all([
@@ -515,7 +515,7 @@ export default function ComentariosPage() {
           const topTargets = uniqueTargets.slice(0, 40);
           const commentsPromises = topTargets.map(async (target) => {
             try {
-              const res = await metaAds.getAdCreativeComments(target.storyId);
+              const res = await metaAds.getAdCreativeComments(target.storyId, target.platform);
               return { storyId: target.storyId, platform: target.platform, comments: res.data || [] };
             } catch {
               return { storyId: target.storyId, platform: target.platform, comments: [] };
@@ -598,7 +598,7 @@ export default function ComentariosPage() {
       });
 
       if (post.isAd) {
-        const res = await metaAds.getAdCreativeComments(post.id);
+        const res = await metaAds.getAdCreativeComments(post.id, post.platform);
         const fresh = (res.data || [])
           .filter((c: any) => !isFromPage(c))
           .map(normalizeComment);

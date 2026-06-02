@@ -177,10 +177,13 @@ ${fewShotExamples.map((ex, i) => `Example ${i + 1}:
 
       if (matched?.url) {
         try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
           const pageRes = await fetch(matched.url, {
             headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AlgorBot/1.0)' },
-            signal: AbortSignal.timeout(5000),
+            signal: controller.signal,
           });
+          clearTimeout(timeout);
           if (pageRes.ok) {
             const html = await pageRes.text();
             // Extract text: remove scripts, styles, nav, footer, header tags
