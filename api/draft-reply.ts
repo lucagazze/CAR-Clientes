@@ -303,7 +303,7 @@ ${postCaption ? `\nPublicación a la que responde: "${postCaption}"` : ''}
 ════════════════════════════════════════
 MENSAJE A RESPONDER
 ════════════════════════════════════════
-Usuario: @${username}
+Usuario: ${username.startsWith('Usuario') ? '(usuario privado — no mencionar nombre)' : `@${username}`}
 Mensaje: "${itemText}"
 
 ════════════════════════════════════════
@@ -322,6 +322,7 @@ REGLAS DE RESPUESTA
 TONO Y HUMANIDAD:
 - Escribí como una persona real del equipo, no como un asistente de IA ni un bot corporativo.
 - Nada de frases genéricas como "¡Gracias por tu mensaje!", "¡Con gusto te ayudo!" o "¡Espero que tengas un excelente día!".
+- NOMBRE DEL USUARIO: Si el campo usuario dice "(usuario privado)" NO uses ningún nombre ni @handle en la respuesta. Si tiene un nombre/handle real, podés usarlo ocasionalmente pero no es obligatorio.
 - Sé directo y natural. Contestá lo que preguntaron, sin rodeos.
 - Podés usar contracciones, lenguaje casual y expresiones reales de la marca.
 - Si el tono de la marca es relajado e informal (como se ve en los ejemplos), usalo.
@@ -351,7 +352,7 @@ FORMATO FINAL:
 - No uses asteriscos ni formato markdown. Solo texto plano.`;
 
     // 4. Call AI API — Gemini 2.0 Flash preferred, fallback to OpenAI gpt-4o-mini
-    const userPrompt = `${isDM ? 'Mensaje del cliente en el DM' : 'Comentario del cliente'}: "${itemText}"\nRedactá la respuesta para @${username}:`;
+    const userPrompt = `${isDM ? 'Mensaje del cliente en el DM' : 'Comentario del cliente'}: "${itemText}"\nRedactá la respuesta${username.startsWith('Usuario') ? '' : ` para @${username}`}:`;
     let draftText = '';
 
     if (geminiKey) {
