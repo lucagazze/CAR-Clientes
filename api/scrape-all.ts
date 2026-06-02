@@ -132,16 +132,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { data: analysisData } = req.body as any;
     if (!clientId || !analysisData) return res.status(400).json({ error: 'Missing clientId or data' });
     try {
-      // Delete existing entry for this client, then insert fresh
-      await supabase.from('car_user_activity').delete().eq('client_id', clientId).eq('action', 'product_analysis_cache');
-      const { error } = await supabase.from('car_user_activity').insert({
-        client_id: clientId,
-        action: 'product_analysis_cache',
-        metadata: { results: analysisData, calculated_at: new Date().toISOString() },
-        created_at: new Date().toISOString(),
-      });
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('car_product_analysis')
+        .upsert(
+          { client_id: clientId, data: analysisData, calculated_at: now, updated_at: now },
+          { onConflict: 'client_id' }
+        );
       if (error) return res.status(500).json({ error: error.message });
-      return res.status(200).json({ saved: true });
+      return res.status(200).json({ saved: true, calculated_at: now });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -152,19 +151,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
     try {
       const { data, error } = await supabase
-        .from('car_user_activity')
-        .select('metadata, created_at')
+        .from('car_product_analysis')
+        .select('data, calculated_at')
         .eq('client_id', clientId)
-        .eq('action', 'product_analysis_cache')
-        .order('created_at', { ascending: false })
-        .limit(1)
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });
       if (!data) return res.status(200).json({ found: false });
       return res.status(200).json({
         found: true,
-        results: (data.metadata as any)?.results || [],
-        calculated_at: (data.metadata as any)?.calculated_at || data.created_at,
+        results: (data as any).data || [],
+        calculated_at: (data as any).calculated_at,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
