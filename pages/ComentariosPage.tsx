@@ -76,6 +76,7 @@ export default function ComentariosPage() {
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+  const [commentFilter, setCommentFilter] = useState<'all' | 'pending'>('pending');
 
   // ── Connection flow state ─────────────────────────────────────────
   const [connectingUserToken, setConnectingUserToken] = useState<string | null>(null);
@@ -540,6 +541,7 @@ export default function ComentariosPage() {
     setReplyErrors({});
     setLikedIds({});
     setPlayingVideoId(null);
+    setCommentFilter('pending');
 
     // Reload fresh comments from API
     setLoadingComments(true);
@@ -1090,7 +1092,39 @@ export default function ComentariosPage() {
               </div>
 
               {/* Right: Comments list */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto flex flex-col">
+                {/* Filter toggle */}
+                {!loadingComments && comments.length > 0 && (
+                  <div className="flex items-center gap-1.5 px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+                    <button
+                      onClick={() => setCommentFilter('pending')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${
+                        commentFilter === 'pending'
+                          ? 'bg-amber-500 text-white shadow-sm'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      ⏳ Pendientes
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${commentFilter === 'pending' ? 'bg-white/20' : 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400'}`}>
+                        {comments.filter(c => isCommentPending(c, selectedPost!.platform)).length}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setCommentFilter('all')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${
+                        commentFilter === 'all'
+                          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      Todos
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${commentFilter === 'all' ? 'bg-white/20 dark:bg-black/20' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500'}`}>
+                        {comments.length}
+                      </span>
+                    </button>
+                  </div>
+                )}
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {loadingComments ? (
                   <AppleLoader variant="table" count={4} />
                 ) : comments.length === 0 ? (
@@ -1099,10 +1133,12 @@ export default function ComentariosPage() {
                     <p className="text-[13px] font-bold text-zinc-500">Sin comentarios de usuarios</p>
                   </div>
                 ) : (
-                  [...comments].sort((a, b) =>
-                    new Date(b.timestamp || b.created_time || 0).getTime() -
-                    new Date(a.timestamp || a.created_time || 0).getTime()
-                  ).map(comment => {
+                  [...comments]
+                    .filter(c => commentFilter === 'all' || isCommentPending(c, selectedPost!.platform))
+                    .sort((a, b) =>
+                      new Date(b.timestamp || b.created_time || 0).getTime() -
+                      new Date(a.timestamp || a.created_time || 0).getTime()
+                    ).map(comment => {
                     const isPending = isCommentPending(comment, selectedPost.platform);
                     const liked = !!likedIds[comment.id];
                     const replyOpen = !!openReplies[comment.id];
@@ -1230,6 +1266,7 @@ export default function ComentariosPage() {
                     );
                   })
                 )}
+                </div>
               </div>
             </div>
           </div>
