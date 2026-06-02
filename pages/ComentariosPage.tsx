@@ -548,18 +548,22 @@ export default function ComentariosPage() {
     setPlayingVideoId(null);
     setCommentFilter('pending');
 
-    // Always fetch fresh IG permalink from API — don't trust stored value (could be stale or wrong ad creative URL)
+    // Always fetch fresh IG permalink and normalize to /p/ format (avoids reel player redirect)
     if (post.platform === 'instagram') {
       const capturedId = post.id;
+      const toPostUrl = (url: string) => url.replace('www.instagram.com/reel/', 'www.instagram.com/p/').replace('www.instagram.com/tv/', 'www.instagram.com/p/');
       metaAds.getInstagramMediaPermalink(capturedId, fbPageId || undefined)
         .then((res: any) => {
-          const url = res?.permalink
-            || (res?.shortcode ? `https://www.instagram.com/p/${res.shortcode}/` : null);
-          // Guard against race condition: only update if this post is still selected
+          const raw = res?.permalink || (res?.shortcode ? `https://www.instagram.com/p/${res.shortcode}/` : null);
+          const url = raw ? toPostUrl(raw) : null;
           if (url) setSelectedPost(prev => prev?.id === capturedId ? { ...prev, permalink: url } : prev);
         })
         .catch(() => {
-          // Fallback: keep existing permalink (already shown if valid)
+          // Normalize existing permalink if we already have one
+          if (post.permalink) {
+            const url = toPostUrl(post.permalink);
+            setSelectedPost(prev => prev?.id === capturedId ? { ...prev, permalink: url } : prev);
+          }
         });
     }
 
