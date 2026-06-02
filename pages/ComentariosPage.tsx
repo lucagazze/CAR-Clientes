@@ -62,7 +62,7 @@ export default function ComentariosPage() {
 
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [platformFilter, setPlatformFilter] = useState<'all' | 'instagram' | 'facebook' | 'ads'>('all');
-  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('pending');
 
   // Slide-over state
   const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
