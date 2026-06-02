@@ -182,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           for (const sp of products.filter((p: any) => p.status === 'active')) {
             if (parsedCatalog.some(p => p.title.toLowerCase() === sp.title.toLowerCase())) continue;
             const vs = sp.variants || [];
-            const prices = [...new Set(vs.map((v: any) => v.price).filter(Boolean))];
+            const prices = Array.from(new Set(vs.map((v: any) => v.price).filter(Boolean))) as string[];
             parsedCatalog.push({
               title: sp.title,
               price: prices.length === 1 ? `$${prices[0]}` : prices.length > 1 ? `$${Math.min(...prices.map(Number))}-$${Math.max(...prices.map(Number))}` : 'Consultar',
