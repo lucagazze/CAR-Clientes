@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast';
 import {
   Brain, Globe, Save, RefreshCw, Sparkles, FileText, CheckCircle2,
   ShieldAlert, ArrowUpRight, Instagram, Facebook, Calendar, AlertCircle,
-  ShoppingBag, Package, Tag
+  ShoppingBag, Package, Tag, ExternalLink, Search
 } from 'lucide-react';
 import { AppleLoader } from '../components/ui/AppleLoader';
 
@@ -29,12 +29,12 @@ export default function CerebroPage() {
   const [activeTab, setActiveTab] = useState<'web' | 'social'>('web');
   const [scanStep, setScanStep] = useState<string>('');
 
-  // Catalog state
-  const [catalog, setCatalog] = useState<any[]>([]);
-  const [catalogSyncedAt, setCatalogSyncedAt] = useState<string | null>(null);
-  const [catalogSource, setCatalogSource] = useState<string>('');
-  const [syncingCatalog, setSyncingCatalog] = useState(false);
-  const [catalogSearch, setCatalogSearch] = useState('');
+  // Products state (fetched live from ecommerce platform)
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState('');
+  const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -44,13 +44,11 @@ export default function CerebroPage() {
     setScrapedContent(profile.scraped_content || '');
     setInstagramContext(profile.instagram_context || '');
     setBrainUpdatedAt(profile.brain_updated_at || null);
-    // Load cached catalog
-    const pc = (profile as any).products_catalog;
-    if (pc) {
-      try { setCatalog(JSON.parse(pc)); } catch {}
-    }
-    setCatalogSyncedAt((profile as any).catalog_synced_at || null);
     setLoading(false);
+    // Auto-load products if platform configured
+    if ((profile as any).ecommerce_platform && ((profile as any).shopify_domain || (profile as any).wordpress_url || (profile as any).tiendanube_store_id)) {
+      loadProducts(profile);
+    }
   }, [profile]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -76,25 +74,107 @@ export default function CerebroPage() {
     }
   };
 
-  const handleSyncCatalog = async () => {
-    if (!profile) return;
-    setSyncingCatalog(true);
+  const loadProducts = async (prof?: any) => {
+    const p = prof || profile;
+    if (!p) return;
+    const platform = (p as any).ecommerce_platform;
+    if (!platform) return;
+    setProductsLoading(true);
+    setProductsError(null);
     try {
-      const res = await fetch('/api/scrape-all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: profile.id, action: 'sync-catalog' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al sincronizar');
-      setCatalog(data.catalog || []);
-      setCatalogSyncedAt(data.synced_at);
-      setCatalogSource(data.source || '');
-      showToast(`Catálogo sincronizado: ${data.count} productos · ${data.source}`, 'success');
+      let loaded: any[] = [];
+
+      if (platform === 'shopify') {
+        const domain = ((p as any).shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const token = (p as any).shopify_access_token;
+        if (!domain || !token) throw new Error('Shopify no configurado completamente');
+        const res = await fetch(`https://${domain}/admin/api/2024-01/products.json?limit=250&fields=id,title,body_html,handle,status,variants,images,product_type,tags`, {
+          headers: { 'X-Shopify-Access-Token': token, 'Accept': 'application/json' },
+        });
+        if (!res.ok) throw new Error(`Error Shopify: ${res.status}`);
+        const data = await res.json();
+        loaded = (data.products || []).filter((p: any) => p.status === 'active').map((p: any) => ({
+          id: p.id,
+          title: p.title,
+          description: p.body_html?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) || '',
+          type: p.product_type || '',
+          tags: p.tags || '',
+          image: p.images?.[0]?.src || null,
+          url: `https://${domain}/products/${p.handle}`,
+          variants: (p.variants || []).map((v: any) => ({
+            title: v.title !== 'Default Title' ? v.title : '',
+            price: v.price,
+            sku: v.sku,
+            available: v.inventory_policy === 'continue' || (v.inventory_quantity ?? 1) > 0,
+          })),
+        }));
+
+      } else if (platform === 'wordpress') {
+        const base = ((p as any).wordpress_url || '').replace(/\/$/, '');
+        const key = (p as any).woo_consumer_key;
+        const secret = (p as any).woo_consumer_secret;
+        if (!base || !key || !secret) throw new Error('WooCommerce no configurado completamente');
+        const creds = btoa(`${key}:${secret}`);
+        let page = 1;
+        while (page <= 5) {
+          const res = await fetch(`${base}/wp-json/wc/v3/products?per_page=100&page=${page}&status=publish`, {
+            headers: { 'Authorization': `Basic ${creds}` },
+          });
+          if (!res.ok) break;
+          const data: any[] = await res.json();
+          if (!data.length) break;
+          loaded = loaded.concat(data.map((p: any) => ({
+            id: p.id,
+            title: p.name,
+            description: p.short_description?.replace(/<[^>]+>/g, ' ').trim().slice(0, 300) || p.description?.replace(/<[^>]+>/g, ' ').trim().slice(0, 300) || '',
+            type: p.categories?.[0]?.name || '',
+            tags: p.tags?.map((t: any) => t.name).join(', ') || '',
+            image: p.images?.[0]?.src || null,
+            url: p.permalink || '',
+            variants: p.attributes?.length > 0
+              ? [{ title: p.attributes.map((a: any) => a.options?.join('/')).join(' · '), price: p.price, sku: p.sku, available: p.stock_status === 'instock' }]
+              : [{ title: '', price: p.price, sku: p.sku, available: p.stock_status === 'instock' }],
+          })));
+          page++;
+        }
+
+      } else if (platform === 'tiendanube') {
+        const storeId = (p as any).tiendanube_store_id;
+        const token = (p as any).tiendanube_access_token;
+        if (!storeId || !token) throw new Error('Tiendanube no configurado completamente');
+        let tnPage = 1;
+        while (tnPage <= 5) {
+          const res = await fetch(`https://api.tiendanube.com/v1/${storeId}/products?per_page=200&page=${tnPage}`, {
+            headers: { 'Authentication': `bearer ${token}`, 'User-Agent': 'AlgorBot/1.0' },
+          });
+          if (!res.ok) break;
+          const data: any[] = await res.json();
+          if (!data.length) break;
+          loaded = loaded.concat(data.map((p: any) => ({
+            id: p.id,
+            title: p.name?.es || p.name?.en || Object.values(p.name || {})[0] || '',
+            description: (p.description?.es || p.description?.en || '').replace(/<[^>]+>/g, ' ').trim().slice(0, 300),
+            type: p.categories?.[0]?.name?.es || '',
+            tags: '',
+            image: p.images?.[0]?.src || null,
+            url: p.canonical_url || '',
+            variants: (p.variants || []).map((v: any) => ({
+              title: v.values?.map((val: any) => val.es || val.en).join(' / ') || '',
+              price: v.price,
+              sku: v.sku,
+              available: v.stock === null || v.stock > 0,
+            })),
+          })));
+          tnPage++;
+        }
+      }
+
+      setProducts(loaded);
+      if (!loaded.length) setProductsError('No se encontraron productos activos');
     } catch (err: any) {
-      showToast(err.message || 'Error al sincronizar catálogo', 'error');
+      setProductsError(err.message || 'Error al cargar productos');
     } finally {
-      setSyncingCatalog(false);
+      setProductsLoading(false);
     }
   };
 
@@ -470,55 +550,140 @@ export default function CerebroPage() {
           </div>
         </div>
 
-        {/* ── CATALOG SECTION (read-only for client) ── */}
-        {catalog.length > 0 && (
+        {/* ── PRODUCTS SECTION ── */}
+        {(profile as any)?.ecommerce_platform && (
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
-            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                   <ShoppingBag className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-[15px] font-black text-zinc-900 dark:text-white">Catálogo de Productos</h2>
-                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
-                      {catalog.length} productos ✓
-                    </span>
+                    <h2 className="text-[15px] font-black text-zinc-900 dark:text-white">Productos de la Tienda</h2>
+                    {products.length > 0 && (
+                      <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                        {products.length} activos
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
-                    {catalogSyncedAt ? `Actualizado ${new Date(catalogSyncedAt).toLocaleDateString('es-AR')}` : 'Conectado'}
-                    {catalogSource ? ` · ${catalogSource}` : ''}
-                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 capitalize">{(profile as any).ecommerce_platform}</p>
                 </div>
               </div>
+              <button
+                onClick={() => loadProducts()}
+                disabled={productsLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${productsLoading ? 'animate-spin' : ''}`} />
+                {productsLoading ? 'Cargando...' : 'Actualizar'}
+              </button>
             </div>
-            <div className="p-4 space-y-3">
-              <input
-                type="text"
-                placeholder="Buscar producto..."
-                value={catalogSearch}
-                onChange={e => setCatalogSearch(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[12px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 outline-none focus:border-emerald-500 transition-colors"
-              />
-              <div className="space-y-1.5 max-h-80 overflow-y-auto">
-                {catalog
-                  .filter(p => !catalogSearch || p.title.toLowerCase().includes(catalogSearch.toLowerCase()) || (p.type || '').toLowerCase().includes(catalogSearch.toLowerCase()))
-                  .map((p, i) => (
-                    <div key={i} className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800">
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-bold text-zinc-900 dark:text-white truncate">{p.title}</p>
-                        {p.variants?.length > 0 && (
-                          <p className="text-[10px] text-zinc-400 truncate">{p.variants.join(' · ')}</p>
-                        )}
-                      </div>
-                      <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 shrink-0">{p.price}</span>
-                    </div>
-                  ))}
-                {catalog.filter(p => !catalogSearch || p.title.toLowerCase().includes(catalogSearch.toLowerCase())).length === 0 && (
-                  <p className="text-[12px] text-zinc-400 text-center py-4">Sin resultados para "{catalogSearch}"</p>
-                )}
+
+            {productsLoading && (
+              <div className="flex items-center justify-center py-12 gap-3">
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-500" />
+                <span className="text-[12px] text-zinc-400">Importando productos...</span>
               </div>
-            </div>
+            )}
+
+            {productsError && !productsLoading && (
+              <div className="p-4 m-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-[12px] text-red-600 dark:text-red-400">{productsError}</div>
+            )}
+
+            {products.length > 0 && !productsLoading && (
+              <div className="p-4 space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar producto..."
+                    value={productSearch}
+                    onChange={e => setProductSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[12px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                  {products
+                    .filter(p => !productSearch || p.title.toLowerCase().includes(productSearch.toLowerCase()) || (p.type || '').toLowerCase().includes(productSearch.toLowerCase()) || (p.tags || '').toLowerCase().includes(productSearch.toLowerCase()))
+                    .map((p) => {
+                      const isExpanded = expandedProduct === String(p.id);
+                      const minPrice = p.variants?.length > 0 ? Math.min(...p.variants.map((v: any) => parseFloat(v.price) || 0)) : 0;
+                      const maxPrice = p.variants?.length > 0 ? Math.max(...p.variants.map((v: any) => parseFloat(v.price) || 0)) : 0;
+                      const priceStr = minPrice === maxPrice ? `$${minPrice.toFixed(2)}` : `$${minPrice.toFixed(2)} – $${maxPrice.toFixed(2)}`;
+                      return (
+                        <div key={p.id} className="border border-zinc-100 dark:border-zinc-800 rounded-xl overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedProduct(isExpanded ? null : String(p.id))}
+                            className="w-full flex items-center gap-3 p-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors text-left"
+                          >
+                            {p.image ? (
+                              <img src={p.image} alt={p.title} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-zinc-100 dark:border-zinc-800" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                                <Package className="w-4 h-4 text-zinc-400" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-bold text-zinc-900 dark:text-white truncate">{p.title}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {p.type && <span className="text-[9px] text-zinc-400 font-medium">{p.type}</span>}
+                                {p.variants?.length > 1 && <span className="text-[9px] text-zinc-400">{p.variants.length} variantes</span>}
+                              </div>
+                            </div>
+                            <span className="text-[12px] font-black text-emerald-600 dark:text-emerald-400 shrink-0">{priceStr}</span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-3 pb-3 space-y-2.5 border-t border-zinc-100 dark:border-zinc-800 pt-2.5">
+                              {p.description && (
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">{p.description}</p>
+                              )}
+                              {p.tags && (
+                                <p className="text-[10px] text-zinc-400"><span className="font-bold">Tags:</span> {p.tags}</p>
+                              )}
+                              {p.variants?.length > 0 && (
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">Variantes</p>
+                                  <div className="grid grid-cols-1 gap-1">
+                                    {p.variants.map((v: any, vi: number) => (
+                                      <div key={vi} className="flex items-center justify-between px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 text-[11px]">
+                                        <span className="text-zinc-600 dark:text-zinc-300 font-medium">{v.title || 'Única'}{v.sku ? ` · SKU: ${v.sku}` : ''}</span>
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${v.available ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-950 text-red-500'}`}>
+                                            {v.available ? 'Stock' : 'Sin stock'}
+                                          </span>
+                                          <span className="font-black text-zinc-900 dark:text-white">${parseFloat(v.price || 0).toFixed(2)}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {p.url && (
+                                <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] text-violet-500 hover:underline font-bold">
+                                  <ExternalLink className="w-2.5 h-2.5" /> Ver en tienda
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  {products.filter(p => !productSearch || p.title.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                    <p className="text-[12px] text-zinc-400 text-center py-6">Sin resultados para "{productSearch}"</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!productsLoading && !productsError && products.length === 0 && (
+              <div className="p-8 text-center">
+                <Package className="w-8 h-8 text-zinc-300 dark:text-zinc-600 mx-auto mb-2" />
+                <p className="text-[12px] text-zinc-400">Hacé clic en "Actualizar" para cargar los productos</p>
+              </div>
+            )}
           </div>
         )}
 
