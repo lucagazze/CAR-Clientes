@@ -367,7 +367,9 @@ export default function CostosPage() {
       shipping,
       ...updatedData
     };
-    localStorage.setItem(`car_costs_${profileId}`, JSON.stringify(currentData));
+    try {
+      localStorage.setItem(`car_costs_${profileId}`, JSON.stringify(currentData));
+    } catch (e) { /* ignore quota full */ }
   };
 
   useEffect(() => {

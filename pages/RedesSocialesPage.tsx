@@ -454,7 +454,7 @@ export default function RedesSocialesPage() {
   // Track page ID in localStorage to enable token retrieval in services
   useEffect(() => {
     if (fbPageId) {
-      localStorage.setItem('active_fb_page_id', fbPageId);
+      try { localStorage.setItem('active_fb_page_id', fbPageId); } catch {}
     }
   }, [fbPageId]);
 
@@ -763,11 +763,13 @@ export default function RedesSocialesPage() {
         setIgNextCursor(nextCursor);
 
         // Update Cache
-        sessionStorage.setItem(`ig_cache_${clientId}`, JSON.stringify({
-          igProfile: profileRes,
-          igMedia: media,
-          igNextCursor: nextCursor
-        }));
+        try {
+          sessionStorage.setItem(`ig_cache_${clientId}`, JSON.stringify({
+            igProfile: profileRes,
+            igMedia: media,
+            igNextCursor: nextCursor
+          }));
+        } catch (e) { /* quota exceeded — ignore */ }
       }).catch(err => {
         if (active) setError(err.message || 'Error al obtener datos de Instagram.');
       }).finally(() => { if (active) setIgLoading(false); });
@@ -817,11 +819,13 @@ export default function RedesSocialesPage() {
       setFbNextCursor(nextCursor);
 
       // Update Cache
-      sessionStorage.setItem(cacheKey, JSON.stringify({
-        fbProfile: profileRes,
-        fbMedia: media,
-        fbNextCursor: nextCursor
-      }));
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          fbProfile: profileRes,
+          fbMedia: media,
+          fbNextCursor: nextCursor
+        }));
+      } catch (e) { /* quota exceeded — ignore */ }
     }).finally(() => { if (active) setFbLoading(false); });
 
     return () => { active = false; };
