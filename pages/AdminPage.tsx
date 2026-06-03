@@ -39,6 +39,8 @@ import {
   Sparkles,
   Brain,
   CheckCircle2,
+  Trash2,
+  AlertCircle,
 } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useViewAs } from "../contexts/ViewAsContext";
@@ -285,6 +287,11 @@ export default function AdminPage() {
   const [showChangingPwd, setShowChangingPwd] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
 
+  const [unlinkedUsers, setUnlinkedUsers] = useState<any[]>([]);
+  const [loadingUnlinked, setLoadingUnlinked] = useState(false);
+  const [associatingUser, setAssociatingUser] = useState<string | null>(null);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
+
   // Estados de conexión persistentes (locales al formulario por ahora)
   const [statuses, setStatuses] = useState<
     Record<string, "ok" | "error" | null>
@@ -462,6 +469,39 @@ export default function AdminPage() {
     if (profile && !profile.is_admin) navigate("/", { replace: true });
   }, [profile, navigate]);
 
+  const loadUnlinkedUsers = async () => {
+    if (!supabaseAdmin) return;
+    setLoadingUnlinked(true);
+    try {
+      const [allAuthRes, clientsRes, assocRes] = await Promise.all([
+        supabaseAdmin.auth.admin.listUsers(),
+        supabaseAdmin.from('car_clients').select('user_id, business_name'),
+        supabaseAdmin.from('car_business_accounts').select('user_id, email, business_id')
+      ]);
+
+      if (allAuthRes.error) throw allAuthRes.error;
+      if (clientsRes.error) throw clientsRes.error;
+      if (assocRes.error) throw assocRes.error;
+
+      const authUsers = allAuthRes.data.users || [];
+      const clientsData = clientsRes.data || [];
+      const assocData = assocRes.data || [];
+
+      // Find users not mapped in car_clients or car_business_accounts
+      const unlinked = authUsers.filter(u => {
+        const isOwner = clientsData.some((c: any) => c.user_id === u.id);
+        const isAssoc = assocData.some((a: any) => a.user_id === u.id);
+        return !isOwner && !isAssoc;
+      });
+
+      setUnlinkedUsers(unlinked);
+    } catch (err: any) {
+      console.error("Error loading unlinked users:", err);
+    } finally {
+      setLoadingUnlinked(false);
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -470,7 +510,47 @@ export default function AdminPage() {
       .order("created_at", { ascending: false });
     if (error) showToast("Error: " + error.message, "error");
     else setClients(data ?? []);
-    setLoading(false);
+    
+    if (supabaseAdmin) {
+      loadUnlinkedUsers();
+    } else {
+      setLoading(false);
+    }
+  };
+
+  const handleAssociateUser = async (userId: string, email: string, clientId: string) => {
+    if (!supabaseAdmin) return;
+    setAssociatingUser(userId);
+    try {
+      const { error } = await supabaseAdmin.from('car_business_accounts').insert({
+        business_id: clientId,
+        user_id: userId,
+        email: email
+      });
+      if (error) throw error;
+      showToast('Usuario asociado con éxito ✓', 'success');
+      load(); // Reload to refresh unlinked list and clients
+    } catch (err: any) {
+      showToast('Error al asociar: ' + err.message, 'error');
+    } finally {
+      setAssociatingUser(null);
+    }
+  };
+
+  const handleDeleteUnlinkedUser = async (userId: string) => {
+    if (!supabaseAdmin) return;
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este usuario de la autenticación?')) return;
+    setDeletingUser(userId);
+    try {
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (error) throw error;
+      showToast('Usuario eliminado con éxito ✓', 'success');
+      load(); // Reload to refresh unlinked list
+    } catch (err: any) {
+      showToast('Error al eliminar: ' + err.message, 'error');
+    } finally {
+      setDeletingUser(null);
+    }
   };
 
   useEffect(() => {
@@ -1424,6 +1504,51 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Pending Google Logins Access Requests */}
+      {supabaseAdmin && unlinkedUsers.length > 0 && (
+        <div className="bg-amber-50/50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl p-5 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle className="w-4.5 h-4.5 text-amber-500" />
+            <h3 className="text-[14px] font-bold text-amber-800 dark:text-amber-400">
+              Solicitudes de Acceso Pendientes ({unlinkedUsers.length})
+            </h3>
+            <span className="text-[10px] bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold">
+              Google / OAuth
+            </span>
+          </div>
+          <p className="text-[12px] text-amber-700/80 dark:text-amber-400/80 mb-4 leading-relaxed">
+            Estos correos intentaron ingresar al portal con su cuenta de Google pero no están vinculados a ningún negocio. Podés asociarlos rápidamente a un negocio para darles acceso o eliminarlos.
+          </p>
+
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[500px]">
+                <thead>
+                  <tr className="border-b border-zinc-150 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+                    <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Asociar a Negocio</th>
+                    <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-150 dark:divide-zinc-800">
+                  {unlinkedUsers.map(u => (
+                    <UnlinkedUserRow
+                      key={u.id}
+                      user={u}
+                      clients={clients}
+                      associatingUser={associatingUser}
+                      deletingUser={deletingUser}
+                      onAssociate={handleAssociateUser}
+                      onDelete={handleDeleteUnlinkedUser}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2447,5 +2572,75 @@ function DR({
         )}
       </div>
     </div>
+  );
+}
+
+const UnlinkedUserRow = ({
+  user,
+  clients,
+  associatingUser,
+  deletingUser,
+  onAssociate,
+  onDelete,
+}: {
+  user: any;
+  clients: any[];
+  associatingUser: string | null;
+  deletingUser: string | null;
+  onAssociate: (userId: string, email: string, clientId: string) => void;
+  onDelete: (userId: string) => void;
+}) => {
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const isAssociating = associatingUser === user.id;
+  const isDeleting = deletingUser === user.id;
+
+  return (
+    <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+      <td className="px-4 py-3 text-[13px] font-mono text-zinc-700 dark:text-zinc-300 truncate max-w-[220px]">
+        {user.email}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2 max-w-xs">
+          <select
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            disabled={isAssociating || isDeleting}
+            className="h-8 px-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-[12px] font-medium outline-none focus:border-violet-500 transition-all flex-grow"
+          >
+            <option value="">Seleccionar negocio...</option>
+            {clients.map((c: any) => (
+              <option key={c.id} value={c.id}>
+                {c.business_name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!selectedClientId || isAssociating || isDeleting}
+            onClick={() => onAssociate(user.id, user.email, selectedClientId)}
+            className="h-8 px-3 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-[12px] font-bold flex items-center gap-1 transition-all"
+          >
+            {isAssociating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Asociar"}
+          </button>
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            disabled={isAssociating || isDeleting}
+            onClick={() => onDelete(user.id)}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+            title="Eliminar usuario de autenticación"
+          >
+            {isDeleting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
