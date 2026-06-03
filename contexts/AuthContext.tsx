@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const retries = 3;
     for (let i = 0; i < retries; i++) {
       try {
-        const p = await db.profile.getByUserId(userId);
+        const p = await db.profile.getByUserId(userId, email);
         setProfile(p);
         if (p) {
           db.activity.log(userId, p.id, 'session_start', {
@@ -81,7 +81,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       else setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return;
+
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {

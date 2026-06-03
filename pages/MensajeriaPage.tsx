@@ -450,49 +450,44 @@ export default function MensajeriaPage() {
     loadChannelMetas();
   }, [cwUrl, cwToken, inboxes, statusFilter, profile?.id]);
 
-  const fetchAllOpenConversationsInBackground = useCallback(async () => {
-    if (!cwUrl || !cwToken) return;
-    try {
-      // 1. Fetch page 1 of all conversations to get the total count (meta)
-      const firstPage = await chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1);
-      const allCount = firstPage.meta?.all_count ?? 0;
-      const firstPayload = firstPage.payload;
+  const fetchConversationsData = useCallback(async () => {
+    if (!cwUrl || !cwToken) return null;
+    const inboxId = getInboxIdForChannel(channelFilter);
+    const [firstPageRes, openPage1Res] = await Promise.all([
+      chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1, inboxId),
+      chatwoot.getConversationsPage(cwUrl, cwToken, 'open', 1),
+    ]);
 
-      if (allCount <= 25) {
-        setConversations(prev => {
-          const prevIds = new Set(prev.map((c: any) => c.id));
-          const toAdd = firstPayload.filter((c: any) => !prevIds.has(c.id));
-          return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
-        });
-        return;
-      }
+    const { payload: firstPayload, hasMore: firstHasMore, meta } = firstPageRes;
+    const allFetchedConversations = [...firstPayload];
 
-      const totalPages = Math.min(40, Math.ceil(allCount / 25));
-      const pagesToFetch = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+    const openCount = openPage1Res.meta?.all_count ?? 0;
+    const openPayload = openPage1Res.payload || [];
+    allFetchedConversations.push(...openPayload);
+
+    if (openCount > 25) {
+      const totalOpenPages = Math.min(15, Math.ceil(openCount / 25));
+      const pagesToFetch = Array.from({ length: totalOpenPages - 1 }, (_, i) => i + 2);
 
       const results = await Promise.all(
         pagesToFetch.map(p =>
-          chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, p).catch(() => ({ payload: [] }))
+          chatwoot.getConversationsPage(cwUrl, cwToken, 'open', p).catch(() => ({ payload: [] }))
         )
       );
 
-      const remainingPayloads = results.flatMap(r => r.payload);
-      const allConversations = [...firstPayload, ...remainingPayloads];
-
-      // Merge silently: update existing items, append new ones — no flash
-      setConversations(prev => {
-        const apiMap = new Map(allConversations.map((c: any) => [c.id, c]));
-        const updated = prev.map((c: any) => apiMap.has(c.id) ? apiMap.get(c.id) : c);
-        const prevIds = new Set(prev.map((c: any) => c.id));
-        const newOnes = allConversations.filter((c: any) => !prevIds.has(c.id));
-        return [...newOnes, ...updated];
+      results.forEach(r => {
+        if (r.payload) {
+          allFetchedConversations.push(...r.payload);
+        }
       });
-      // All pages fetched — no more to load
-      setHasMore(false);
-    } catch (err) {
-      console.error("Error in background fetch of all conversations:", err);
     }
-  }, [cwUrl, cwToken, statusFilter]);
+
+    return {
+      allFetchedConversations,
+      firstHasMore,
+      meta,
+    };
+  }, [cwUrl, cwToken, statusFilter, channelFilter, getInboxIdForChannel]);
 
   const loadConversations = useCallback(async () => {
     if (!cwUrl || !cwToken) return;
@@ -502,38 +497,42 @@ export default function MensajeriaPage() {
     setCurrentPage(1);
     setHasMore(false);
 
-    // Trigger background fetcher in parallel
-    fetchAllOpenConversationsInBackground();
-
     try {
-      const inboxId = getInboxIdForChannel(channelFilter);
-      const [firstPageRes, sm] = await Promise.all([
-        chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1, inboxId),
+      const [data, sm] = await Promise.all([
+        fetchConversationsData(),
         chatwoot.getSummary(cwUrl, cwToken, Math.floor(new Date().setHours(0,0,0,0)/1000), Math.floor(Date.now()/1000)).catch(() => null),
       ]);
 
-      const { payload: firstPayload, hasMore: firstHasMore, meta } = firstPageRes;
+      if (!data) return;
       setSummary(sm);
-      if (meta && channelFilter === 'all') {
-        setConvMeta({ all_count: meta.all_count ?? 0, unassigned_count: meta.unassigned_count ?? 0, assigned_count: meta.assigned_count ?? 0 });
+
+      if (data.meta && channelFilter === 'all') {
+        setConvMeta({
+          all_count: data.meta.all_count ?? 0,
+          unassigned_count: data.meta.unassigned_count ?? 0,
+          assigned_count: data.meta.assigned_count ?? 0
+        });
       }
 
-      // Merge update: update existing items, prepend new ones — no flash
       setConversations(prev => {
-        const apiMap = new Map(firstPayload.map((c: any) => [c.id, c]));
-        const updated = prev.map((c: any) => apiMap.has(c.id) ? apiMap.get(c.id) : c);
-        const prevIds = new Set(prev.map((c: any) => c.id));
-        const newOnes = firstPayload.filter((c: any) => !prevIds.has(c.id));
-        return [...newOnes, ...updated];
+        const apiMap = new Map<number, any>();
+        prev.forEach((c: any) => {
+          if (c && c.id) apiMap.set(c.id, c);
+        });
+        data.allFetchedConversations.forEach((c: any) => {
+          if (c && c.id) apiMap.set(c.id, c);
+        });
+        return Array.from(apiMap.values());
       });
-      setHasMore(firstHasMore);
+
+      setHasMore(data.firstHasMore);
       setCurrentPage(1);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [cwUrl, cwToken, statusFilter, channelFilter, getInboxIdForChannel, fetchAllOpenConversationsInBackground, convCacheKey]);
+  }, [cwUrl, cwToken, channelFilter, fetchConversationsData]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!cwUrl || !cwToken || loadingMore || !hasMore) return;
@@ -646,24 +645,31 @@ export default function MensajeriaPage() {
     };
   }, [cwUrl, cwToken]);
 
-  // Poll conversations list every 20s
+  // Poll conversations list every 5s with visibility checks
   useEffect(() => {
     if (!cwUrl || !cwToken) return;
     const refreshConvList = async () => {
+      if (document.visibilityState !== 'visible') return;
       try {
-        const { payload } = await chatwoot.getConversationsPage(cwUrl, cwToken, statusFilter, 1);
+        const data = await fetchConversationsData();
+        if (!data) return;
         setConversations(prev => {
-          const apiMap = new Map(payload.map((c: any) => [c.id, c]));
-          const updated = prev.map((c: any) => apiMap.has(c.id) ? apiMap.get(c.id) : c);
-          const prevIds = new Set(prev.map((c: any) => c.id));
-          const newOnes = payload.filter((c: any) => !prevIds.has(c.id));
-          return [...newOnes, ...updated];
+          const apiMap = new Map<number, any>();
+          prev.forEach((c: any) => {
+            if (c && c.id) apiMap.set(c.id, c);
+          });
+          data.allFetchedConversations.forEach((c: any) => {
+            if (c && c.id) apiMap.set(c.id, c);
+          });
+          return Array.from(apiMap.values());
         });
-      } catch {}
+      } catch (err) {
+        console.error('[MensajeriaPage] Error polling conversations:', err);
+      }
     };
-    const interval = setInterval(refreshConvList, 20000);
+    const interval = setInterval(refreshConvList, 5000);
     return () => clearInterval(interval);
-  }, [cwUrl, cwToken, statusFilter]);
+  }, [cwUrl, cwToken, fetchConversationsData]);
 
   const generateAiDraft = async () => {
     if (!profile?.id || !selected || messages.length === 0) return;

@@ -41,7 +41,7 @@ const getManuallyUnreadSet = (profileId?: string): Set<number> => {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-const POLL_INTERVAL_MS = 20_000; // poll every 20 seconds
+const POLL_INTERVAL_MS = 5_000; // poll every 5 seconds
 
 export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile: authProfile } = useAuth();
@@ -69,6 +69,10 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [profile?.id]);
 
   const fetchCount = useCallback(async () => {
+    // Skip requests when the tab is in the background
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
     const isMensajeria = window.location.hash.toLowerCase().startsWith('#/mensajeria') || 
                          location.pathname.toLowerCase().startsWith('/mensajeria');
     if (isMensajeria) {
@@ -80,18 +84,31 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!url || !token) return;
 
     try {
-      // Fetch pages 1, 2, and 3 of open conversations (75 conversations total) in parallel
-      const [page1Res, page2Res, page3Res] = await Promise.all([
-        chatwoot.getConversationsPage(url, token, 'open', 1).catch(() => ({ payload: [] })),
-        chatwoot.getConversationsPage(url, token, 'open', 2).catch(() => ({ payload: [] })),
-        chatwoot.getConversationsPage(url, token, 'open', 3).catch(() => ({ payload: [] }))
-      ]);
+      // 1. Fetch page 1 of open conversations to get total count
+      const firstPage = await chatwoot.getConversationsPage(url, token, 'open', 1);
+      const allCount = firstPage.meta?.all_count ?? 0;
+      const firstPayload = firstPage.payload || [];
 
-      const conversations = [
-        ...(page1Res.payload || []),
-        ...(page2Res.payload || []),
-        ...(page3Res.payload || [])
-      ];
+      const allConversations = [...firstPayload];
+
+      // 2. Fetch remaining pages in parallel up to a limit of 15 pages (375 conversations)
+      if (allCount > 25) {
+        const totalPages = Math.min(15, Math.ceil(allCount / 25));
+        const pagesToFetch = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+
+        const results = await Promise.all(
+          pagesToFetch.map(p =>
+            chatwoot.getConversationsPage(url, token, 'open', p).catch(() => ({ payload: [] }))
+          )
+        );
+
+        results.forEach(r => {
+          if (r.payload) {
+            allConversations.push(...r.payload);
+          }
+        });
+      }
+
       const manuallyUnread = getManuallyUnreadSet(profile?.id);
 
       const isConvUnread = (c: any) => {
@@ -119,7 +136,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       // Filter and count unique conversation IDs to avoid any double-counting
       const uniqueConvs = new Map<number, any>();
-      conversations.forEach(c => {
+      allConversations.forEach(c => {
         if (c && c.id) uniqueConvs.set(c.id, c);
       });
 
@@ -129,8 +146,8 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (profile?.id) {
         localStorage.setItem(`car_unread_count_${profile.id}`, String(count));
       }
-    } catch {
-      // silently ignore — badge just won't update
+    } catch (err) {
+      console.error('[UnreadContext] Error fetching count:', err);
     }
   }, [profile?.id, profile?.chatwoot_url, profile?.chatwoot_token, location.pathname]);
 
@@ -274,6 +291,19 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       fetchCount();
     }
   }, [location.pathname, fetchCount]);
+
+  // Trigger fetchCount immediately when the tab is focused/returned to foreground
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchCountRef.current();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const fetchCommentsCount = useCallback(async () => {
     if (!profile) return;

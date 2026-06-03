@@ -140,7 +140,7 @@ export const db = {
   },
 
   profile: {
-    async getByUserId(userId: string): Promise<ClientProfile | null> {
+    async getByUserId(userId: string, email?: string): Promise<ClientProfile | null> {
       // Cuenta directa en car_clients
       const { data } = await supabase
         .from('car_clients')
@@ -152,11 +152,33 @@ export const db = {
       // Cuenta asociada: buscar el business_id y leer el negocio con supabaseAdmin
       // (necesario para bypasear RLS — el user_id del negocio no coincide con auth.uid())
       const adminClient = supabaseAdmin ?? supabase;
-      const { data: link } = await adminClient
+      let link = await adminClient
         .from('car_business_accounts')
-        .select('business_id')
+        .select('id, business_id')
         .eq('user_id', userId)
-        .maybeSingle();
+        .maybeSingle()
+        .then(res => res.data);
+
+      // Fallback: si no se encuentra por user_id pero se proporciona el email, se busca por email para vincularlo dinámicamente
+      if (!link && email) {
+        const cleanEmail = email.trim().toLowerCase();
+        const { data: matchedLink } = await adminClient
+          .from('car_business_accounts')
+          .select('id, business_id, user_id')
+          .ilike('email', cleanEmail)
+          .maybeSingle();
+
+        if (matchedLink) {
+          // Vincular el user_id en car_business_accounts automáticamente
+          await adminClient
+            .from('car_business_accounts')
+            .update({ user_id: userId })
+            .eq('id', matchedLink.id);
+          
+          link = matchedLink;
+        }
+      }
+
       if (!link) return null;
 
       const { data: business } = await adminClient

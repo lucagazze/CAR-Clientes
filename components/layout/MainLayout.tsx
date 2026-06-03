@@ -47,7 +47,7 @@ class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, 
     return this.props.children;
   }
 }
-import { Menu, Sun, Moon } from 'lucide-react';
+import { Menu, Sun, Moon, AlertCircle } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { AIChatFloat } from '../AIChatFloat';
@@ -129,10 +129,34 @@ const PageSkeleton = () => (
 export const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { darkMode, toggleDarkMode } = useTheme();
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const { isViewingAs } = useViewAs();
   const { unreadCount } = useUnread();
   const location = useLocation();
+
+  // Guard: if profile is null (and loading is false, which is guaranteed here), show error card
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#f5f5f7] dark:bg-[#0a0a0a] text-center">
+        <div className="max-w-md w-full bg-white dark:bg-[#161618] rounded-[24px] p-8 border border-black/[0.06] dark:border-white/[0.05] shadow-xl text-zinc-900 dark:text-white">
+          <div className="w-12 h-12 rounded-[16px] bg-rose-100 dark:bg-rose-500/10 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-6 h-6 text-rose-500" />
+          </div>
+          <h2 className="text-[17px] font-bold mb-2">Error de perfil</h2>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">
+            No se pudo encontrar un perfil de negocio asociado a esta cuenta. 
+            Por favor, intenta cerrar sesión e ingresar nuevamente.
+          </p>
+          <button
+            onClick={() => signOut()}
+            className="w-full h-11 bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 rounded-[12px] text-sm font-bold shadow-md transition-all"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Load client-specific token into metaAds cache
   useEffect(() => {
