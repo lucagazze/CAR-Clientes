@@ -39,8 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   );
   const hasRedes = !!(
     activeProfile?.fb_page_id ||
-    (activeProfile as any)?.ig_business_id ||
-    (activeProfile as any)?.ig_username
+    (activeProfile as any)?.ig_business_id
   );
 
   // Admins always see all pages (including unconfigured ones, shown dimmed)

@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/google-signin",
+      "destination": "/api/complete-contact"
+    },
+    {
       "source": "/api/klaviyo/:path*",
       "destination": "/api/klaviyo/[...path]"
     },

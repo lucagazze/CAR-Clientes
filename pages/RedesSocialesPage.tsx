@@ -74,7 +74,7 @@ export default function RedesSocialesPage() {
 
   // Loading and Error States
   const [igLoading, setIgLoading] = useState(true);
-  const [fbLoading, setFbLoading] = useState(true);
+  const [fbLoading, setFbLoading] = useState(false);
   const loading = activeTab === 'instagram' ? igLoading : fbLoading;
   const [error, setError] = useState<string | null>(null);
   const [fbError, setFbError] = useState<string | null>(null);
@@ -780,7 +780,12 @@ export default function RedesSocialesPage() {
 
   // Load Facebook independently on demand (SWR)
   useEffect(() => {
-    if (!clientId || !fbPageId || activeTab !== 'facebook') return;
+    if (!clientId) return;
+    if (!fbPageId) {
+      setFbLoading(false);
+      return;
+    }
+    if (activeTab !== 'facebook') return;
     if (fbProfile !== null) return; // Prevent refetching if already loaded for the current refreshKey
 
     let active = true;
@@ -913,7 +918,7 @@ export default function RedesSocialesPage() {
   };
 
   return (
-    <CenteredPageLoader isLoading={igLoading || fbLoading || authLoading}>
+    <CenteredPageLoader isLoading={loading || authLoading}>
     <div className="space-y-5 md:space-y-8 w-full pt-3 md:pt-6 animate-in fade-in duration-300">
       
       {/* Page Header */}
