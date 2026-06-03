@@ -349,19 +349,22 @@ export const db = {
           const { data: { session } } = await supabase.auth.getSession();
           const token = session?.access_token;
           
-          fetch('/api/log-activity', {
+          fetch('/api/admin-users', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
             body: JSON.stringify({
-              clientId,
-              action,
-              metadata: {
-                ...metadata,
-                ua: navigator.userAgent,
-                screen: `${window.innerWidth}x${window.innerHeight}`
+              action: 'logActivity',
+              payload: {
+                clientId,
+                activityAction: action,
+                metadata: {
+                  ...metadata,
+                  ua: navigator.userAgent,
+                  screen: `${window.innerWidth}x${window.innerHeight}`
+                }
               }
             })
           }).catch(err => console.error('Error logging activity request:', err));
