@@ -45,13 +45,23 @@ export default function LoginPage() {
     }
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const idToken = params.get('id_token');
+    if (idToken) {
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+      handleCredentialResponse({ credential: idToken });
+    }
+  }, []);
+
   const initializeGoogleSignIn = () => {
     if (!client_id || !window.google) return;
 
     window.google.accounts.id.initialize({
       client_id,
-      callback: handleCredentialResponse,
-      ux_mode: 'popup',
+      login_uri: `${window.location.origin}/api/google-signin`,
+      ux_mode: 'redirect',
     });
 
     if (containerRef.current) {
