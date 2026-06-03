@@ -62,7 +62,7 @@ AutoResizeTextarea.displayName = 'AutoResizeTextarea';
 
 export default function RedesSocialesPage() {
   const { isViewingAs, viewAsProfile } = useViewAs();
-  const { profile: authProfile, user } = useAuth();
+  const { profile: authProfile, user, loading: authLoading } = useAuth();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   const clientId = profile?.id;
 
@@ -967,6 +967,8 @@ export default function RedesSocialesPage() {
             <p className="text-[13px] text-red-600 dark:text-red-500 mt-1">{error}</p>
           </div>
         </div>
+      ) : (authLoading || (!clientId && !igId && !fbPageId)) ? (
+        <AppleLoader variant="page" />
       ) : !igId && !fbPageId ? (
         <div className="bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/60 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-4 shadow-sm">
           <Instagram className="w-12 h-12 text-zinc-400 mx-auto" />
@@ -982,7 +984,9 @@ export default function RedesSocialesPage() {
           {activeTab === 'instagram' && (
             <div className="space-y-6">
               
-              {!igId ? (
+              {authLoading || !clientId ? (
+                <AppleLoader variant="page" />
+              ) : !igId ? (
                 <div className="bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/60 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-4 shadow-sm animate-in fade-in duration-200">
                   <Instagram className="w-12 h-12 text-zinc-400 mx-auto" />
                   <h3 className="font-black text-zinc-800 dark:text-zinc-200 text-[18px]">Instagram no configurado</h3>
@@ -1245,8 +1249,10 @@ export default function RedesSocialesPage() {
           {/* TAB 2: FACEBOOK ORGANICO */}
           {activeTab === 'facebook' && (
             <div className="space-y-6">
-              
-              {!fbPageId ? (
+
+              {authLoading || !clientId ? (
+                <AppleLoader variant="page" />
+              ) : !fbPageId ? (
                 <div className="bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/60 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-4 shadow-sm animate-in fade-in duration-200">
                   <span className="w-12 h-12 text-zinc-400 mx-auto font-black text-4xl flex items-center justify-center">f</span>
                   <h3 className="font-black text-zinc-800 dark:text-zinc-200 text-[18px]">Facebook no configurado</h3>

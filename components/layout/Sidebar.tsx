@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag, 
-  AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare, Brain, Users, TrendingUp, Package,
+  AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare, Brain, Users, Package,
   Calculator, Coins, Target, Send, Zap
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -39,7 +39,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const metricasItems = [
     { path: '/tienda',           icon: ShoppingBag,   label: 'Tienda Online' },
-    { path: '/analisis-productos', icon: TrendingUp,  label: 'Análisis de Productos' },
     { path: '/captacion',        icon: BarChart2,     label: 'Captación' },
     { path: '/atencion',         icon: MessageCircle, label: 'Atención' },
     { path: '/retencion',        icon: Mail,          label: 'Retención' },

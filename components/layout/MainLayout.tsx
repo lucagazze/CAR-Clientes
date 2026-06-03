@@ -116,7 +116,6 @@ const ContactosPage      = lazyWithRetry(() => import('../../pages/ContactosPage
 const InformesPage       = lazyWithRetry(() => import('../../pages/InformesPage'));
 const CostosPage         = lazyWithRetry(() => import('../../pages/CostosPage'));
 const InventarioPage     = lazyWithRetry(() => import('../../pages/InventarioPage'));
-const AnalisisProductosPage = lazyWithRetry(() => import('../../pages/AnalisisProductosPage'));
 
 
 import { useViewAs } from '../../contexts/ViewAsContext';
@@ -217,7 +216,7 @@ export const MainLayout = () => {
               <Route path="/entradas" element={<EntradasPage />} />
               <Route path="/cerebro" element={<CerebroPage />} />
               <Route path="/inventario" element={<InventarioPage />} />
-              <Route path="/analisis-productos" element={<AnalisisProductosPage />} />
+              <Route path="/analisis-productos" element={<Navigate to="/tienda" replace />} />
               <Route path="/contactos" element={<ContactosPage />} />
               <Route path="/informes" element={<InformesPage />} />
               <Route 
