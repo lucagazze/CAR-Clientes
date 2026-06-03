@@ -431,7 +431,7 @@ export default function AdminPage() {
       };
       if (igId) { updateData.ig_business_id = igId; updateData.ig_username = igUsername; }
 
-      const { error } = await supabase.from('car_clients').update(updateData).eq('id', clientId);
+      const { error } = await supabaseAdmin.from('car_clients').update(updateData).eq('id', clientId);
       if (error) throw error;
 
       metaAds.setClientPageToken(page.id, page.access_token);
@@ -487,6 +487,12 @@ export default function AdminPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (editingClient && activeTab === "users") {
+      loadAccounts(editingClient.id, editingClient.user_id ?? null);
+    }
+  }, [editingClient?.id, activeTab]);
+
   const copy = (t: string, l: string) => {
     navigator.clipboard.writeText(t);
     showToast(l + " copiado ✓", "success");
@@ -508,7 +514,7 @@ export default function AdminPage() {
         });
       if (authErr) throw authErr;
 
-      const { error: dbErr } = await supabase.from("car_clients").insert({
+      const { error: dbErr } = await supabaseAdmin.from("car_clients").insert({
         user_id: auth.user.id,
         business_name: form.business_name,
         industry: form.industry || null,
@@ -530,7 +536,7 @@ export default function AdminPage() {
   };
 
   const toggleActive = async (c: ClientRow) => {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from("car_clients")
       .update({ active: !c.active })
       .eq("id", c.id);
@@ -998,7 +1004,8 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
     }
     if (editForm.klaviyo_api_key) {
       try {
-        await klaviyo.getDashboardData(editForm.klaviyo_api_key, '30days');
+        const today = new Date().toISOString().split("T")[0];
+        await klaviyo.getDashboardData(editForm.klaviyo_api_key, today, today);
         testResults.klaviyo = 'ok'; saveConnOk(editingClient.id, 'klaviyo');
       } catch { testResults.klaviyo = 'error'; saveConnErr(editingClient.id, 'klaviyo'); errors.push('Klaviyo'); }
     }
@@ -1032,7 +1039,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
         fb_page_access_token: editForm.fb_page_access_token || null,
       };
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from("car_clients")
         .update(corePayload)
         .eq("id", editingClient.id);
@@ -1067,9 +1074,9 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
             sort_order: order++,
           };
           if (link.id) {
-            await supabase.from("car_links").update(payload).eq("id", link.id);
+            await supabaseAdmin.from("car_links").update(payload).eq("id", link.id);
           } else {
-            await supabase.from("car_links").insert(payload);
+            await supabaseAdmin.from("car_links").insert(payload);
           }
         }
       }
