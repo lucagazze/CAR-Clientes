@@ -730,6 +730,9 @@ export default function DashboardPage() {
   const [currentStore, setCurrentStore] = useState<any>(null);
   const [prevStore, setPrevStore] = useState<any>(null);
   const [fetchingStore, setFetchingStore] = useState(true);
+  const [shopifyError, setShopifyError] = useState<string | null>(null);
+  const [metaError, setMetaError] = useState<string | null>(null);
+  const [klaviyoError, setKlaviyoError] = useState<string | null>(null);
   const [historical90d, setHistorical90d] = useState<any[]>([]);
   const [fetching90d, setFetching90d] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
@@ -887,8 +890,11 @@ export default function DashboardPage() {
       } catch (e) {}
     };
 
+    setShopifyError(null);
+    setMetaError(null);
+    setKlaviyoError(null);
+
     try {
-      await ensureMetaToken();
       const range = p === "custom" ? { since: s, until: u } : presetToRange(p);
       const prevRange = getPrevPeriod(range.since, range.until);
 
@@ -903,6 +909,7 @@ export default function DashboardPage() {
           return;
         }
         setFetchingStore(true);
+        setShopifyError(null);
         try {
           const [currStore, prevStoreData] = await Promise.all([
             ecommerce.getDashboardData(
@@ -920,13 +927,19 @@ export default function DashboardPage() {
               prevRange.until,
             ),
           ]);
+          if (!currStore || !prevStoreData) {
+            throw new Error("No se obtuvieron datos de Shopify. Verifique el dominio y token.");
+          }
           if (myFetchId !== fetchIdRef.current) return;
           setCurrentStore(currStore);
           setPrevStore(prevStoreData);
           updateCache('currentStore', currStore);
           updateCache('prevStore', prevStoreData);
-        } catch (err) {
+        } catch (err: any) {
           console.error("Store Fetch Error:", err);
+          if (myFetchId === fetchIdRef.current) {
+            setShopifyError(err?.message || "Error al conectar con Shopify");
+          }
         } finally {
           if (myFetchId === fetchIdRef.current) setFetchingStore(false);
         }
@@ -938,7 +951,9 @@ export default function DashboardPage() {
           return;
         }
         setFetchingMeta(true);
+        setMetaError(null);
         try {
+          await ensureMetaToken();
           const [rawDaily, rawPrevDaily] = await Promise.all([
             metaAds.getInsightsDaily(
               profile.meta_account_id,
@@ -955,6 +970,10 @@ export default function DashboardPage() {
               controller.signal,
             ),
           ]);
+
+          if (!rawDaily || !rawPrevDaily) {
+            throw new Error("No se obtuvieron insights de Meta Ads. Verifique el ID de cuenta.");
+          }
 
           const extractActions = (actions: any[], type: 'purchases' | 'leads' | 'messages') => {
             if (!actions || !Array.isArray(actions)) return 0;
@@ -1046,8 +1065,12 @@ export default function DashboardPage() {
           updateCache('metaDaily', padded);
           updateCache('prevMetaDaily', paddedPrev);
         } catch (err: any) {
-          if (err.name !== "AbortError")
+          if (err.name !== "AbortError") {
             console.error("Meta Fetch Error:", err);
+            if (myFetchId === fetchIdRef.current) {
+              setMetaError(err?.message || "Error al conectar con Meta Ads");
+            }
+          }
         } finally {
           if (myFetchId === fetchIdRef.current) setFetchingMeta(false);
         }
@@ -1059,6 +1082,7 @@ export default function DashboardPage() {
           return;
         }
         setFetchingKlaviyo(true);
+        setKlaviyoError(null);
         try {
           const [curr, prev] = await Promise.all([
             klaviyo.getDashboardData(
@@ -1072,13 +1096,19 @@ export default function DashboardPage() {
               prevRange.until,
             ),
           ]);
+          if (!curr || !prev) {
+            throw new Error("No se obtuvieron datos de Klaviyo. Verifique la API Key.");
+          }
           if (myFetchId !== fetchIdRef.current) return;
           setCurrentKlaviyo(curr);
           setPrevKlaviyo(prev);
           updateCache('currentKlaviyo', curr);
           updateCache('prevKlaviyo', prev);
-        } catch (err) {
+        } catch (err: any) {
           console.error("Klaviyo Fetch Error:", err);
+          if (myFetchId === fetchIdRef.current) {
+            setKlaviyoError(err?.message || "Error al conectar con Klaviyo");
+          }
         } finally {
           if (myFetchId === fetchIdRef.current) setFetchingKlaviyo(false);
         }
@@ -1600,11 +1630,19 @@ export default function DashboardPage() {
         {/* Shopify Section */}
         {(profile as any)?.ecommerce_platform && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-2 h-2 rounded-full bg-pink-500" />
-              <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                Tienda Online ({(profile as any).ecommerce_platform})
-              </h2>
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-pink-500" />
+                <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                  Tienda Online ({(profile as any).ecommerce_platform})
+                </h2>
+              </div>
+              {shopifyError && (
+                <div className="flex items-center gap-1.5 text-red-500 dark:text-red-400 text-[10px] font-semibold bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-full border border-red-200/50 dark:border-red-900/50">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{shopifyError}</span>
+                </div>
+              )}
             </div>
             <EmailLoader
               loading={fetchingStore}
@@ -1795,11 +1833,19 @@ export default function DashboardPage() {
         {/* Meta Ads Section */}
         {profile?.meta_account_id && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-2 h-2 rounded-full bg-blue-500" />
-              <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                Captación (Meta Ads)
-              </h2>
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                  Captación (Meta Ads)
+                </h2>
+              </div>
+              {metaError && (
+                <div className="flex items-center gap-1.5 text-red-500 dark:text-red-400 text-[10px] font-semibold bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-full border border-red-200/50 dark:border-red-900/50">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{metaError}</span>
+                </div>
+              )}
             </div>
             <EmailLoader
               loading={fetchingMeta}
@@ -2017,11 +2063,19 @@ export default function DashboardPage() {
         {/* Email Marketing Section */}
         {profile?.klaviyo_api_key && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                Retención (Email Marketing)
-              </h2>
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                  Retención (Email Marketing)
+                </h2>
+              </div>
+              {klaviyoError && (
+                <div className="flex items-center gap-1.5 text-red-500 dark:text-red-400 text-[10px] font-semibold bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-full border border-red-200/50 dark:border-red-900/50">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{klaviyoError}</span>
+                </div>
+              )}
             </div>
             <EmailLoader
               loading={fetchingKlaviyo}

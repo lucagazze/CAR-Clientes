@@ -350,7 +350,7 @@ export default function AdminUsersPage() {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-[9999] px-4 py-3 rounded-2xl shadow-xl text-[13px] font-bold text-white animate-in slide-in-from-bottom-4 duration-300 ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
+        <div className={`fixed top-16 right-5 sm:top-6 sm:right-6 z-[9999] px-4 py-3 rounded-2xl shadow-xl text-[13px] font-bold text-white animate-in slide-in-from-top-2 duration-300 ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
           {toast.msg}
         </div>
       )}

@@ -559,8 +559,19 @@ export default function AdminPage() {
     // Subscribe to changes in car_clients for live updates (last_login, etc)
     const channel = supabase
       .channel('car_clients_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'car_clients' }, () => {
-        load();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'car_clients' }, (payload: any) => {
+        if (payload.eventType === 'UPDATE') {
+          setClients(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
+        } else if (payload.eventType === 'INSERT') {
+          setClients(prev => {
+            if (prev.some(c => c.id === payload.new.id)) return prev;
+            return [...prev, payload.new].sort((a, b) => (a.business_name || '').localeCompare(b.business_name || ''));
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setClients(prev => prev.filter(c => c.id === payload.old.id));
+        } else {
+          load();
+        }
       })
       .subscribe();
 
