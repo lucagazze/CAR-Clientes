@@ -1264,7 +1264,7 @@ export default function EmailMarketingPage() {
 
   return (
     <CenteredPageLoader isLoading={loading}>
-    <div className="max-w-4xl mx-auto flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
+    <div className="w-full flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
       {/* Header */}
       <div className="mb-6 flex items-end justify-between">
         <div>
