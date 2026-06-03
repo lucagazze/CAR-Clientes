@@ -165,9 +165,9 @@ export default function AnalisisProductosPage() {
               { label: 'Pedidos totales', value: productAnalysis.reduce((s, p) => s + p.totalOrders, 0).toLocaleString(), color: 'text-zinc-900 dark:text-white' },
               { label: 'Héroes (3/3)', value: productAnalysis.filter(p => totalScore(p) === 3).length, color: 'text-emerald-600' },
             ].map(s => (
-              <div key={s.label} className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-xl p-4 text-center">
-                <p className={`text-[24px] font-black ${s.color}`}>{s.value}</p>
-                <p className="text-[10px] text-zinc-400 font-medium mt-0.5">{s.label}</p>
+              <div key={s.label} className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-xl p-3 sm:p-4 text-center">
+                <p className={`text-[20px] sm:text-[24px] font-black ${s.color}`}>{s.value}</p>
+                <p className="text-[9px] sm:text-[10px] text-zinc-400 font-medium mt-0.5 leading-tight">{s.label}</p>
               </div>
             ))}
           </div>
@@ -184,12 +184,27 @@ export default function AnalisisProductosPage() {
                     className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-xl cursor-pointer hover:border-pink-200 dark:hover:border-pink-900/50 hover:shadow-sm transition-all"
                     onClick={() => setModalProduct(p)}
                   >
-                    <div className="flex items-center gap-3 px-4 py-3.5">
-                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${score === 3 ? 'bg-emerald-500' : score === 2 ? 'bg-blue-500' : score === 1 ? 'bg-amber-500' : 'bg-zinc-300'}`} />
+                    <div className="flex items-center gap-2 px-3 py-3 sm:px-4">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${score === 3 ? 'bg-emerald-500' : score === 2 ? 'bg-blue-500' : score === 1 ? 'bg-amber-500' : 'bg-zinc-300'}`} />
                       <div className="flex-1 min-w-0">
-                        <span className="text-[13px] font-bold text-zinc-900 dark:text-white">{p.name}</span>
-                        <span className="text-[11px] text-zinc-400 font-medium ml-2">{p.totalOrders} pedidos</span>
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <span className="text-[13px] font-bold text-zinc-900 dark:text-white leading-tight">{p.name}</span>
+                          <span className="text-[10px] text-zinc-400 font-medium whitespace-nowrap">{p.totalOrders} ped.</span>
+                        </div>
+                        {/* Mobile: stats in one compact line */}
+                        <div className="flex sm:hidden items-center gap-1.5 mt-1 flex-wrap">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeCls(scoreEP(p.entryPointPct))}`}>
+                            EP {p.entryPointPct}%
+                          </span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeCls(scoreSP(p.secondPurchasePct))}`}>
+                            {p.secondPurchasePct}% vuelven
+                          </span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgeCls(scoreRD(p.repurchaseDays))}`}>
+                            {p.repurchaseDays > 0 ? `${p.repurchaseDays}d` : '—'}
+                          </span>
+                        </div>
                       </div>
+                      {/* Desktop: full labels */}
                       <div className="hidden sm:flex items-center gap-2 shrink-0">
                         <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badgeCls(scoreEP(p.entryPointPct))}`}>
                           {p.entryPointPct}% primer pedido
@@ -213,21 +228,21 @@ export default function AnalisisProductosPage() {
 
       {/* Product Modal */}
       {modalProduct && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setModalProduct(null)}>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4" onClick={() => setModalProduct(null)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-2xl max-w-[680px] w-full flex flex-col max-h-[85vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-[15px] font-black text-zinc-900 dark:text-white">{modalProduct.name}</h3>
+          <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-t-2xl sm:rounded-2xl max-w-[680px] w-full flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 sm:p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[14px] sm:text-[15px] font-black text-zinc-900 dark:text-white leading-tight">{modalProduct.name}</h3>
                 <p className="text-[11px] text-zinc-400 mt-0.5">{modalProduct.totalOrders} pedidos · Precio prom: ${modalProduct.avgPrice?.toFixed(2)}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <TotalBadge score={totalScore(modalProduct)} />
                 <button onClick={() => setModalProduct(null)} className="p-1.5 text-zinc-400 hover:text-zinc-700 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"><X className="w-4 h-4" /></button>
               </div>
             </div>
-            <div className="overflow-y-auto p-5 space-y-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="overflow-y-auto p-4 sm:p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: 'Primer Pedido', value: `${modalProduct.entryPointPct}%`, sub: `${modalProduct.firstPurchases} primeras compras`, s: scoreEP(modalProduct.entryPointPct), q: '¿Con qué frecuencia es la primera compra de un cliente nuevo?' },
                   { label: 'Vuelven a Comprar', value: `${modalProduct.secondPurchasePct}%`, sub: 'de quienes lo compraron primero', s: scoreSP(modalProduct.secondPurchasePct), q: '¿Qué tan bien retiene clientes este producto?' },

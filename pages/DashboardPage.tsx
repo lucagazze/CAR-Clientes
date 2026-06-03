@@ -450,8 +450,8 @@ const MetricDetailChart = ({ label, data = [], prevData = [], color }: any) => {
               stroke={chartColor}
               strokeWidth={hoveredLine ? 1 : 3}
               strokeOpacity={hoveredLine ? 0.1 : 1}
-              fillOpacity={hoveredLine ? 0.02 : 1}
-              fill={`url(#${gradientId})`}
+              fillOpacity={0}
+              fill="none"
               dot={(p: any) =>
                 p.value > 0 ? (
                   <circle
