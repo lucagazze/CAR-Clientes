@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag, 
   AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare, Brain, Users, Package,
-  Calculator, Coins, Target, Send, Zap
+  Calculator, Coins, Target, Send, Zap, Building2
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useViewAs } from '../../contexts/ViewAsContext';
@@ -43,39 +43,43 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     (activeProfile as any)?.ig_username
   );
 
-  // Sidebar Menu Items — filtered by connected channels
+  // Admins always see all pages (including unconfigured ones, shown dimmed)
+  const isAdmin = !!(profile?.is_admin);
+
+  // Sidebar Menu Items
   const principalItems = [
-    { path: '/',               icon: Home,          label: 'Inicio',          show: true },
-    { path: '/mensajeria',     icon: MessageSquare, label: 'Mensajería',      show: hasChatwoot, badge: unreadCount },
-    { path: '/comentarios',    icon: MessageCircle, label: 'Comentarios',     show: hasChatwoot, badge: pendingCommentsCount },
-    { path: '/redes-sociales', icon: Instagram,     label: 'Redes Sociales',  show: hasRedes },
-    { path: '/contactos',      icon: Users,         label: 'Contactos',       show: hasChatwoot },
-    { path: '/inventario',     icon: Package,       label: 'Inventario',      show: hasEcommerce },
-  ].filter(i => i.show);
+    { path: '/',               icon: Home,          label: 'Inicio',          configured: true },
+    { path: '/mensajeria',     icon: MessageSquare, label: 'Mensajería',      configured: hasChatwoot, badge: unreadCount },
+    { path: '/comentarios',    icon: MessageCircle, label: 'Comentarios',     configured: hasChatwoot, badge: pendingCommentsCount },
+    { path: '/redes-sociales', icon: Instagram,     label: 'Redes Sociales',  configured: hasRedes },
+    { path: '/contactos',      icon: Users,         label: 'Contactos',       configured: hasChatwoot },
+    { path: '/inventario',     icon: Package,       label: 'Inventario',      configured: hasEcommerce },
+  ].filter(i => isAdmin || i.configured);
 
   const metricasItems = [
-    { path: '/tienda',    icon: ShoppingBag,   label: 'Tienda Online', show: hasEcommerce },
-    { path: '/captacion', icon: BarChart2,     label: 'Captación',     show: hasMeta },
-    { path: '/atencion',  icon: MessageCircle, label: 'Atención',      show: hasChatwoot },
-    { path: '/retencion', icon: Mail,          label: 'Retención',     show: hasKlaviyo },
-  ].filter(i => i.show);
+    { path: '/tienda',    icon: ShoppingBag,   label: 'Tienda Online', configured: hasEcommerce },
+    { path: '/captacion', icon: BarChart2,     label: 'Captación',     configured: hasMeta },
+    { path: '/atencion',  icon: MessageCircle, label: 'Atención',      configured: hasChatwoot },
+    { path: '/retencion', icon: Mail,          label: 'Retención',     configured: hasKlaviyo },
+  ].filter(i => isAdmin || i.configured);
 
   const activosItems = [
-    { path: '/admin/meta',      icon: Target, label: 'Creativos Ads',    show: hasMeta },
-    { path: '/email-marketing', icon: Send,   label: 'Email Marketing',  show: hasKlaviyo },
-  ].filter(i => i.show);
+    { path: '/admin/meta',      icon: Target, label: 'Creativos Ads',    configured: hasMeta },
+    { path: '/email-marketing', icon: Send,   label: 'Email Marketing',  configured: hasKlaviyo },
+  ].filter(i => isAdmin || i.configured);
 
   const configuracionItems = [
-    { path: '/links',            icon: Link2,         label: 'Mis Accesos' },
-    { path: '/cerebro',          icon: Brain,         label: 'Cerebro de IA' },
+    { path: '/links',            icon: Link2,  label: 'Mis Accesos',    configured: true },
+    { path: '/cerebro',          icon: Brain,  label: 'Cerebro de IA',  configured: true },
   ];
 
   const adminItems = [
-    { path: '/admin',                  icon: Shield,   label: 'Gestión Clientes' },
-    { path: '/admin/actividad',        icon: Activity, label: 'Monitoreo Actividad' },
-    { path: '/admin/emails',           icon: Library,  label: 'Email Library' },
-    { path: '/admin/email-monitor',    icon: Workflow, label: 'Email Monitor' },
-    { path: '/costos',                 icon: Coins,    label: 'Costos' },
+    { path: '/admin',                  icon: Building2, label: 'Gestión Negocios' },
+    { path: '/admin/usuarios',         icon: Users,     label: 'Gestión Usuarios' },
+    { path: '/admin/actividad',        icon: Activity,  label: 'Monitoreo Actividad' },
+    { path: '/admin/emails',           icon: Library,   label: 'Email Library' },
+    { path: '/admin/email-monitor',    icon: Workflow,  label: 'Email Monitor' },
+    { path: '/costos',                 icon: Coins,     label: 'Costos' },
   ];
 
   const isActivePath = (itemPath: string) => {
@@ -104,26 +108,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     setIsOpen(false);
   };
 
-  const renderItem = (item: { path: string; icon: any; label: string; badge?: number }) => {
+  const renderItem = (item: { path: string; icon: any; label: string; badge?: number; configured?: boolean }) => {
     const Icon = item.icon;
     const isActive = isActivePath(item.path);
     const badgeCount = (item.badge ?? 0);
+    const isUnconfigured = isAdmin && item.configured === false;
     return (
       <Link
         key={item.path}
         to={item.path}
-        title={item.label}
+        title={isUnconfigured ? `${item.label} (no configurado)` : item.label}
         onClick={() => window.innerWidth < 768 && setIsOpen(false)}
         className={`group flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-bold transition-all duration-150 active:scale-[0.98] ${
           isActive
             ? 'bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 shadow-md shadow-black/10 dark:shadow-white/5'
-            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.05] hover:shadow-sm'
+            : isUnconfigured
+              ? 'text-zinc-350 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/[0.03] opacity-50'
+              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.05] hover:shadow-sm'
         }`}
       >
         <Icon className={`w-4 h-4 flex-shrink-0 transition-all duration-150 ${
           isActive
             ? 'text-white dark:text-zinc-950'
-            : 'text-zinc-450 dark:text-zinc-500 group-hover:text-zinc-800 dark:group-hover:text-zinc-100 group-hover:scale-110'
+            : isUnconfigured
+              ? 'text-zinc-350 dark:text-zinc-600'
+              : 'text-zinc-450 dark:text-zinc-500 group-hover:text-zinc-800 dark:group-hover:text-zinc-100 group-hover:scale-110'
         }`} />
         <span className="tracking-tight flex-1">{item.label}</span>
         {/* Unread badge */}
@@ -132,10 +141,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
             {badgeCount > 99 ? '99+' : badgeCount}
           </span>
         )}
+        {/* Unconfigured indicator for admins */}
+        {isUnconfigured && !isActive && (
+          <span className="flex-shrink-0 w-3.5 h-3.5 text-zinc-300 dark:text-zinc-700">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+        )}
         {isActive && !badgeCount && <div className="w-1.5 h-1.5 rounded-full bg-violet-500 dark:bg-violet-400" />}
       </Link>
     );
   };
+
 
   return (
     <>

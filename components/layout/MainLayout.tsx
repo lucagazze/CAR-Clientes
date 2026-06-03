@@ -104,6 +104,7 @@ const TiendaPage         = lazyWithRetry(() => import('../../pages/TiendaPage'))
 const LinksPage          = lazyWithRetry(() => import('../../pages/LinksPage'));
 const ReportsPage        = lazyWithRetry(() => import('../../pages/ReportsPage'));
 const AdminPage          = lazyWithRetry(() => import('../../pages/AdminPage'));
+const AdminUsersPage     = lazyWithRetry(() => import('../../pages/AdminUsersPage'));
 const MetaAdsPage        = lazyWithRetry(() => import('../../pages/MetaAdsPage'));
 const ActivityPage       = lazyWithRetry(() => import('../../pages/ActivityPage'));
 const EmailLibraryPage   = lazyWithRetry(() => import('../../pages/EmailLibraryPage'));
@@ -312,6 +313,7 @@ export const MainLayout = () => {
               <Route path="/links" element={<LinksPage />} />
               <Route path="/reportes" element={<ReportsPage />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin/usuarios" element={profile?.is_admin && !isViewingAs ? <AdminUsersPage /> : <Navigate to="/" replace />} />
               <Route path="/admin/actividad" element={<ActivityPage />} />
               <Route path="/admin/meta" element={<MetaAdsPage />} />
               <Route path="/admin/emails" element={<EmailLibraryPage />} />
