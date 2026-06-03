@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
-import { Package, ShoppingBag, ArrowUpRight, AlertTriangle, Search, ChevronDown } from 'lucide-react';
+import { Package, ShoppingBag, ArrowUpRight, AlertTriangle, Search, ChevronDown, TrendingUp } from 'lucide-react';
 import { ecommerce } from '../services/ecommerce';
+import { presetToRange } from '../services/metaAds';
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -52,6 +53,10 @@ export default function InventarioPage() {
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
+  // Top products by orders (last 30 days)
+  const [topProducts, setTopProducts] = useState<{ title: string; quantity: number }[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
   const getInventoryUrl = () => {
     if (platform === 'shopify' && shopifyDomain) return { url: `https://${shopifyDomain}/admin/products`, label: `Abrir en Shopify` };
     if (platform === 'wordpress' && wordpressUrl) return { url: `${wordpressUrl}/wp-admin/edit.php?post_type=product`, label: `Abrir en WooCommerce` };
@@ -69,6 +74,21 @@ export default function InventarioPage() {
       .then(setProducts)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+  }, [platform, shopifyDomain, shopifyToken]);
+
+  useEffect(() => {
+    if (platform !== 'shopify' || !shopifyDomain || !shopifyToken) return;
+    setLoadingOrders(true);
+    const range = presetToRange('last_30d');
+    ecommerce.getDashboardData(platform, shopifyDomain, shopifyToken, range.since, range.until)
+      .then(data => {
+        const top = (data?.topProducts || [])
+          .slice(0, 10)
+          .map((p: any) => ({ title: p.title, quantity: p.quantity }));
+        setTopProducts(top);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingOrders(false));
   }, [platform, shopifyDomain, shopifyToken]);
 
   // Stats per variant (flat) for filter counts
@@ -141,6 +161,43 @@ export default function InventarioPage() {
         <p className="text-[11px] text-zinc-400 text-center">Se abre en una nueva pestaña. Iniciá sesión en tu tienda si todavía no lo hiciste.</p>
       ) : (
         <>
+          {/* Top products last 30 days */}
+          {(loadingOrders || topProducts.length > 0) && (
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+                <TrendingUp className="w-4 h-4 text-emerald-500" />
+                <span className="text-[13px] font-bold text-zinc-900 dark:text-white">Más pedidos — últimos 30 días</span>
+                <span className="text-[10px] text-zinc-400 ml-1">qué reponer primero</span>
+              </div>
+              {loadingOrders ? (
+                <div className="p-4 space-y-2">
+                  {[...Array(5)].map((_, i) => <div key={i} className="h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />)}
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                  {topProducts.map((p, i) => {
+                    const maxQty = topProducts[0]?.quantity || 1;
+                    const width = Math.round((p.quantity / maxQty) * 100);
+                    return (
+                      <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="text-[11px] font-black text-zinc-400 w-5 shrink-0">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[12px] font-semibold text-zinc-900 dark:text-white truncate">{p.title}</p>
+                            <span className="text-[12px] font-black text-emerald-600 shrink-0">{p.quantity} ped.</span>
+                          </div>
+                          <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${width}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Filter chips */}
           {!loading && allVariants.length > 0 && (
             <div className="flex gap-2 flex-wrap">

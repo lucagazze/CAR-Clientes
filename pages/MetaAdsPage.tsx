@@ -200,11 +200,11 @@ export default function MetaAdsPage() {
   const [resolvingIds, setResolvingIds] = useState<Record<string, boolean>>({});
 
   // Date picker state
-  const [activePreset, setActivePreset] = useState<string>('last_28d');
+  const [activePreset, setActivePreset] = useState<string>('last_14d');
   const [activeSince, setActiveSince] = useState(daysAgo(28));
   const [activeUntil, setActiveUntil] = useState(today());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [pendingPreset, setPendingPreset] = useState<string>('last_28d');
+  const [pendingPreset, setPendingPreset] = useState<string>('last_14d');
   const [pendingSince, setPendingSince] = useState(daysAgo(28));
   const [pendingUntil, setPendingUntil] = useState(today());
   const [hovering, setHovering] = useState<string | null>(null);
@@ -406,21 +406,20 @@ export default function MetaAdsPage() {
             <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
           </button>
           {showDatePicker && (
-            <div className="absolute right-0 top-full mt-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-2xl z-50 flex overflow-hidden animate-in slide-in-from-top-2 fade-in duration-150">
-              <div className="w-[140px] border-r border-zinc-100 dark:border-zinc-800 p-2 flex flex-col gap-0.5">
+            <div className="absolute right-0 top-full mt-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-2xl z-50 flex flex-col sm:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-150 max-w-[calc(100vw-2rem)] w-[min(430px,calc(100vw-2rem))]">
+              {/* Presets — horizontal scroll on mobile, vertical list on sm+ */}
+              <div className="sm:w-[140px] border-b sm:border-b-0 sm:border-r border-zinc-100 dark:border-zinc-800 p-2 flex flex-row sm:flex-col gap-0.5 overflow-x-auto sm:overflow-x-visible no-scrollbar">
                 {PRESETS.map(p => (
-                  <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id); setPendingSince(r.since); setPendingUntil(r.until); }} className={`text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${pendingPreset === p.id ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
+                  <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id); setPendingSince(r.since); setPendingUntil(r.until); }} className={`flex-shrink-0 sm:flex-shrink text-left px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap ${pendingPreset === p.id ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
                 ))}
               </div>
               <div className="p-4 flex flex-col gap-4">
-                <div className="flex gap-6">
-                  <MiniCalMeta year={calYear} month={calMonth} since={pendingSince} until={pendingUntil} hovering={hovering}
-                    onDay={(iso: string) => { setPendingPreset('custom'); if (!pendingSince || (pendingSince && pendingUntil)) { setPendingSince(iso); setPendingUntil(''); } else { setPendingUntil(iso < pendingSince ? (setPendingSince(iso), pendingSince) : iso); } }}
-                    onHover={setHovering}
-                    onPrev={() => { if (calMonth === 0) { setCalYear(calYear - 1); setCalMonth(11); } else setCalMonth(calMonth - 1); }}
-                    onNext={() => { if (calMonth === 11) { setCalYear(calYear + 1); setCalMonth(0); } else setCalMonth(calMonth + 1); }}
-                  />
-                </div>
+                <MiniCalMeta year={calYear} month={calMonth} since={pendingSince} until={pendingUntil} hovering={hovering}
+                  onDay={(iso: string) => { setPendingPreset('custom'); if (!pendingSince || (pendingSince && pendingUntil)) { setPendingSince(iso); setPendingUntil(''); } else { setPendingUntil(iso < pendingSince ? (setPendingSince(iso), pendingSince) : iso); } }}
+                  onHover={setHovering}
+                  onPrev={() => { if (calMonth === 0) { setCalYear(calYear - 1); setCalMonth(11); } else setCalMonth(calMonth - 1); }}
+                  onNext={() => { if (calMonth === 11) { setCalYear(calYear + 1); setCalMonth(0); } else setCalMonth(calMonth + 1); }}
+                />
                 <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
                   <button onClick={() => setShowDatePicker(false)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
                   <button onClick={handleApplyDate} className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 transition-colors">Aplicar</button>
