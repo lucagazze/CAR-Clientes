@@ -783,7 +783,18 @@ export default function RedesSocialesPage() {
     if (fbProfile !== null) return; // Prevent refetching if already loaded for the current refreshKey
 
     let active = true;
-    const hasCache = sessionStorage.getItem(`fb_cache_${clientId}`);
+    const cacheKey = `fb_cache_${clientId}`;
+    const hasCache = sessionStorage.getItem(cacheKey);
+
+    // Restore from cache immediately to prevent flash on tab switch
+    if (hasCache) {
+      try {
+        const parsed = JSON.parse(hasCache);
+        if (parsed.fbProfile) setFbProfile(parsed.fbProfile);
+        if (parsed.fbMedia) setFbMedia(parsed.fbMedia);
+        if (parsed.fbNextCursor) setFbNextCursor(parsed.fbNextCursor);
+      } catch (e) { /* ignore parse error */ }
+    }
     setFbLoading(!hasCache);
     setFbError(null);
     setFbNextCursor(null);
@@ -800,7 +811,7 @@ export default function RedesSocialesPage() {
       setFbNextCursor(nextCursor);
 
       // Update Cache
-      sessionStorage.setItem(`fb_cache_${clientId}`, JSON.stringify({
+      sessionStorage.setItem(cacheKey, JSON.stringify({
         fbProfile: profileRes,
         fbMedia: media,
         fbNextCursor: nextCursor
