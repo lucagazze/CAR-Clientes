@@ -49,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const principalItems = [
     { path: '/',               icon: Home,          label: 'Inicio',          configured: true },
     { path: '/mensajeria',     icon: MessageSquare, label: 'Mensajería',      configured: hasChatwoot, badge: unreadCount },
-    { path: '/comentarios',    icon: MessageCircle, label: 'Comentarios',     configured: hasChatwoot, badge: pendingCommentsCount },
+    { path: '/comentarios',    icon: MessageCircle, label: 'Comentarios',     configured: hasRedes, badge: pendingCommentsCount },
     { path: '/redes-sociales', icon: Instagram,     label: 'Redes Sociales',  configured: hasRedes },
     { path: '/contactos',      icon: Users,         label: 'Contactos',       configured: hasChatwoot },
     { path: '/inventario',     icon: Package,       label: 'Inventario',      configured: hasEcommerce },
