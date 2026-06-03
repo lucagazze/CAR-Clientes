@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
 import EmailLoader from '../components/ui/EmailLoader';
+import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
 const BLUE = '#3b82f6';
 const GREEN = '#10b981';
@@ -435,6 +436,7 @@ export default function CaptacionPage() {
   const gradientId = `grad-${expandedMetric}`;
 
   return (
+    <CenteredPageLoader isLoading={loading}>
     <div className="w-full space-y-8 print:space-y-6 print:p-0 pt-4 md:pt-6 print:max-w-none">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
@@ -833,5 +835,6 @@ export default function CaptacionPage() {
 
       <style>{`@media print { body { background: white !important; } .print\\:hidden { display: none !important; } @page { margin: 1cm; size: A4; } }`}</style>
     </div>
+    </CenteredPageLoader>
   );
 }

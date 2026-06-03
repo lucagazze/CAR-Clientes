@@ -10,6 +10,7 @@ import {
   ChevronDown, AlertCircle, Info, X, CheckCircle, Circle, ChevronRight
 } from 'lucide-react';
 import { AppleLoader } from '../components/ui/AppleLoader';
+import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
 const Pill = ({ active, label, icon: Icon }: { active: boolean; label: string; icon: any }) => (
   <div className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg ${active ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400' : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-400'}`}>
@@ -281,9 +282,8 @@ export default function CerebroPage() {
   const contextScore = sections.filter(s => s.value).length;
   const contextPct = Math.round((contextScore / sections.length) * 100);
 
-  if (loading) return <AppleLoader variant="page" />;
-
   return (
+    <CenteredPageLoader isLoading={loading}>
     <div className="w-full pt-4 pb-20 md:pt-6 px-4 md:px-0 animate-fade-in">
 
       {/* ── Header ── */}
@@ -760,5 +760,6 @@ export default function CerebroPage() {
         </div>
       )}
     </div>
+    </CenteredPageLoader>
   );
 }

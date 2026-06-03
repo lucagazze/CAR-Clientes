@@ -10,6 +10,7 @@ import { db } from '../services/db';
 import { supabaseAdmin } from '../services/supabase';
 import EmailLoader from '../components/ui/EmailLoader';
 import { AppleLoader } from '../components/ui/AppleLoader';
+import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
 interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   value: string;
@@ -719,6 +720,7 @@ export default function MensajesDMPage() {
 
   // ── Render ─────────────────────────────────────────────────────
   return (
+    <CenteredPageLoader isLoading={loading}>
     <div className="flex flex-col h-full w-full max-w-none animate-in fade-in duration-300">
 
       {/* Header */}
@@ -1061,5 +1063,6 @@ export default function MensajesDMPage() {
         </div>
       )}
     </div>
+    </CenteredPageLoader>
   );
 }

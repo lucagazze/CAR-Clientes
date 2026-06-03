@@ -11,6 +11,7 @@ import { db } from '../services/db';
 import { supabaseAdmin } from '../services/supabase';
 import { TopLoadingBar } from '../components/ui/TopLoadingBar';
 import { AppleLoader } from '../components/ui/AppleLoader';
+import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 import SmoothImage from '../components/ui/SmoothImage';
 
 interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -899,6 +900,7 @@ export default function ComentariosPage() {
   }
 
   return (
+    <CenteredPageLoader isLoading={loading}>
     <div className="space-y-6 w-full pt-6 px-4 md:px-6 lg:px-8 animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-4">
@@ -1415,5 +1417,6 @@ export default function ComentariosPage() {
         </div>
       )}
     </div>
+    </CenteredPageLoader>
   );
 }
