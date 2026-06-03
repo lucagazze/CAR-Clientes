@@ -81,6 +81,13 @@ export const chatwoot = {
     return proxy(url, token, path);
   },
 
+  async getHeatmapData(url: string, token: string, since: number, until: number) {
+    const accountId = await chatwoot.getAccountId(url, token);
+    // group_by=hour returns one data point per hour with its timestamp
+    const path = `/api/v2/accounts/${accountId}/reports?metric=conversations_count&since=${since}&until=${until}&type=account&group_by=hour`;
+    return proxy(url, token, path);
+  },
+
   async getMessages(url: string, token: string, conversationId: number, before?: number) {
     const accountId = await chatwoot.getAccountId(url, token);
     const qs = before ? `?before=${before}` : '';

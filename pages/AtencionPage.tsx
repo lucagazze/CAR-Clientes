@@ -135,8 +135,8 @@ export default function AtencionPage() {
   const [inboxBreakdowns, setInboxBreakdowns] = useState<any[]>([]);
   const [loadingBreakdowns, setLoadingBreakdowns] = useState(false);
 
-  // Traffic heatmap (conversations by day-of-week × hour)
-  const [heatmapData, setHeatmapData] = useState<number[][]>([]); // [dayOfWeek 0-6][hour 0-23]
+  // Traffic heatmap: rows = last 7 days (date strings), cols = 24h
+  const [heatmapRows, setHeatmapRows] = useState<{ date: string; label: string; hours: number[] }[]>([]);
   const [loadingHeatmap, setLoadingHeatmap] = useState(false);
 
   useEffect(() => {
@@ -365,21 +365,39 @@ export default function AtencionPage() {
       if (!profile?.chatwoot_url || !profile?.chatwoot_token || loading) return;
       setLoadingHeatmap(true);
       try {
-        const untilSecs = Math.floor(Date.now() / 1000);
+        const now = Date.now();
+        const untilSecs = Math.floor(now / 1000);
         const sinceSecs = untilSecs - 7 * 24 * 3600;
-        const data = await chatwoot.getReportsTimeSeries(
-          profile.chatwoot_url, profile.chatwoot_token,
-          'conversations_count', sinceSecs, untilSecs, 'account'
+
+        const data = await chatwoot.getHeatmapData(
+          profile.chatwoot_url, profile.chatwoot_token, sinceSecs, untilSecs
         );
-        // Build 7×24 grid [dayOfWeek][hour]
-        const grid: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0));
+
+        // Build rows keyed by local date string YYYY-MM-DD
+        const byDate: Record<string, number[]> = {};
+        const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
         (data || []).forEach((pt: any) => {
-          const d = new Date((pt.timestamp || pt.ts || 0) * 1000);
-          const dow = d.getDay(); // 0=Sun..6=Sat
+          const ts = pt.timestamp ?? pt.ts ?? 0;
+          const d = new Date(ts * 1000);
+          const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          if (!byDate[dateKey]) byDate[dateKey] = new Array(24).fill(0);
           const hour = d.getHours();
-          grid[dow][hour] += (pt.value ?? pt.count ?? 0);
+          byDate[dateKey][hour] += (pt.value ?? pt.count ?? 0);
         });
-        if (!cancelled) setHeatmapData(grid);
+
+        // Build last 7 days in order (oldest → newest)
+        const rows: { date: string; label: string; hours: number[] }[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(now - i * 24 * 3600 * 1000);
+          const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const dayName = DAYS_ES[d.getDay()];
+          const label = `${dayName} ${d.getDate()} ${MONTHS_ES[d.getMonth()]}`;
+          rows.push({ date: dateKey, label, hours: byDate[dateKey] || new Array(24).fill(0) });
+        }
+
+        if (!cancelled) setHeatmapRows(rows);
       } catch (e) {
         console.error('Heatmap error:', e);
       } finally {
@@ -728,9 +746,9 @@ export default function AtencionPage() {
           )}
 
           {/* Traffic Heatmap */}
-          {(loadingHeatmap || heatmapData.length > 0) && (() => {
-            const DAYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-            const maxVal = heatmapData.length > 0 ? Math.max(1, ...heatmapData.flat()) : 1;
+          {(loadingHeatmap || heatmapRows.length > 0) && (() => {
+            const allVals = heatmapRows.flatMap(r => r.hours);
+            const maxVal = Math.max(1, ...allVals);
             return (
               <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-4">
@@ -750,17 +768,17 @@ export default function AtencionPage() {
                   <div className="overflow-x-auto">
                     <div className="min-w-[560px]">
                       {/* Hour labels */}
-                      <div className="flex ml-10 mb-1">
+                      <div className="flex ml-[100px] mb-1">
                         {Array.from({ length: 24 }, (_, h) => (
                           <div key={h} className="flex-1 text-center text-[9px] text-zinc-400 font-medium">{h}</div>
                         ))}
                       </div>
-                      {/* Rows */}
-                      {DAYS_ES.map((day, dow) => (
-                        <div key={dow} className="flex items-center mb-1">
-                          <div className="w-10 text-[10px] text-zinc-400 font-medium shrink-0">{day}</div>
+                      {/* Rows — one per actual date */}
+                      {heatmapRows.map((row) => (
+                        <div key={row.date} className="flex items-center mb-1">
+                          <div className="w-[100px] text-[10px] text-zinc-400 font-medium shrink-0 pr-2 text-right leading-tight">{row.label}</div>
                           {Array.from({ length: 24 }, (_, h) => {
-                            const val = heatmapData[dow]?.[h] ?? 0;
+                            const val = row.hours[h] ?? 0;
                             const intensity = val / maxVal;
                             const bg = val === 0
                               ? 'bg-zinc-100 dark:bg-zinc-800/50'
@@ -775,7 +793,7 @@ export default function AtencionPage() {
                               <div
                                 key={h}
                                 className={`flex-1 mx-px h-7 rounded-sm ${bg} cursor-default transition-opacity hover:opacity-80`}
-                                title={`${day} ${h}:00 — ${val} conv.`}
+                                title={`${row.label} ${h}:00 — ${val} conv.`}
                               />
                             );
                           })}
