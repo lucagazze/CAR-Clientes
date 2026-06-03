@@ -287,26 +287,29 @@ export default function CerebroPage() {
     <div className="w-full pt-4 pb-20 md:pt-6 px-4 md:px-0 animate-fade-in">
 
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4 min-w-0">
+          {/* Title */}
+          <div className="flex items-center gap-2 shrink-0">
             <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
               <Brain className="w-5 h-5 text-violet-500" />
             </div>
-            <h1 className="text-[22px] font-black text-zinc-900 dark:text-white tracking-tight">Cerebro de IA</h1>
-            {isViewingAs && <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400 text-[9px] font-black uppercase"><ShieldAlert className="w-2.5 h-2.5" />Admin</span>}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-[22px] font-black text-zinc-900 dark:text-white tracking-tight">Cerebro de IA</h1>
+                {isViewingAs && <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400 text-[9px] font-black uppercase"><ShieldAlert className="w-2.5 h-2.5" />Admin</span>}
+              </div>
+              <p className="text-[12px] text-zinc-400 font-medium">Todo lo que sabe la IA sobre tu negocio — alimenta comentarios, mensajería y más.</p>
+            </div>
           </div>
-          <p className="text-[12px] text-zinc-400 font-medium ml-11">Todo lo que sabe la IA sobre tu negocio — alimenta comentarios, mensajería y más.</p>
-        </div>
 
-        <div className="flex items-center gap-3">
-          {/* Context score — clickable modal (izquierda) */}
+          {/* Context score — clickable modal (junto al título) */}
           <button
             onClick={() => setShowContextModal(true)}
-            className="flex items-center gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 shadow-sm hover:border-violet-300 dark:hover:border-violet-700 transition-all"
+            className="hidden sm:flex items-center gap-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 shadow-sm hover:border-violet-300 dark:hover:border-violet-700 transition-all shrink-0"
           >
-            <div className="relative w-10 h-10">
-              <svg viewBox="0 0 36 36" className="w-10 h-10 -rotate-90">
+            <div className="relative w-9 h-9">
+              <svg viewBox="0 0 36 36" className="w-9 h-9 -rotate-90">
                 <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e4e4e7" strokeWidth="3" />
                 <circle cx="18" cy="18" r="15.9" fill="none" stroke="#8b5cf6" strokeWidth="3"
                   strokeDasharray={`${contextPct} ${100 - contextPct}`} strokeLinecap="round" />
@@ -317,21 +320,21 @@ export default function CerebroPage() {
               <p className="text-[11px] font-black text-zinc-700 dark:text-zinc-300">Contexto IA</p>
               <p className="text-[10px] text-zinc-400">{contextScore}/{sections.length} secciones</p>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
+            <ChevronRight className="w-3 h-3 text-zinc-400" />
           </button>
-
-          {/* Save button at top (derecha) */}
-          {activeTab === 'identidad' && (
-            <button
-              onClick={() => handleSaveSettings()}
-              disabled={saving}
-              className={`flex items-center gap-2 px-4 py-2 disabled:opacity-50 text-white rounded-xl text-[12px] font-black shadow-md transition-all ${savedOk ? 'bg-emerald-500 shadow-emerald-200 dark:shadow-none' : 'bg-violet-600 hover:bg-violet-700 shadow-violet-200 dark:shadow-none'}`}
-            >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedOk ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-              {saving ? 'Guardando…' : savedOk ? '¡Guardado!' : 'Guardar'}
-            </button>
-          )}
         </div>
+
+        {/* Save button at top (derecha) */}
+        {activeTab === 'identidad' && (
+          <button
+            onClick={() => handleSaveSettings()}
+            disabled={saving}
+            className={`flex items-center gap-2 px-5 py-2.5 disabled:opacity-50 text-white rounded-xl text-[13px] font-black shadow-md transition-all shrink-0 ${savedOk ? 'bg-emerald-500 shadow-emerald-200 dark:shadow-none' : 'bg-violet-600 hover:bg-violet-700 shadow-violet-200 dark:shadow-none'}`}
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedOk ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+            {saving ? 'Guardando…' : savedOk ? '¡Guardado!' : 'Guardar cambios'}
+          </button>
+        )}
       </div>
 
       {/* ── Tabs ── */}
