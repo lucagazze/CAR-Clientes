@@ -294,31 +294,29 @@ export const MainLayout = () => {
                 <Clock className="w-6 h-6 text-amber-500" />
               </div>
               <div>
-                <h2 className="text-[18px] font-bold mb-1.5">Solicitud de Acceso Enviada</h2>
-                <div className="text-[13px] text-zinc-500 dark:text-zinc-400 space-y-3 leading-relaxed">
+                <h2 className="text-[18px] font-bold mb-1.5 text-center">Solicitud de Acceso Enviada</h2>
+                <div className="text-[13px] text-zinc-500 dark:text-zinc-400 space-y-4 leading-relaxed text-center">
                   <p>
-                    Tu solicitud para el negocio <strong className="text-zinc-800 dark:text-zinc-200">"{businessName}"</strong> ha sido registrada.
+                    Tu solicitud para vincular el negocio <strong className="text-zinc-800 dark:text-zinc-200">"{businessName}"</strong> ha sido registrada con éxito.
                   </p>
-                  <p>
-                    Esperá a que el administrador te acepte la solicitud directamente para poder ingresar al ecosistema.
+                  <div className="bg-zinc-50 dark:bg-zinc-800/40 p-3.5 rounded-2xl border border-zinc-150/50 dark:border-zinc-800/60 text-left text-[12px] text-zinc-600 dark:text-zinc-300">
+                    <span className="font-bold text-amber-600 dark:text-amber-400 block mb-1">💬 ¿Qué pasa ahora?</span>
+                    Te enviaremos una notificación por <strong>WhatsApp</strong> en cuanto el administrador apruebe tu acceso. Una vez que la recibas, ya podrás ingresar al ecosistema.
+                  </div>
+                  <p className="font-bold text-violet-500 dark:text-violet-400 text-[13.5px]">
+                    Ya podés cerrar esta pestaña o salir del sitio.
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/60 space-y-3">
+              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/60 text-center">
                 <button
+                  type="button"
                   onClick={() => signOut()}
-                  className={`w-full h-11 flex items-center justify-center gap-2 rounded-xl text-[13px] font-bold transition-all ${
-                    darkMode
-                      ? 'bg-white text-black hover:bg-zinc-100'
-                      : 'bg-zinc-900 text-white hover:bg-black'
-                  }`}
+                  className="text-[11px] font-bold text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors uppercase tracking-wider"
                 >
-                  Cerrar sesión
+                  Salir / Cambiar cuenta de Google
                 </button>
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                  Una vez que el administrador te dé de alta, ingresá de vuelta con tu cuenta de Google.
-                </p>
               </div>
             </div>
           )}
