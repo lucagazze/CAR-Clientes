@@ -279,8 +279,9 @@ CAMPO 2 — "tone":
 Describí en 100-130 palabras cómo debe hablar la IA: nivel de formalidad/informalidad, si usa voseo argentino, cuántos emojis, longitud ideal de respuestas. Basarte en el estilo de escritura que ves en el texto.
 
 CAMPO 3 — "offers":
-REGLA ABSOLUTA: Solo podés poner aquí descuentos o promociones que estén LITERALMENTE escritos en el texto con su porcentaje o monto exacto (ej: "20% OFF", "3x2", "envio gratis en compras mayores a $X").
-Si no encontras ningun descuento con valor numerico explicito en el texto → el campo DEBE ser exactamente: ""
+FUENTE: SOLO el TEXTO DEL SITIO WEB. Las redes sociales NO son fuente válida para este campo.
+REGLA ABSOLUTA: Solo podés poner aquí descuentos o promociones que estén LITERALMENTE escritos en el SITIO WEB con su porcentaje o monto exacto (ej: "20% OFF", "3x2", "envio gratis en compras mayores a $X").
+Si no encontras ningun descuento con valor numerico explicito en el sitio web → el campo DEBE ser exactamente: ""
 Ante cualquier duda → ""
 
 CAMPO 4 — "faq":
@@ -300,7 +301,7 @@ RESPONDÉ SOLO CON JSON VALIDO. Sin markdown, sin texto fuera del JSON.`;
           model: 'gpt-4o',
           messages: [
             { role: 'system', content: fieldsPrompt },
-            { role: 'user', content: `TEXTO COMPLETO DEL SITIO WEB:\n${webCtx.slice(0, 50000)}\n\nINFORMACIÓN REDES SOCIALES:\n${socialCtx.slice(0, 8000)}` }
+            { role: 'user', content: `TEXTO COMPLETO DEL SITIO WEB (fuente para todos los campos):\n${webCtx.slice(0, 50000)}\n\n---\nINFORMACIÓN REDES SOCIALES (usar SOLO para inferir tono de comunicación, NO para offers):\n${socialCtx.slice(0, 8000)}` }
           ],
           temperature: 0,
           max_tokens: 4000,
