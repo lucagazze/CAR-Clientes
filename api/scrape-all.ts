@@ -264,17 +264,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!webCtx) return res.status(400).json({ error: 'Primero escaneá el sitio web' });
 
-      const fieldsPrompt = `Sos un experto en marketing digital y atención al cliente. Analizá la información del negocio "${bName}" y extraé los siguientes campos en formato JSON estricto:
+      const fieldsPrompt = `Sos un extractor de información. Tu único trabajo es copiar datos que EXISTEN LITERALMENTE en el texto que te dan. NUNCA inferís, NUNCA suponés, NUNCA completás con conocimiento propio.
 
-1. "business_description": Descripción completa del negocio. Incluir: qué vende, productos principales con precios exactos si están disponibles, políticas de envío, devoluciones, formas de pago, datos de contacto (teléfono, email, WhatsApp, dirección). Máx 450 palabras. MUY IMPORTANTE: solo usar información que esté en el texto, no inventar.
+Extraé del texto del negocio "${bName}" exactamente estos 4 campos en JSON:
 
-2. "tone": Instrucciones exactas de cómo debe hablar la IA. Incluir: voseo argentino obligatorio, nivel de formalidad, si usar emojis (y cuántos), longitud máxima de respuestas, palabras o frases características de la marca. Máx 150 palabras.
+1. "business_description": Copiá la información que EXISTE en el texto: qué vende, productos mencionados con sus precios exactos si aparecen, políticas de envío, cambios/devoluciones, formas de pago, datos de contacto. SOLO lo que está escrito. Máx 450 palabras.
 
-3. "offers": SOLO si hay descuentos, promociones, cuotas sin interés, envío gratis u ofertas ACTIVAS mencionadas explícitamente en la información. Si no hay información clara de ofertas vigentes, devolvé exactamente "". Si hay ofertas, formato: lista con guiones, incluir vigencia si se menciona.
+2. "tone": Del estilo de escritura que observás en el texto, describí cómo debe hablar la IA: nivel de formalidad, uso de voseo argentino (si corresponde), cantidad de emojis, longitud de respuestas. Máx 120 palabras.
 
-4. "faq": Preguntas frecuentes que haría un cliente nuevo, con respuestas basadas ÚNICAMENTE en información del texto. Formato exacto para cada par: "P: ¿pregunta?\nR: respuesta completa\n\n". Mínimo 8 pares si hay suficiente info. Solo usar datos reales del texto.
+3. "offers": ⚠️ REGLA ABSOLUTA: Este campo SOLO puede contener descuentos, promociones o cuotas que estén TEXTUALMENTE escritos en el texto con su porcentaje, monto o condición exacta. Si el texto NO menciona explícitamente un descuento activo con su valor específico → devolvé exactamente el string vacío "". PROHIBIDO inferir, suponer o inventar ofertas. Si hay duda → "".
 
-RESPONDÉ ÚNICAMENTE CON JSON VÁLIDO. Sin texto extra, sin bloques de código markdown.`;
+4. "faq": Preguntas y respuestas COPIADAS de información que está en el texto. Formato: "P: ¿pregunta?\nR: respuesta\n\n". Solo preguntas cuya respuesta esté en el texto. No inventar respuestas.
+
+⛔ PROHIBIDO ABSOLUTO: inventar cualquier dato que no esté en el texto proporcionado. Si no está escrito, no existe.
+
+RESPONDÉ ÚNICAMENTE CON JSON VÁLIDO. Sin texto extra ni markdown.`;
 
       const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -285,7 +289,7 @@ RESPONDÉ ÚNICAMENTE CON JSON VÁLIDO. Sin texto extra, sin bloques de código 
             { role: 'system', content: fieldsPrompt },
             { role: 'user', content: `INFORMACIÓN WEB:\n${webCtx.slice(0, 22000)}\n\nINFORMACIÓN REDES SOCIALES:\n${socialCtx.slice(0, 6000)}` }
           ],
-          temperature: 0.2,
+          temperature: 0,
           max_tokens: 2500,
           response_format: { type: 'json_object' }
         }),
@@ -297,7 +301,9 @@ RESPONDÉ ÚNICAMENTE CON JSON VÁLIDO. Sin texto extra, sin bloques de código 
 
       const desc: string = parsed.business_description || '';
       const tone: string = parsed.tone || '';
-      const offersVal: string = parsed.offers || '';
+      // Only keep offers if it's a non-empty string with actual content (not just whitespace/dashes)
+      const rawOffers: string = parsed.offers || '';
+      const offersVal: string = rawOffers.replace(/^[-\s]+$/, '').trim();
       const faqVal: string = parsed.faq || '';
 
       const nowTs = new Date().toISOString();

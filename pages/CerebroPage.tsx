@@ -270,7 +270,7 @@ export default function CerebroPage() {
     { key: 'faq',   label: 'Preguntas Frecuentes',    icon: BookOpen,     color: 'emerald',value: faq,                 tip: 'El escaneo extrae las FAQs del sitio automáticamente' },
     { key: 'web',   label: 'Memoria Web',             icon: Globe,        color: 'indigo', value: scrapedContent,      tip: 'Usá "Escanear y Entrenar" para extraer el contenido del sitio' },
     { key: 'social',label: 'Memoria Social',          icon: Instagram,    color: 'pink',   value: instagramContext,    tip: 'Vinculá Instagram en la configuración y luego escaneá' },
-    { key: 'cat',   label: 'Catálogo Conectado',      icon: ShoppingBag,  color: 'emerald',value: ecommercePlatform,   tip: 'Conectá Shopify, WooCommerce o Tiendanube desde Admin → Configuración' },
+    { key: 'cat',   label: 'Catálogo Conectado',      icon: ShoppingBag,  color: 'emerald',value: ecommercePlatform,   tip: 'Falta conectar la Tienda Online' },
   ];
   const contextScore = sections.filter(s => s.value).length;
   const contextPct = Math.round((contextScore / sections.length) * 100);
