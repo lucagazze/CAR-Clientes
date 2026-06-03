@@ -49,7 +49,7 @@ import { usePresence } from "../contexts/PresenceContext";
 
 interface BusinessAccount {
   id?: number;
-  user_id: string;
+  user_id: string | null;
   email: string;
   source: 'car_clients' | 'car_business_accounts';
   created_at: string;
@@ -279,9 +279,10 @@ export default function AdminPage() {
   const [newAccEmail, setNewAccEmail] = useState('');
   const [newAccPwd, setNewAccPwd] = useState(() => genPwd());
   const [showNewAccPwd, setShowNewAccPwd] = useState(false);
+  const [newAccGoogleOnly, setNewAccGoogleOnly] = useState(false);
   const [creatingAccount, setCreatingAccount] = useState(false);
-  const [deletingAccountUserId, setDeletingAccountUserId] = useState<string | null>(null);
-  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
+  const [deletingAccountKey, setDeletingAccountKey] = useState<string | null>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
   const [changingPwdFor, setChangingPwdFor] = useState<string | null>(null);
   const [changingPwd, setChangingPwd] = useState('');
   const [showChangingPwd, setShowChangingPwd] = useState(false);
@@ -660,19 +661,34 @@ export default function AdminPage() {
     setCreatingAccount(true);
     try {
       const authEmail = toAuthEmail(newAccEmail);
-      const { data: auth, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-        email: authEmail,
-        password: newAccPwd,
-        email_confirm: true,
-      });
-      if (authErr) throw authErr;
-      const { error: dbErr } = await supabaseAdmin.from('car_business_accounts').insert({
-        business_id: clientId,
-        user_id: auth.user.id,
-        email: authEmail,
-      });
-      if (dbErr) throw dbErr;
-      showToast('Cuenta creada ✓', 'success');
+
+      if (newAccGoogleOnly) {
+        // Pre-invitation: insert into car_business_accounts with user_id = null
+        // When the user signs in with Google OAuth for the first time, the system
+        // automatically links their user_id via the email fallback in db.profile.getByUserId
+        const { error: dbErr } = await supabaseAdmin.from('car_business_accounts').insert({
+          business_id: clientId,
+          user_id: null,
+          email: authEmail,
+        });
+        if (dbErr) throw dbErr;
+        showToast('Invitación Google registrada ✓', 'success');
+      } else {
+        const { data: auth, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          email: authEmail,
+          password: newAccPwd,
+          email_confirm: true,
+        });
+        if (authErr) throw authErr;
+        const { error: dbErr } = await supabaseAdmin.from('car_business_accounts').insert({
+          business_id: clientId,
+          user_id: auth.user.id,
+          email: authEmail,
+        });
+        if (dbErr) throw dbErr;
+        showToast('Cuenta creada ✓', 'success');
+      }
+
       setNewAccEmail('');
       setNewAccPwd(genPwd());
       loadAccounts(clientId, mainUserId);
@@ -685,7 +701,8 @@ export default function AdminPage() {
 
   const handleDeleteAccount = async (acc: BusinessAccount, clientId: string, mainUserId: string | null) => {
     if (!supabaseAdmin) return;
-    setDeletingAccountUserId(acc.user_id);
+    const accKey = acc.user_id ?? acc.email;
+    setDeletingAccountKey(accKey);
     try {
       if (acc.source === 'car_clients') {
         const { error } = await supabaseAdmin.from('car_clients').update({ user_id: null }).eq('id', clientId);
@@ -695,14 +712,17 @@ export default function AdminPage() {
         const { error } = await supabaseAdmin.from('car_business_accounts').delete().eq('id', acc.id!);
         if (error) throw error;
       }
-      await supabaseAdmin.auth.admin.deleteUser(acc.user_id);
-      setBusinessAccounts((p) => p.filter((a) => a.user_id !== acc.user_id));
-      setConfirmDeleteUserId(null);
+      // Only delete from auth if the user has actually signed up (user_id is set)
+      if (acc.user_id) {
+        await supabaseAdmin.auth.admin.deleteUser(acc.user_id);
+      }
+      setBusinessAccounts((p) => p.filter((a) => (a.user_id ?? a.email) !== accKey));
+      setConfirmDeleteKey(null);
       showToast('Cuenta eliminada ✓', 'success');
     } catch (err: any) {
       showToast('Error: ' + err.message, 'error');
     } finally {
-      setDeletingAccountUserId(null);
+      setDeletingAccountKey(null);
     }
   };
 
@@ -2205,44 +2225,57 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                       </td>
                                     </tr>
                                   ) : (
-                                    businessAccounts.map((acc) => (
-                                      <React.Fragment key={acc.user_id}>
+                                    businessAccounts.map((acc) => {
+                                      const accKey = acc.user_id ?? acc.email;
+                                      const isGooglePending = !acc.user_id;
+                                      return (
+                                      <React.Fragment key={accKey}>
                                         <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
                                           <td className="px-4 py-3 text-[13px] font-mono text-zinc-700 dark:text-zinc-300 truncate max-w-[200px]">
-                                            {acc.email}
+                                            <div className="flex items-center gap-2">
+                                              <span className="truncate">{acc.email}</span>
+                                              {isGooglePending && (
+                                                <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                                                  Google pendiente
+                                                </span>
+                                              )}
+                                            </div>
                                           </td>
                                           <td className="px-4 py-3 text-[11px] text-zinc-400 hidden sm:table-cell">
                                             {new Date(acc.created_at).toLocaleDateString("es-AR")}
                                           </td>
                                           <td className="px-4 py-3">
                                             <div className="flex items-center gap-1.5 justify-end">
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (changingPwdFor === acc.user_id) {
-                                                    setChangingPwdFor(null);
-                                                    setChangingPwd('');
-                                                  } else {
-                                                    setChangingPwdFor(acc.user_id);
-                                                    setChangingPwd(genPwd());
-                                                    setShowChangingPwd(false);
-                                                    setConfirmDeleteUserId(null);
-                                                  }
-                                                }}
-                                                className={`p-1.5 rounded-lg transition-all ${
-                                                  changingPwdFor === acc.user_id
-                                                    ? "bg-violet-100 dark:bg-violet-500/20 text-violet-600"
-                                                    : "text-zinc-400 hover:text-violet-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                                                }`}
-                                                title="Cambiar contraseña"
-                                              >
-                                                <KeyRound className="w-3.5 h-3.5" />
-                                              </button>
-                                              {confirmDeleteUserId !== acc.user_id && (
+                                              {/* Password change button — only for accounts with actual auth users */}
+                                              {!isGooglePending && (
                                                 <button
                                                   type="button"
                                                   onClick={() => {
-                                                    setConfirmDeleteUserId(acc.user_id);
+                                                    if (changingPwdFor === acc.user_id) {
+                                                      setChangingPwdFor(null);
+                                                      setChangingPwd('');
+                                                    } else {
+                                                      setChangingPwdFor(acc.user_id);
+                                                      setChangingPwd(genPwd());
+                                                      setShowChangingPwd(false);
+                                                      setConfirmDeleteKey(null);
+                                                    }
+                                                  }}
+                                                  className={`p-1.5 rounded-lg transition-all ${
+                                                    changingPwdFor === acc.user_id
+                                                      ? "bg-violet-100 dark:bg-violet-500/20 text-violet-600"
+                                                      : "text-zinc-400 hover:text-violet-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                                                  }`}
+                                                  title="Cambiar contraseña"
+                                                >
+                                                  <KeyRound className="w-3.5 h-3.5" />
+                                                </button>
+                                              )}
+                                              {confirmDeleteKey !== accKey && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setConfirmDeleteKey(accKey);
                                                     setChangingPwdFor(null);
                                                     setChangingPwd('');
                                                   }}
@@ -2256,7 +2289,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                           </td>
                                         </tr>
 
-                                        {changingPwdFor === acc.user_id && (
+                                        {!isGooglePending && changingPwdFor === acc.user_id && (
                                           <tr className="bg-violet-50/50 dark:bg-violet-500/5">
                                             <td colSpan={3} className="px-4 py-3">
                                               <div className="flex flex-col sm:flex-row gap-2 items-end">
@@ -2287,7 +2320,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                                   <button type="button" onClick={() => { setChangingPwdFor(null); setChangingPwd(''); }} className="h-10 px-3 rounded-[9px] border border-zinc-200 dark:border-zinc-700 text-[12px] text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all">
                                                     Cancelar
                                                   </button>
-                                                  <button type="button" onClick={() => handleChangePwd(acc.user_id)} disabled={savingPwd || !changingPwd} className="h-10 px-4 rounded-[9px] bg-violet-600 text-white text-[12px] font-semibold flex items-center gap-2 hover:bg-violet-700 transition-all disabled:opacity-50">
+                                                  <button type="button" onClick={() => handleChangePwd(acc.user_id!)} disabled={savingPwd || !changingPwd} className="h-10 px-4 rounded-[9px] bg-violet-600 text-white text-[12px] font-semibold flex items-center gap-2 hover:bg-violet-700 transition-all disabled:opacity-50">
                                                     {savingPwd ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                                     Guardar
                                                   </button>
@@ -2297,7 +2330,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                           </tr>
                                         )}
 
-                                        {confirmDeleteUserId === acc.user_id && (
+                                        {confirmDeleteKey === accKey && (
                                           <tr className="bg-red-50/60 dark:bg-red-500/5">
                                             <td colSpan={3} className="px-4 py-3">
                                               <div className="flex items-center gap-3">
@@ -2306,7 +2339,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                                 </span>
                                                 <button
                                                   type="button"
-                                                  onClick={() => setConfirmDeleteUserId(null)}
+                                                  onClick={() => setConfirmDeleteKey(null)}
                                                   className="h-8 px-3 rounded-lg border border-zinc-200 dark:border-zinc-700 text-[11px] text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all flex-shrink-0"
                                                 >
                                                   Cancelar
@@ -2314,10 +2347,10 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                                 <button
                                                   type="button"
                                                   onClick={() => handleDeleteAccount(acc, editingClient.id, editingClient.user_id ?? null)}
-                                                  disabled={deletingAccountUserId === acc.user_id}
+                                                  disabled={deletingAccountKey === accKey}
                                                   className="h-8 px-4 rounded-lg bg-red-500 text-white text-[11px] font-bold hover:bg-red-600 transition-all disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
                                                 >
-                                                  {deletingAccountUserId === acc.user_id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                                  {deletingAccountKey === accKey && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                                   Sí, eliminar
                                                 </button>
                                               </div>
@@ -2325,7 +2358,8 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                           </tr>
                                         )}
                                       </React.Fragment>
-                                    ))
+                                      );
+                                    })
                                   )}
                                 </tbody>
                               </table>
@@ -2335,14 +2369,42 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                           {/* Agregar cuenta */}
                           <div className="mt-4 pt-4 border-t border-zinc-150 dark:border-zinc-800 space-y-3">
                             <h5 className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">
-                              Crear Nueva Cuenta de Acceso
+                              Agregar Cuenta de Acceso
                             </h5>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                            {/* Toggle Google-only vs user+password */}
+                            <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                              <button
+                                type="button"
+                                onClick={() => setNewAccGoogleOnly(!newAccGoogleOnly)}
+                                className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                                  newAccGoogleOnly ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-600'
+                                }`}
+                              >
+                                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                  newAccGoogleOnly ? 'translate-x-4' : 'translate-x-0.5'
+                                }`} />
+                              </button>
+                              <div>
+                                <p className="text-[12px] font-bold text-zinc-700 dark:text-zinc-300">
+                                  Solo ingreso con Google (pre-invitación)
+                                </p>
+                                <p className="text-[10px] text-zinc-400 leading-snug">
+                                  {newAccGoogleOnly
+                                    ? 'El cliente ingresará con su cuenta de Google. No necesita contraseña.'
+                                    : 'Se crea una cuenta con usuario y contraseña. También puede vincular Google.'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className={`grid gap-3 ${
+                              newAccGoogleOnly ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'
+                            }`}>
                               <div className="w-full">
-                                <label className={labelCls}>Usuario o Email</label>
+                                <label className={labelCls}>Email de Google (o usuario)</label>
                                 <input
                                   type="text"
-                                  placeholder="usuario o email@empresa.com"
+                                  placeholder={newAccGoogleOnly ? 'email@gmail.com' : 'usuario o email@empresa.com'}
                                   autoCapitalize="none"
                                   autoCorrect="off"
                                   value={newAccEmail}
@@ -2350,37 +2412,43 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                   className={inputCls}
                                 />
                               </div>
-                              <div className="w-full">
-                                <label className={labelCls}>Contraseña Inicial</label>
-                                <div className="relative">
-                                  <input
-                                    type={showNewAccPwd ? "text" : "password"}
-                                    value={newAccPwd}
-                                    onChange={(e) => setNewAccPwd(e.target.value)}
-                                    className={inputCls + " pr-20 font-mono"}
-                                  />
-                                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-1">
-                                    <button type="button" onClick={() => setShowNewAccPwd((s) => !s)} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 transition-all">
-                                      {showNewAccPwd ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                    </button>
-                                    <button type="button" onClick={() => copy(newAccPwd, "Contraseña")} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 transition-all" title="Copiar">
-                                      <Copy className="w-3 h-3" />
-                                    </button>
-                                    <button type="button" onClick={() => setNewAccPwd(genPwd())} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 transition-all" title="Generar nueva">
-                                      <RefreshCw className="w-3 h-3" />
-                                    </button>
+                              {!newAccGoogleOnly && (
+                                <div className="w-full">
+                                  <label className={labelCls}>Contraseña Inicial</label>
+                                  <div className="relative">
+                                    <input
+                                      type={showNewAccPwd ? "text" : "password"}
+                                      value={newAccPwd}
+                                      onChange={(e) => setNewAccPwd(e.target.value)}
+                                      className={inputCls + " pr-20 font-mono"}
+                                    />
+                                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-1">
+                                      <button type="button" onClick={() => setShowNewAccPwd((s) => !s)} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 transition-all">
+                                        {showNewAccPwd ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                      </button>
+                                      <button type="button" onClick={() => copy(newAccPwd, "Contraseña")} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 transition-all" title="Copiar">
+                                        <Copy className="w-3 h-3" />
+                                      </button>
+                                      <button type="button" onClick={() => setNewAccPwd(genPwd())} className="p-1.5 rounded text-zinc-400 hover:text-zinc-600 transition-all" title="Generar nueva">
+                                        <RefreshCw className="w-3 h-3" />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
+                              )}
                             </div>
                             <button
                               type="button"
                               onClick={() => handleCreateAccount(editingClient.id, editingClient.user_id ?? null)}
                               disabled={creatingAccount || !newAccEmail || !supabaseAdmin}
-                              className="w-full h-10 rounded-[9px] bg-violet-600 text-white text-[12px] font-semibold flex items-center justify-center gap-2 hover:bg-violet-700 transition-all disabled:opacity-50"
+                              className={`w-full h-10 rounded-[9px] text-white text-[12px] font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
+                                newAccGoogleOnly
+                                  ? 'bg-blue-600 hover:bg-blue-700'
+                                  : 'bg-violet-600 hover:bg-violet-700'
+                              }`}
                             >
                               {creatingAccount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-                              Agregar cuenta de acceso
+                              {newAccGoogleOnly ? 'Registrar invitación Google' : 'Agregar cuenta de acceso'}
                             </button>
                           </div>
                         </div>
