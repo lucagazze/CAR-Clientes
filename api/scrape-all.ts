@@ -302,8 +302,9 @@ Describí en 100-130 palabras cómo debe hablar la IA: nivel de formalidad/infor
 
 CAMPO 3 — "offers":
 FUENTE: SOLO el TEXTO DEL SITIO WEB. Las redes sociales NO son fuente válida para este campo.
-REGLA ABSOLUTA: Solo podés poner aquí descuentos o promociones que estén LITERALMENTE escritos en el SITIO WEB con su porcentaje o monto exacto (ej: "20% OFF", "3x2", "envio gratis en compras mayores a $X").
-Si no encontras ningun descuento con valor numerico explicito en el sitio web → el campo DEBE ser exactamente: ""
+TIPO DE DESCUENTO: SOLO promociones GENERALES o TRANSVERSALES del negocio (ej: "10% OFF en toda la tienda este mes", "envío gratis en compras mayores a $X", "5% de descuento para estudiantes de diseño", "Cuotas sin interés", "Descuento por pago en efectivo").
+NO incluir descuentos de productos individuales (ej: "-33% en Voile", "-8% en Gabardina"). Esos descuentos ya los tiene el catálogo y no deben repetirse acá.
+Si no encontras ninguna promoción GENERAL en el sitio web → el campo DEBE ser exactamente: ""
 Ante cualquier duda → ""
 
 CAMPO 4 — "faq":
