@@ -198,8 +198,9 @@ function getConnStatus(clientId: string, type: string): 'ok' | 'unverified' {
 }
 
 // Badge component: green=verified, amber=configured-unverified, grey=not configured
-const ConnBadge = ({ hasValue, clientId, type, label, children }: {
-  hasValue: boolean; clientId: string; type: string; label: string; children: React.ReactNode;
+// tick prop is unused but forces re-render when connection status changes
+const ConnBadge = ({ hasValue, clientId, type, label, children, tick: _tick }: {
+  hasValue: boolean; clientId: string; type: string; label: string; children: React.ReactNode; tick?: number;
 }) => {
   if (!hasValue) {
     return (
@@ -232,6 +233,7 @@ export default function AdminPage() {
 
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [connTick, setConnTick] = useState(0); // increments on every conn verification → forces badge re-render
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
@@ -716,6 +718,7 @@ export default function AdminPage() {
       );
       showToast("¡Conexión con Shopify Exitosa! ✓", "success");
       if (editingClient) saveConnOk(editingClient.id, 'shopify');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, shopify: "ok" }));
     } catch (err: any) {
       showToast(
@@ -723,6 +726,7 @@ setStatuses((p) => ({ ...p, shopify: "ok" }));
         "error",
       );
       if (editingClient) saveConnErr(editingClient.id, 'shopify');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, shopify: "error" }));
     } finally {
       setTestingShopify(false);
@@ -744,10 +748,12 @@ setStatuses((p) => ({ ...p, shopify: "error" }));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       showToast('¡Conexión con WooCommerce exitosa! ✓', 'success');
       if (editingClient) saveConnOk(editingClient.id, 'shopify');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, shopify: 'ok' }));
     } catch (err: any) {
       showToast('Error WooCommerce: ' + (err.message || 'Verificá los datos'), 'error');
       if (editingClient) saveConnErr(editingClient.id, 'shopify');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, shopify: 'error' }));
     } finally {
       setTestingWoo(false);
@@ -771,6 +777,7 @@ setStatuses((p) => ({ ...p, shopify: 'error' }));
         throw new Error("No se pudo obtener datos (verificá la API Key)");
       showToast("¡Conexión con Klaviyo Exitosa! ✓", "success");
       if (editingClient) saveConnOk(editingClient.id, 'klaviyo');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, klaviyo: "ok" }));
     } catch (err: any) {
       showToast(
@@ -778,6 +785,7 @@ setStatuses((p) => ({ ...p, klaviyo: "ok" }));
         "error",
       );
       if (editingClient) saveConnErr(editingClient.id, 'klaviyo');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, klaviyo: "error" }));
     } finally {
       setTestingKlaviyo(false);
@@ -796,6 +804,7 @@ setStatuses((p) => ({ ...p, klaviyo: "error" }));
         throw new Error("No se pudo obtener datos (verificá el Token General)");
       showToast("¡Conexión con Meta Exitosa! ✓", "success");
       if (editingClient) saveConnOk(editingClient.id, 'meta');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, meta: "ok" }));
     } catch (err: any) {
       showToast(
@@ -803,6 +812,7 @@ setStatuses((p) => ({ ...p, meta: "ok" }));
         "error",
       );
       if (editingClient) saveConnErr(editingClient.id, 'meta');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, meta: "error" }));
     } finally {
       setTestingMeta(false);
@@ -843,6 +853,7 @@ setStatuses((p) => ({ ...p, meta: "error" }));
         throw new Error("No se pudo obtener el perfil (verificá el ID de Instagram y el Token General)");
       showToast(`¡Conexión con Instagram Exitosa! (@${res.username}) ✓`, "success");
       if (editingClient) saveConnOk(editingClient.id, 'instagram');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, instagram: "ok" }));
     } catch (err: any) {
       showToast(
@@ -850,6 +861,7 @@ setStatuses((p) => ({ ...p, instagram: "ok" }));
         "error",
       );
       if (editingClient) saveConnErr(editingClient.id, 'instagram');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, instagram: "error" }));
     } finally {
       setTestingIg(false);
@@ -874,6 +886,7 @@ setStatuses((p) => ({ ...p, instagram: "error" }));
       
       showToast(`¡Conexión con Facebook Exitosa! (${res.name}) ✓`, "success");
       if (editingClient) saveConnOk(editingClient.id, 'facebook');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, facebook: "ok" }));
     } catch (err: any) {
       showToast(
@@ -881,6 +894,7 @@ setStatuses((p) => ({ ...p, facebook: "ok" }));
         "error",
       );
       if (editingClient) saveConnErr(editingClient.id, 'facebook');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, facebook: "error" }));
     } finally {
       setTestingFbPage(false);
@@ -936,10 +950,12 @@ setStatuses((p) => ({ ...p, facebook: "error" }));
         "success",
       );
       if (editingClient) saveConnOk(editingClient.id, 'chatwoot');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, chatwoot: "ok" }));
     } catch (err: any) {
       showToast("Error Chatwoot: El dominio no responde", "error");
       if (editingClient) saveConnErr(editingClient.id, 'chatwoot');
+        setConnTick(t => t + 1);
 setStatuses((p) => ({ ...p, chatwoot: "error" }));
     } finally {
       setTestingChatwoot(false);
@@ -990,6 +1006,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
       } catch { testResults.chatwoot = 'error'; saveConnErr(editingClient.id, 'chatwoot'); errors.push('Chatwoot'); }
     }
     setStatuses(prev => ({ ...prev, ...testResults }));
+    if (Object.keys(testResults).length > 0) setConnTick(t => t + 1);
 
     try {
       // Core fields — definitely exist in DB
@@ -1406,18 +1423,18 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
 
                       {/* Connection badges — 🟢 verde=verificado · 🟡 amarillo=sin verificar · ⚪ gris=no configurado */}
                       <div className="flex items-center gap-1 mt-2 flex-wrap">
-                        <ConnBadge hasValue={!!c.meta_account_id} clientId={c.id} type="meta" label="Meta Ads">M</ConnBadge>
-                        <ConnBadge hasValue={!!(c.fb_page_id && (c as any).fb_page_access_token)} clientId={c.id} type="facebook" label={c.fb_page_name ? `Facebook: ${c.fb_page_name}` : 'Facebook'}>
+                        <ConnBadge hasValue={!!c.meta_account_id} clientId={c.id} type="meta" label="Meta Ads" tick={connTick}>M</ConnBadge>
+                        <ConnBadge hasValue={!!(c.fb_page_id && (c as any).fb_page_access_token)} clientId={c.id} type="facebook" label={c.fb_page_name ? `Facebook: ${c.fb_page_name} tick={connTick}` : 'Facebook'}>
                           <Facebook className="w-2.5 h-2.5" />
                         </ConnBadge>
-                        <ConnBadge hasValue={!!c.ig_username} clientId={c.id} type="instagram" label={c.ig_username ? `Instagram: @${c.ig_username}` : 'Instagram'}>
+                        <ConnBadge hasValue={!!c.ig_username} clientId={c.id} type="instagram" label={c.ig_username ? `Instagram: @${c.ig_username} tick={connTick}` : 'Instagram'}>
                           <Instagram className="w-2.5 h-2.5" />
                         </ConnBadge>
-                        <ConnBadge hasValue={!!c.ecommerce_platform && !!c.shopify_access_token} clientId={c.id} type="shopify" label={c.ecommerce_platform ? `Tienda: ${c.ecommerce_platform}` : 'Sin tienda'}>
+                        <ConnBadge hasValue={!!c.ecommerce_platform && !!c.shopify_access_token} clientId={c.id} type="shopify" label={c.ecommerce_platform ? `Tienda: ${c.ecommerce_platform} tick={connTick}` : 'Sin tienda'}>
                           {c.ecommerce_platform === 'shopify' ? 'S' : c.ecommerce_platform === 'tiendanube' ? 'TN' : c.ecommerce_platform === 'wordpress' ? 'WP' : 'T'}
                         </ConnBadge>
-                        <ConnBadge hasValue={!!c.klaviyo_api_key} clientId={c.id} type="klaviyo" label="Klaviyo">K</ConnBadge>
-                        <ConnBadge hasValue={!!(c.chatwoot_url && c.chatwoot_token)} clientId={c.id} type="chatwoot" label="Chatwoot (Mensajería)">C</ConnBadge>
+                        <ConnBadge hasValue={!!c.klaviyo_api_key} clientId={c.id} type="klaviyo" label="Klaviyo" tick={connTick}>K</ConnBadge>
+                        <ConnBadge hasValue={!!(c.chatwoot_url && c.chatwoot_token)} clientId={c.id} type="chatwoot" label="Chatwoot (Mensajería)" tick={connTick}>C</ConnBadge>
                       </div>
                     </div>
                   </div>
