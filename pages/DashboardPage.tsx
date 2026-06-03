@@ -1514,7 +1514,7 @@ export default function DashboardPage() {
                       change={merChange}
                       trend={currentMER >= prevMER ? "up" : "down"}
                       data={merDaily}
-                      color={RED}
+                      color={PINK}
                       loading={fetchingStore || fetchingMeta}
                       active={expandedMetric === "mer-efficiency"}
                       onClick={() =>
@@ -1541,7 +1541,7 @@ export default function DashboardPage() {
                                 ? "Sesiones"
                                 : "Tasa de Conversión"
                     }
-                    color={expandedMetric === "mer-efficiency" ? RED : PINK}
+                    color={PINK}
                     data={
                       expandedMetric === "mer-efficiency"
                         ? merDaily
