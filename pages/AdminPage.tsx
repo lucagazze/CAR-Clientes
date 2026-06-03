@@ -870,24 +870,7 @@ setStatuses((p) => ({ ...p, instagram: "error" }));
       if (!res || res.error)
         throw new Error("No se pudo obtener la Página (verificá el ID de la Página y el Token)");
       
-      // Fetch permissions to show the user what's enabled
-      let permissionsMsg = "";
-      try {
-        const tokenToTest = editForm.fb_page_access_token || localStorage.getItem(`fb_pat_${editForm.fb_page_id}`) || "";
-        if (tokenToTest) {
-          const permRes = await fetch(`https://graph.facebook.com/v21.0/me/permissions?access_token=${tokenToTest}`).then(r => r.json());
-          if (permRes?.data) {
-            const granted = permRes.data.filter((p: any) => p.status === 'granted').map((p: any) => p.permission);
-            const keyPerms = ['instagram_manage_messages', 'instagram_manage_comments', 'pages_messaging', 'pages_show_list'];
-            const active = keyPerms.filter(p => granted.includes(p));
-            permissionsMsg = ` | Permisos activos: ${active.join(', ') || 'ninguno'}`;
-          }
-        }
-      } catch (e) {
-        console.error("Error fetching permissions:", e);
-      }
-
-      showToast(`¡Conexión con Facebook Exitosa! (${res.name})${permissionsMsg} ✓`, "success");
+      showToast(`¡Conexión con Facebook Exitosa! (${res.name}) ✓`, "success");
       if (editingClient) saveConnOk(editingClient.id, 'facebook');
 setStatuses((p) => ({ ...p, facebook: "ok" }));
     } catch (err: any) {
@@ -961,10 +944,50 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
     }
   };
 
-  const saveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveConfig = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!editingClient) return;
     setSavingConfig(true);
+
+    // Auto-test all configured connections before saving
+    const errors: string[] = [];
+    const testResults: Record<string, 'ok' | 'error'> = {};
+
+    if (editForm.shopify_domain && editForm.shopify_access_token) {
+      try {
+        await ecommerce.getShopifyOrders(editForm.shopify_domain, editForm.shopify_access_token, new Date(Date.now() - 86400000).toISOString(), new Date().toISOString());
+        testResults.shopify = 'ok';
+        saveConnOk(editingClient.id, 'shopify');
+      } catch { testResults.shopify = 'error'; saveConnErr(editingClient.id, 'shopify'); errors.push('Shopify'); }
+    }
+    if (editForm.meta_account_id) {
+      try {
+        await metaAds.getAccount(editForm.meta_account_id);
+        testResults.meta = 'ok'; saveConnOk(editingClient.id, 'meta');
+      } catch { testResults.meta = 'error'; saveConnErr(editingClient.id, 'meta'); errors.push('Meta Ads'); }
+    }
+    if (editForm.fb_page_id) {
+      try {
+        if (editForm.fb_page_access_token) metaAds.setClientPageToken(editForm.fb_page_id, editForm.fb_page_access_token);
+        const res = await metaAds.getFacebookPageInfo(editForm.fb_page_id);
+        if (!res || res.error) throw new Error();
+        testResults.facebook = 'ok'; saveConnOk(editingClient.id, 'facebook');
+      } catch { testResults.facebook = 'error'; saveConnErr(editingClient.id, 'facebook'); errors.push('Facebook'); }
+    }
+    if (editForm.klaviyo_api_key) {
+      try {
+        await klaviyo.getDashboardData(editForm.klaviyo_api_key, '30days');
+        testResults.klaviyo = 'ok'; saveConnOk(editingClient.id, 'klaviyo');
+      } catch { testResults.klaviyo = 'error'; saveConnErr(editingClient.id, 'klaviyo'); errors.push('Klaviyo'); }
+    }
+    if (editForm.chatwoot_url && editForm.chatwoot_token) {
+      try {
+        await fetch(editForm.chatwoot_url, { mode: 'no-cors' });
+        testResults.chatwoot = 'ok'; saveConnOk(editingClient.id, 'chatwoot');
+      } catch { testResults.chatwoot = 'error'; saveConnErr(editingClient.id, 'chatwoot'); errors.push('Chatwoot'); }
+    }
+    setStatuses(prev => ({ ...prev, ...testResults }));
+
     try {
       // Core fields — definitely exist in DB
       // Core fields confirmed in DB schema
@@ -1043,7 +1066,11 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
         await db.links.delete(id);
       }
 
-      showToast("Actualizado correctamente ✓", "success");
+      if (errors.length === 0) {
+        showToast("Guardado y todas las conexiones verificadas ✓", "success");
+      } else {
+        showToast(`Guardado ✓ — Conexiones con error: ${errors.join(", ")}. Revisá las credenciales.`, "warning");
+      }
       closeEdit();
       load();
     } catch (err: any) {
@@ -1858,15 +1885,6 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                               <Field label="Page Access Token"><input type="text" value={editForm.fb_page_access_token || ""} onChange={e => ef("fb_page_access_token", e.target.value)} placeholder="EAARv..." className={inputCls} /></Field>
                             </div>
                           </details>
-                          {editingClient?.meta_account_id && (
-                            <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                              <button type="button" onClick={syncCatalog} disabled={syncingCatalog}
-                                className="w-full h-9 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                                {syncingCatalog ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                                {syncingCatalog ? "Sincronizando..." : (editingClient as any).catalog_synced_at ? `Re-sincronizar catálogo (${new Date((editingClient as any).catalog_synced_at).toLocaleDateString("es-AR")})` : "Sincronizar catálogo desde Meta"}
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </div>
 
@@ -1935,33 +1953,14 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                         </div>
                       </div>
 
-                      {/* SAVE BUTTON */}
-                      {(() => {
-                        const needsVerify = [
-                          editForm.shopify_access_token && statuses.shopify !== "ok" && "Shopify",
-                          editForm.meta_account_id && statuses.meta !== "ok" && "Meta Ads",
-                          editForm.fb_page_id && statuses.facebook !== "ok" && "Facebook",
-                          editForm.klaviyo_api_key && statuses.klaviyo !== "ok" && "Klaviyo",
-                          (editForm.chatwoot_url && editForm.chatwoot_token) && statuses.chatwoot !== "ok" && "Chatwoot",
-                        ].filter(Boolean) as string[];
-                        return (
-                          <div className="pt-2">
-                            {needsVerify.length > 0 && (
-                              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 mb-3">
-                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                                <p className="text-[11px] text-amber-700 dark:text-amber-400 font-bold">
-                                  Verificá antes de guardar: {needsVerify.join(", ")}
-                                </p>
-                              </div>
-                            )}
-                            <button type="button" onClick={saveConfig as any} disabled={savingConfig || needsVerify.length > 0}
-                              className="w-full h-11 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13px] font-black flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-500/20">
-                              {savingConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                              {savingConfig ? "Guardando..." : needsVerify.length > 0 ? `Verificá ${needsVerify.length} conexión${needsVerify.length > 1 ? "es" : ""} primero` : "Guardar Conexiones"}
-                            </button>
-                          </div>
-                        );
-                      })()}
+                      {/* SAVE — auto-testa todo y reporta */}
+                      <div className="pt-2">
+                        <p className="text-[10px] text-zinc-400 text-center mb-2">Al guardar se verifican automáticamente todas las conexiones configuradas</p>
+                        <button type="button" onClick={saveConfig as any} disabled={savingConfig}
+                          className="w-full h-11 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-[13px] font-black flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-500/20">
+                          {savingConfig ? <><Loader2 className="w-4 h-4 animate-spin" />Verificando y guardando...</> : <><Save className="w-4 h-4" />Guardar Conexiones</>}
+                        </button>
+                      </div>
                     </div>
                   )}
 
