@@ -1529,6 +1529,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                 <thead>
                   <tr className="border-b border-zinc-150 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
                     <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Web / Negocio</th>
                     <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Asociar a Negocio</th>
                     <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider text-right">Acciones</th>
                   </tr>
@@ -2598,6 +2599,24 @@ const UnlinkedUserRow = ({
     <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
       <td className="px-4 py-3 text-[13px] font-mono text-zinc-700 dark:text-zinc-300 truncate max-w-[220px]">
         {user.email}
+      </td>
+      <td className="px-4 py-3 text-[13px] text-zinc-600 dark:text-zinc-400 max-w-[200px] truncate">
+        {user.user_metadata?.website_url ? (
+          <a
+            href={
+              user.user_metadata.website_url.startsWith("http")
+                ? user.user_metadata.website_url
+                : `https://${user.user_metadata.website_url}`
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-600 dark:text-violet-400 hover:underline font-semibold"
+          >
+            {user.user_metadata.website_url}
+          </a>
+        ) : (
+          <span className="text-zinc-400 dark:text-zinc-600 italic">No especificado</span>
+        )}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2 max-w-xs">
