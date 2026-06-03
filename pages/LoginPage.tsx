@@ -170,7 +170,7 @@ export default function LoginPage() {
                       ¿Sos un usuario nuevo?
                     </h4>
                     <p className={`text-[11px] leading-relaxed mt-0.5 ${darkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                      Si ingresás por primera vez y aún no estás registrado por tu administrador, verás una pantalla de <strong>"Acceso pendiente"</strong>. Tu administrador deberá asociar tu cuenta de Google para darte acceso.
+                      Si ingresás por primera vez y aún no estás registrado, verás una pantalla de <strong>"Acceso pendiente"</strong>. Esperá a que el administrador te acepte la solicitud directamente.
                     </p>
                   </div>
                 </div>
