@@ -24,9 +24,9 @@ interface MetricKeyData {
 
 const METRICS_CONFIG: MetricKeyData[] = [
   { key: 'conversations_count', label: 'Conversaciones Totales', icon: MessageCircle, color: '#8b5cf6', info: 'Cantidad total de conversaciones iniciadas con clientes en el período seleccionado, en todos los canales.' },
-  { key: 'incoming_messages_count', label: 'Mensajes Entrantes', icon: Inbox, color: '#10b981', info: 'Total de mensajes recibidos de clientes. Refleja el volumen de consultas y demanda de atención.' },
-  { key: 'outgoing_messages_count', label: 'Mensajes Salientes', icon: Send, color: '#3b82f6', info: 'Total de mensajes enviados por el equipo. Indica cuántas respuestas se dieron a los clientes.' },
-  { key: 'avg_first_response_time', label: 'Tiempo Resp. Promedio', icon: Clock, color: '#f59e0b', isTime: true, info: 'Tiempo promedio que tarda el equipo en dar la primera respuesta. Menos tiempo = mejor experiencia del cliente.' },
+  { key: 'incoming_messages_count', label: 'Mensajes Entrantes', icon: Inbox, color: '#8b5cf6', info: 'Total de mensajes recibidos de clientes. Refleja el volumen de consultas y demanda de atención.' },
+  { key: 'outgoing_messages_count', label: 'Mensajes Salientes', icon: Send, color: '#8b5cf6', info: 'Total de mensajes enviados por el equipo. Indica cuántas respuestas se dieron a los clientes.' },
+  { key: 'avg_first_response_time', label: 'Tiempo Resp. Promedio', icon: Clock, color: '#8b5cf6', isTime: true, info: 'Tiempo promedio que tarda el equipo en dar la primera respuesta. Menos tiempo = mejor experiencia del cliente.' },
 ];
 
 const MiniCal = ({ year, month, since, until, hovering, onDay, onHover, onPrev, onNext }: any) => {
@@ -130,6 +130,8 @@ export default function AtencionPage() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [prevChartData, setPrevChartData] = useState<any[]>([]);
   const [loadingChart, setLoadingChart] = useState(false);
+  const [allSeriesData, setAllSeriesData] = useState<Record<string, any[]>>({});
+  const [allPrevSeriesData, setAllPrevSeriesData] = useState<Record<string, any[]>>({});
 
   // Breakdown tables data
   const [inboxBreakdowns, setInboxBreakdowns] = useState<any[]>([]);
@@ -358,6 +360,51 @@ export default function AtencionPage() {
     fetchBreakdowns();
     return () => { cancelled = true; };
   }, [profile?.chatwoot_url, profile?.chatwoot_token, activeSince, activeUntil, inboxes, loading, refreshKey]);
+
+  // Pre-fetch sparklines for all 4 metrics when summary loads
+  useEffect(() => {
+    if (!summaryData || loading) return;
+    let cancelled = false;
+    const fetchAllSeries = async () => {
+      if (!profile?.chatwoot_url || !profile?.chatwoot_token) return;
+      const sinceSecs = toUnix(activeSince);
+      const untilSecs = toUnix(activeUntil, true);
+      const prevRange = getPrevPeriod(activeSince, activeUntil);
+      const prevSinceSecs = toUnix(prevRange.since);
+      const prevUntilSecs = toUnix(prevRange.until, true);
+
+      let scopeType = 'account';
+      let scopeId: number | undefined = undefined;
+      if (selectedAgentId !== 'all') { scopeType = 'agent'; scopeId = Number(selectedAgentId); }
+      else if (selectedInboxId !== 'all') { scopeType = 'inbox'; scopeId = Number(selectedInboxId); }
+
+      const parseSeries = (data: any) => {
+        const list = Array.isArray(data) ? data : (data?.data || data?.payload || []);
+        return list.map((item: any) => ({
+          val: Number(item.value || 0),
+          date: new Date((item.timestamp > 10000000000 ? item.timestamp : item.timestamp * 1000)).toISOString().split('T')[0],
+        }));
+      };
+
+      const keys = METRICS_CONFIG.map(m => m.key);
+      const results = await Promise.allSettled(
+        keys.map(k => Promise.all([
+          chatwoot.getReportsTimeSeries(profile.chatwoot_url!, profile.chatwoot_token!, k, sinceSecs, untilSecs, scopeType, scopeId),
+          chatwoot.getReportsTimeSeries(profile.chatwoot_url!, profile.chatwoot_token!, k, prevSinceSecs, prevUntilSecs, scopeType, scopeId),
+        ]).then(([curr, prev]) => ({ key: k, curr: parseSeries(curr), prev: parseSeries(prev) })))
+      );
+      if (cancelled) return;
+      const curr: Record<string, any[]> = {};
+      const prev: Record<string, any[]> = {};
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') { curr[keys[i]] = r.value.curr; prev[keys[i]] = r.value.prev; }
+      });
+      setAllSeriesData(curr);
+      setAllPrevSeriesData(prev);
+    };
+    fetchAllSeries();
+    return () => { cancelled = true; };
+  }, [summaryData, profile?.chatwoot_url, profile?.chatwoot_token, activeSince, activeUntil, selectedInboxId, selectedAgentId]);
 
   // Fetch heatmap data (conversations by hour, last 7 days regardless of date picker)
   useEffect(() => {
@@ -709,7 +756,7 @@ export default function AtencionPage() {
                   value={displayVal}
                   change={change}
                   trend={trendDirection}
-                  data={expandedMetric === metric.key && chartData.length > 0 ? chartData : []}
+                  data={expandedMetric === metric.key && chartData.length > 0 ? chartData : (allSeriesData[metric.key] || [])}
                   color={metric.color}
                   loading={loading}
                   active={expandedMetric === metric.key}

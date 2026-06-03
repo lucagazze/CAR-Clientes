@@ -36,6 +36,9 @@ import {
   Instagram,
   ShoppingBag,
   Save,
+  Sparkles,
+  Brain,
+  CheckCircle2,
 } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useViewAs } from "../contexts/ViewAsContext";
@@ -1094,6 +1097,34 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
     c.business_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // ── Scan all clients ─────────────────────────────────────────────────────
+  const [scanningAll, setScanningAll] = useState(false);
+  const [scanProgress, setScanProgress] = useState<{ done: number; total: number; current: string; errors: string[] } | null>(null);
+
+  const handleScanAll = async () => {
+    if (scanningAll) return;
+    const withUrl = clients.filter((c: any) => (c as any).website_url);
+    if (withUrl.length === 0) { showToast('Ningún cliente tiene URL configurada.', 'warning'); return; }
+    setScanningAll(true);
+    setScanProgress({ done: 0, total: withUrl.length, current: '', errors: [] });
+    const errors: string[] = [];
+    for (let i = 0; i < withUrl.length; i++) {
+      const cl: any = withUrl[i];
+      setScanProgress({ done: i, total: withUrl.length, current: cl.business_name, errors });
+      try {
+        const base = { clientId: cl.id, url: cl.website_url };
+        await fetch('/api/scrape-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...base, action: 'scrape-website' }) });
+        await fetch('/api/scrape-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...base, action: 'sync-instagram' }) });
+        await fetch('/api/scrape-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: cl.id, action: 'generate-fields' }) });
+      } catch (e: any) {
+        errors.push(`${cl.business_name}: ${e.message}`);
+      }
+    }
+    setScanProgress({ done: withUrl.length, total: withUrl.length, current: '', errors });
+    setScanningAll(false);
+    showToast(`Escaneo completado: ${withUrl.length - errors.length}/${withUrl.length} negocios actualizados.`, errors.length ? 'warning' : 'success');
+  };
+
   if (profile && !profile.is_admin) return null;
 
   return (
@@ -1140,6 +1171,15 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
             <RefreshCw className="w-3.5 h-3.5" /> Actualizar
           </button>
           <button
+            onClick={handleScanAll}
+            disabled={scanningAll}
+            className="h-9 px-3 rounded-[9px] bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white transition-all flex items-center gap-2 text-[13px] font-bold shadow-md shadow-violet-500/20"
+            title="Escanear sitio web, redes e IA de todos los negocios"
+          >
+            {scanningAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+            {scanningAll ? `Escaneando ${scanProgress?.done ?? 0}/${scanProgress?.total ?? 0}…` : 'Escanear todos'}
+          </button>
+          <button
             onClick={handleMetaLogin}
             disabled={savingConfig}
             className="h-9 px-3.5 rounded-[9px] border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-[13px] font-semibold flex items-center gap-2 transition-all disabled:opacity-50"
@@ -1175,6 +1215,39 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Scan-all progress banner */}
+      {scanProgress && (
+        <div className="bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-900/30 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              {scanningAll ? <Loader2 className="w-4 h-4 text-violet-500 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+              <p className="text-[13px] font-bold text-violet-700 dark:text-violet-300">
+                {scanningAll
+                  ? `Escaneando Cerebro IA — ${scanProgress.done}/${scanProgress.total} negocios`
+                  : `Escaneo completado — ${scanProgress.total - scanProgress.errors.length}/${scanProgress.total} actualizados`}
+              </p>
+            </div>
+            {!scanningAll && (
+              <button onClick={() => setScanProgress(null)} className="text-zinc-400 hover:text-zinc-700 p-1">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="w-full bg-violet-200/50 dark:bg-violet-900/30 rounded-full h-1.5 mb-2">
+            <div className="bg-violet-500 h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${scanProgress.total > 0 ? (scanProgress.done / scanProgress.total) * 100 : 0}%` }} />
+          </div>
+          {scanningAll && scanProgress.current && (
+            <p className="text-[11px] text-violet-500/70">Procesando: {scanProgress.current}…</p>
+          )}
+          {scanProgress.errors.length > 0 && (
+            <div className="mt-2 space-y-0.5">
+              {scanProgress.errors.map((e, i) => <p key={i} className="text-[11px] text-red-500">✗ {e}</p>)}
+            </div>
+          )}
         </div>
       )}
 
