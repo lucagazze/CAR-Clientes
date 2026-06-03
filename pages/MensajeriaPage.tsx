@@ -210,6 +210,7 @@ export default function MensajeriaPage() {
       return cached ? JSON.parse(cached) : [];
     } catch { return []; }
   });
+  const [isFirstLoadDone, setIsFirstLoadDone] = useState(false);
 
   // Reset conversations when switching profiles (admin view-as) — no data cross-contamination
   useEffect(() => {
@@ -220,6 +221,7 @@ export default function MensajeriaPage() {
     } catch {
       setConversations([]);
     }
+    setIsFirstLoadDone(false);
     setSelected(null);
     setMessages([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -352,12 +354,12 @@ export default function MensajeriaPage() {
 
   // Synchronize the unreadCount state in UnreadContext with the exact current client-side calculation
   useEffect(() => {
-    if (!loading) {
+    if (!loading && isFirstLoadDone) {
       const count = conversations.filter(isConvUnread).length;
       console.log('[MensajeriaPage] Synchronized unread count to:', count);
       setUnreadCount(count);
     }
-  }, [conversations, isConvUnread, loading, setUnreadCount]);
+  }, [conversations, isConvUnread, loading, isFirstLoadDone, setUnreadCount]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -531,6 +533,7 @@ export default function MensajeriaPage() {
       setError(e.message);
     } finally {
       setLoading(false);
+      setIsFirstLoadDone(true);
     }
   }, [cwUrl, cwToken, channelFilter, fetchConversationsData]);
 
@@ -999,7 +1002,9 @@ export default function MensajeriaPage() {
     ];
     setCannedResponses(defaults);
     if (profile?.id) {
-      localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(defaults));
+      try {
+        localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(defaults));
+      } catch (e) {}
     }
   }, [profile?.id]);
 
@@ -1037,7 +1042,9 @@ export default function MensajeriaPage() {
         }
       ].sort((a,b) => a.title.localeCompare(b.title));
       setCannedResponses(updated);
-      localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(updated));
+      try {
+        localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(updated));
+      } catch (e) {}
 
       setNewCannedTitle('');
       setNewCannedShortcut('');
@@ -1061,12 +1068,16 @@ export default function MensajeriaPage() {
       }
       const updated = cannedResponses.filter(r => r.id !== id);
       setCannedResponses(updated);
-      localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(updated));
+      try {
+        localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(updated));
+      } catch (e) {}
     } catch (err) {
       console.error('Error deleting canned response:', err);
       const updated = cannedResponses.filter(r => r.id !== id);
       setCannedResponses(updated);
-      localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(updated));
+      try {
+        localStorage.setItem(`car_canned_responses_${profile.id}`, JSON.stringify(updated));
+      } catch (e) {}
     }
   };
 

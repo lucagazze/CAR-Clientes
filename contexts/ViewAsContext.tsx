@@ -41,7 +41,9 @@ export const ViewAsProvider = ({ children }: { children: React.ReactNode }) => {
   const handleSetProfile = (p: ClientProfile | null) => {
     setViewAsProfile(p);
     if (p) {
-      localStorage.setItem('view_as_client_id', p.id);
+      try {
+        localStorage.setItem('view_as_client_id', p.id);
+      } catch (e) {}
     } else {
       localStorage.removeItem('view_as_client_id');
     }

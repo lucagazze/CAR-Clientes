@@ -72,7 +72,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           return true; // was signed out
         }
       }
-      localStorage.setItem(LAST_ACTIVE_KEY, String(now));
+      try {
+        localStorage.setItem(LAST_ACTIVE_KEY, String(now));
+      } catch (e) {}
       return false;
     };
 
@@ -91,7 +93,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+        try {
+          localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+        } catch (e) {}
         setLoading(true);
         loadProfile(session.user.id, session.user.email).finally(() => setLoading(false));
       } else {

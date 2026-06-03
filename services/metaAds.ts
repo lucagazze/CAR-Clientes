@@ -707,7 +707,11 @@ export const metaAds = {
     if (pageId && token) {
       pageTokensCache[pageId] = token;
       // Also persist to localStorage so it survives page reloads
-      localStorage.setItem(`fb_pat_${pageId}`, token);
+      try {
+        localStorage.setItem(`fb_pat_${pageId}`, token);
+      } catch (e) {
+        console.warn("Storage full: could not save fb_pat to localStorage", e);
+      }
     }
   },
 };

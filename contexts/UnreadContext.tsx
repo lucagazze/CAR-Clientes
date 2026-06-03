@@ -466,7 +466,9 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setUnreadCount(prev => {
       const nextVal = Math.max(0, prev - 1);
       if (profile?.id) {
-        localStorage.setItem(`car_unread_count_${profile.id}`, String(nextVal));
+        try {
+          localStorage.setItem(`car_unread_count_${profile.id}`, String(nextVal));
+        } catch (e) {}
       }
       return nextVal;
     });

@@ -26,10 +26,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setDarkMode(next);
     if (next) {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+      try {
+        localStorage.setItem('theme', 'dark');
+      } catch (e) {}
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+      try {
+        localStorage.setItem('theme', 'light');
+      } catch (e) {}
     }
   };
 

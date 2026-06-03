@@ -200,7 +200,13 @@ export default function MensajesDMPage() {
   const listContainerRef      = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (fbPageId) localStorage.setItem('active_fb_page_id', fbPageId);
+    if (fbPageId) {
+      try {
+        localStorage.setItem('active_fb_page_id', fbPageId);
+      } catch (e) {
+        console.warn("Storage full: could not save active_fb_page_id", e);
+      }
+    }
   }, [fbPageId]);
 
   // Auto-scroll chat to bottom on new messages (but not when loading older ones)

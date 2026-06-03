@@ -487,7 +487,11 @@ export default function AdminPage() {
   // Connect Facebook on behalf of a specific client (admin flow)
   const handleConnectFacebookForClient = () => {
     if (!editingClient) return;
-    localStorage.setItem('fb_pending_client_id', editingClient.id);
+    try {
+      localStorage.setItem('fb_pending_client_id', editingClient.id);
+    } catch (e) {
+      console.warn("Storage full: could not save fb_pending_client_id", e);
+    }
     handleMetaLogin(); // Same OAuth flow, but the redirect handler checks fb_pending_client_id
   };
 
@@ -816,7 +820,11 @@ export default function AdminPage() {
 
   const openEdit = async (c: ClientRow) => {
     if (c.fb_page_id) {
-      localStorage.setItem('active_fb_page_id', c.fb_page_id);
+      try {
+        localStorage.setItem('active_fb_page_id', c.fb_page_id);
+      } catch (e) {
+        console.warn("Storage full: could not save active_fb_page_id", e);
+      }
       if ((c as any).fb_page_access_token) {
         metaAds.setClientPageToken(c.fb_page_id, (c as any).fb_page_access_token);
       }

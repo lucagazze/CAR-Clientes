@@ -297,7 +297,13 @@ export default function ComentariosPage() {
 
   // Track fb page id
   useEffect(() => {
-    if (fbPageId) localStorage.setItem('active_fb_page_id', fbPageId);
+    if (fbPageId) {
+      try {
+        localStorage.setItem('active_fb_page_id', fbPageId);
+      } catch (e) {
+        console.warn("Storage full: could not save active_fb_page_id", e);
+      }
+    }
   }, [fbPageId]);
 
   // Global keydown listeners for Escape to close slide-over

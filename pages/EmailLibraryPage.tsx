@@ -692,9 +692,17 @@ export default function EmailLibraryPage() {
   const deleteEmails = (files: Set<string> | string[]) => {
     const set = files instanceof Set ? files : new Set(files);
     const deleted: string[] = JSON.parse(localStorage.getItem(STORAGE_DELETED_KEY) ?? '[]');
-    localStorage.setItem(STORAGE_DELETED_KEY, JSON.stringify([...new Set([...deleted, ...set])]));
+    try {
+      localStorage.setItem(STORAGE_DELETED_KEY, JSON.stringify([...new Set([...deleted, ...set])]));
+    } catch (e) {
+      console.warn("Storage full: could not save STORAGE_DELETED_KEY", e);
+    }
     const order: string[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(order.filter(f => !set.has(f))));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(order.filter(f => !set.has(f))));
+    } catch (e) {
+      console.warn("Storage full: could not save STORAGE_KEY", e);
+    }
     setEmails(prev => prev.filter(e => !set.has(e.file)));
     setSelected(new Set());
     setSelectMode(false);
@@ -721,7 +729,11 @@ export default function EmailLibraryPage() {
     const [moved] = next.splice(srcReal, 1);
     next.splice(dstReal, 0, moved);
     setEmails(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(e => e.file)));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(e => e.file)));
+    } catch (e) {
+      console.warn("Storage full: could not save STORAGE_KEY", e);
+    }
     dragIdx.current = null; setDragOver(null);
   };
 
