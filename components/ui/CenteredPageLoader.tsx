@@ -5,59 +5,111 @@ interface Props {
   children: React.ReactNode;
 }
 
+const MESSAGES = [
+  'Conectando con tu cuenta...',
+  'Cargando datos del cliente...',
+  'Sincronizando campañas...',
+  'Preparando todo para vos...',
+  'Casi listo...',
+  'Un segundo más...',
+  'Optimizando la vista...',
+  'Traemos la info más fresca...',
+];
+
 export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => {
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState<'loading' | 'fading' | 'done'>('loading');
+  const [msgIdx, setMsgIdx] = useState(0);
+  const [msgVisible, setMsgVisible] = useState(true);
 
+  // Progress simulation
   useEffect(() => {
     if (isLoading) {
       setProgress(0);
       setPhase('loading');
-      const t1 = setTimeout(() => setProgress(20), 80);
-      const t2 = setTimeout(() => setProgress(45), 350);
-      const t3 = setTimeout(() => setProgress(70), 900);
-      const t4 = setTimeout(() => setProgress(85), 1800);
+      const t1 = setTimeout(() => setProgress(18), 80);
+      const t2 = setTimeout(() => setProgress(42), 400);
+      const t3 = setTimeout(() => setProgress(67), 950);
+      const t4 = setTimeout(() => setProgress(83), 1900);
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
     } else {
       setProgress(100);
       setPhase('fading');
-      const t = setTimeout(() => setPhase('done'), 320);
+      const t = setTimeout(() => setPhase('done'), 380);
       return () => clearTimeout(t);
     }
   }, [isLoading]);
 
-  // Done or fading: show actual content
+  // Rotating messages with fade
+  useEffect(() => {
+    if (phase !== 'loading') return;
+    const cycle = () => {
+      setMsgVisible(false);
+      setTimeout(() => {
+        setMsgIdx(i => (i + 1) % MESSAGES.length);
+        setMsgVisible(true);
+      }, 350);
+    };
+    const interval = setInterval(cycle, 2200);
+    return () => clearInterval(interval);
+  }, [phase]);
+
   if (phase === 'done' || phase === 'fading') return <>{children}</>;
 
-  // Loading: show centered loader within the content area (no overlay, sidebar stays visible)
   return (
     <div
       className="w-full flex flex-col items-center justify-center px-4"
       style={{ minHeight: 'calc(100vh - 80px)' }}
     >
-      {/* Logo */}
-      <div className="mb-6 flex flex-col items-center gap-2">
-        <svg className="w-10 h-10 text-violet-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-          <polyline points="3.29 7 12 12 20.71 7"/>
-          <line x1="12" y1="22" x2="12" y2="12"/>
-        </svg>
-        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">C.A.R · Algoritmia</span>
+      {/* Logo con bounce */}
+      <div className="mb-10 flex flex-col items-center gap-5">
+        <img
+          src="/assets/logoSinFondo.png"
+          alt="Algoritmia"
+          className="w-24 h-24 object-contain"
+          style={{
+            animation: 'alg-bounce 0.85s ease-in-out infinite',
+            filter: 'drop-shadow(0 0 18px rgba(139,92,246,0.55))',
+          }}
+        />
+        <span className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.22em]">
+          C.A.R · Algoritmia
+        </span>
       </div>
 
       {/* Progress bar */}
-      <div className="w-52 space-y-2">
-        <div className="w-full h-[3px] bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+      <div className="w-64 space-y-3">
+        <div className="w-full h-[4px] bg-zinc-800 rounded-full overflow-hidden">
           <div
-            className="h-full bg-violet-500 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{
+              width: `${progress}%`,
+              background: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+              boxShadow: '0 0 10px rgba(139,92,246,0.7)',
+            }}
           />
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-zinc-400 font-medium">Cargando</span>
-          <span className="text-[10px] text-zinc-400 font-bold tabular-nums">{progress}%</span>
-        </div>
+
+        {/* Mensaje rotativo */}
+        <p
+          className="text-center text-[12px] text-zinc-400 font-medium transition-all duration-300"
+          style={{
+            opacity: msgVisible ? 1 : 0,
+            transform: msgVisible ? 'translateY(0)' : 'translateY(4px)',
+          }}
+        >
+          {MESSAGES[msgIdx]}
+        </p>
       </div>
+
+      {/* Keyframes inyectados inline */}
+      <style>{`
+        @keyframes alg-bounce {
+          0%, 100% { transform: translateY(0px); }
+          45%       { transform: translateY(-18px); }
+          65%       { transform: translateY(-10px); }
+        }
+      `}</style>
     </div>
   );
 };
