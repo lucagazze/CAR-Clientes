@@ -127,10 +127,8 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => 
 
   return (
     <div className="relative w-full min-h-screen">
-      {/* The actual page content is rendered underneath, so it's ready when the loader fades out */}
-      <div className={phase === 'fading' ? 'opacity-100' : 'opacity-0 pointer-events-none'}>
-        {children}
-      </div>
+      {/* The actual page content is only mounted when it's fading, triggering entrance animations */}
+      {phase === 'fading' && children}
 
       {/* The loader overlay */}
       <div
@@ -138,48 +136,48 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => 
           phase === 'fading' ? 'opacity-0 pointer-events-none' : 'opacity-100'
         }`}
       >
-        {/* Logo con bounce */}
-        <div className="mb-10 flex flex-col items-center gap-5">
-          <img
-            src="/assets/logoSinFondo.png"
-            alt="Algoritmia"
-            className="w-14 h-14 object-contain"
-            style={{
-              animation: 'alg-bounce 0.85s ease-in-out infinite',
-              filter: 'drop-shadow(0 0 18px rgba(139,92,246,0.55))',
-            }}
-          />
-          <span className="text-[11px] font-black text-zinc-550 dark:text-zinc-400 uppercase tracking-[0.22em]">
-            C.A.R · Algoritmia
-          </span>
-        </div>
-
-        {/* Progress bar */}
-        <div className="w-64 space-y-3">
-          <div className="w-full h-[4px] bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full"
+          {/* Logo con bounce */}
+          <div className="mb-10 flex flex-col items-center gap-5">
+            <img
+              src="/assets/logoSinFondo.png"
+              alt="Algoritmia"
+              className="w-14 h-14 object-contain"
               style={{
-                width: `${progress}%`,
-                background: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
-                boxShadow: '0 0 10px rgba(139,92,246,0.7)',
-                transition: transitionStyle === 'none' ? 'none' : `${transitionStyle}, opacity 0.25s ease-out 0.05s`,
+                animation: 'alg-bounce 0.85s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 18px rgba(139,92,246,0.55))',
               }}
             />
+            <span className="text-[11px] font-black text-zinc-550 dark:text-zinc-400 uppercase tracking-[0.22em]">
+              C.A.R · Algoritmia
+            </span>
           </div>
 
-          {/* Mensaje rotativo */}
-          <p
-            className="text-center text-[12px] text-zinc-450 dark:text-zinc-400 font-medium transition-all duration-300"
-            style={{
-              opacity: msgVisible ? 1 : 0,
-              transform: msgVisible ? 'translateY(0)' : 'translateY(4px)',
-            }}
-          >
-            {MESSAGES[msgIdx]}
-          </p>
+          {/* Progress bar */}
+          <div className="w-64 space-y-3">
+            <div className="w-full h-[4px] bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${progress}%`,
+                  background: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+                  boxShadow: '0 0 10px rgba(139,92,246,0.7)',
+                  transition: transitionStyle === 'none' ? 'none' : `${transitionStyle}, opacity 0.25s ease-out 0.05s`,
+                }}
+              />
+            </div>
+
+            {/* Mensaje rotativo */}
+            <p
+              className="text-center text-[12px] text-zinc-450 dark:text-zinc-400 font-medium transition-all duration-300"
+              style={{
+                opacity: msgVisible ? 1 : 0,
+                transform: msgVisible ? 'translateY(0)' : 'translateY(4px)',
+              }}
+            >
+              {MESSAGES[msgIdx]}
+            </p>
+          </div>
         </div>
-      </div>
 
       {/* Keyframes inyectados inline */}
       <style>{`
