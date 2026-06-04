@@ -2262,7 +2262,7 @@ export default function DashboardPage() {
               loading={fetchingKlaviyo}
               color={GREEN}
               labels={isEcommerce ? ['Entregas', 'Tasa de Apertura', 'Tasa de Clics', 'Ingresos Email'] : ['Entregas', 'Tasa de Apertura', 'Tasa de Clics']}
-              duration={1000}
+              duration={1100}
             >
               {currentKlaviyo ? (
                 <>
@@ -2476,7 +2476,7 @@ export default function DashboardPage() {
               loading={fetchingChatwoot}
               color="#8b5cf6"
               labels={['Conversaciones', 'Msj. Entrantes', 'Msj. Salientes', 'Resp. Promedio']}
-              duration={700}
+              duration={900}
             >
             {chatwootSummary ? (
               <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
