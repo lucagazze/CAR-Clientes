@@ -214,6 +214,16 @@ export default function MensajeriaPage() {
   const [isFirstLoadDone, setIsFirstLoadDone] = useState(false);
   const [loadingInboxes, setLoadingInboxes] = useState(true);
   const [loadingMetas, setLoadingMetas] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (isFirstLoadDone) {
+      const t = setTimeout(() => setMounted(true), 150);
+      return () => clearTimeout(t);
+    } else {
+      setMounted(false);
+    }
+  }, [isFirstLoadDone]);
 
 
 
@@ -1802,7 +1812,7 @@ export default function MensajeriaPage() {
 
         <div className={`
           ${listCollapsed ? 'hidden' : expanded ? 'w-full' : mobileShowChat ? 'hidden md:flex md:w-[320px]' : 'w-full md:w-[320px]'}
-          flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-300
+          flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 ${mounted ? 'transition-all duration-300' : ''}
         `}>
 
           {/* Assign tabs */}
