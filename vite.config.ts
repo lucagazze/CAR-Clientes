@@ -38,6 +38,11 @@ export default defineConfig({
     port: 5174,
     host: true,
     proxy: {
+      '/supabase': {
+        target: 'https://czocbnyoenjbpxmcqobn.supabase.co',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/supabase/, ''),
+      },
       '/api/klaviyo': {
         target: 'https://a.klaviyo.com/api',
         changeOrigin: true,
