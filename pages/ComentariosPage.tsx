@@ -85,6 +85,7 @@ export default function ComentariosPage() {
   const [replyLangs, setReplyLangs] = useState<Record<string, 'en' | 'es'>>({});
   const [langDropdownOpen, setLangDropdownOpen] = useState<Record<string, boolean>>({});
   const [activeReplyTargets, setActiveReplyTargets] = useState<Record<string, any>>({});
+  const [mobileTab, setMobileTab] = useState<'post' | 'comments'>('comments');
 
   const LANGS: { code: 'en' | 'es'; flag: string; label: string }[] = [
     { code: 'en', flag: '🇺🇸', label: 'English' },
@@ -577,6 +578,7 @@ export default function ComentariosPage() {
     setLikedIds({});
     setPlayingVideoId(null);
     setCommentFilter('pending');
+    setMobileTab('comments'); // always land on comments tab on mobile
 
     // Always fetch fresh IG permalink and normalize to /p/ format (avoids reel player redirect)
     if (post.platform === 'instagram') {
@@ -1100,21 +1102,21 @@ export default function ComentariosPage() {
         <div className="fixed inset-0 z-[400] flex justify-end animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedPost(null)} />
 
-          <div className="relative w-full max-w-5xl h-full bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right transition-spring duration-300 z-10">
+          <div className="relative w-full md:max-w-5xl h-full bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right transition-spring duration-300 z-10">
 
             {/* Header */}
-            <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
+            <div className="px-4 md:px-6 py-3 md:py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between flex-shrink-0 gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white ${
                   selectedPost.platform === 'instagram'
                     ? 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600'
                     : 'bg-blue-600'
                 }`}>
                   {selectedPost.platform === 'instagram' ? <Instagram className="w-4 h-4" /> : <span className="font-black text-sm">f</span>}
                 </div>
-                <div>
-                  <h3 className="font-black text-zinc-900 dark:text-white text-[15px] leading-tight">
-                    {selectedPost.platform === 'instagram' ? 'Publicación de Instagram' : 'Publicación de Facebook'}
+                <div className="min-w-0">
+                  <h3 className="font-black text-zinc-900 dark:text-white text-[13px] md:text-[15px] leading-tight truncate">
+                    {selectedPost.platform === 'instagram' ? 'Instagram' : 'Facebook'}
                   </h3>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-zinc-400 font-bold">{fmtDate(selectedPost.timestamp)}</span>
@@ -1126,21 +1128,24 @@ export default function ComentariosPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {/* Bulk drafts */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* Bulk drafts — compact on mobile, full on desktop */}
                 <button
                   onClick={bulkGenerateDrafts}
                   disabled={bulkLoading || comments.filter(c => isCommentPending(c, selectedPost.platform)).length === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/20 dark:hover:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-xl text-[11px] font-black border border-violet-100/50 dark:border-violet-900/20 transition-all disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/20 dark:hover:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-xl text-[11px] font-black border border-violet-100/50 dark:border-violet-900/20 transition-all disabled:opacity-50"
+                  title="Generar borradores para todos los pendientes"
                 >
                   {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  Generar borradores para todos ({comments.filter(c => isCommentPending(c, selectedPost.platform)).length})
+                  <span className="hidden md:inline">Generar borradores para todos ({comments.filter(c => isCommentPending(c, selectedPost.platform)).length})</span>
+                  <span className="md:hidden">{comments.filter(c => isCommentPending(c, selectedPost.platform)).length > 0 && <span className="text-[10px] font-black">{comments.filter(c => isCommentPending(c, selectedPost.platform)).length}</span>}</span>
                 </button>
                 {selectedPost.permalink && (
                   <a href={selectedPost.permalink} target="_blank" rel="noreferrer"
                     title={selectedPost.permalink}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl text-[11px] text-zinc-600 dark:text-zinc-300 font-bold border border-zinc-200 dark:border-zinc-700 transition-all">
-                    Ver original <ArrowUpRight className="w-3 h-3" />
+                    className="inline-flex items-center gap-1 p-1.5 md:px-3 md:py-1.5 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl text-[11px] text-zinc-600 dark:text-zinc-300 font-bold border border-zinc-200 dark:border-zinc-700 transition-all">
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Ver original</span>
                   </a>
                 )}
                 <button onClick={() => setSelectedPost(null)} className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
@@ -1149,11 +1154,40 @@ export default function ComentariosPage() {
               </div>
             </div>
 
+            {/* Mobile tab bar */}
+            <div className="md:hidden flex border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex-shrink-0">
+              <button
+                onClick={() => setMobileTab('post')}
+                className={`flex-1 py-2.5 text-[12px] font-black transition-colors ${
+                  mobileTab === 'post'
+                    ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
+                    : 'text-zinc-500 dark:text-zinc-400'
+                }`}
+              >
+                Publicación
+              </button>
+              <button
+                onClick={() => setMobileTab('comments')}
+                className={`flex-1 py-2.5 text-[12px] font-black transition-colors flex items-center justify-center gap-1.5 ${
+                  mobileTab === 'comments'
+                    ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
+                    : 'text-zinc-500 dark:text-zinc-400'
+                }`}
+              >
+                Comentarios
+                {!loadingComments && comments.length > 0 && (
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400">{comments.length}</span>
+                )}
+              </button>
+            </div>
+
             {/* Body: post preview + comments */}
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
 
-              {/* Left: Post media + caption */}
-              <div className="md:w-[300px] flex-shrink-0 border-r border-zinc-100 dark:border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-50/30 dark:bg-zinc-950/10">
+              {/* Left: Post media + caption — hidden on mobile when comments tab active */}
+              <div className={`${
+                mobileTab === 'comments' ? 'hidden md:flex' : 'flex'
+              } md:w-[300px] flex-shrink-0 flex-col border-r border-zinc-100 dark:border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-50/30 dark:bg-zinc-950/10`}>
                 {/* Media */}
                 {selectedPost.thumbnail || selectedPost.mediaUrl ? (
                   <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-100 dark:bg-zinc-900">
@@ -1198,8 +1232,10 @@ export default function ComentariosPage() {
                 </div>
               </div>
 
-              {/* Right: Comments list */}
-              <div className="flex-1 overflow-y-auto flex flex-col">
+              {/* Right: Comments list — hidden on mobile when post tab active */}
+              <div className={`${
+                mobileTab === 'post' ? 'hidden md:flex' : 'flex'
+              } flex-1 overflow-y-auto flex-col`}>
                 {/* Filter toggle */}
                 {!loadingComments && comments.length > 0 && (
                   <div className="flex items-center gap-1 px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
