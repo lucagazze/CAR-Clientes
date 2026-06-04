@@ -1184,7 +1184,7 @@ export default function EmailMarketingPage() {
               }`}
             >
               {t.icon}
-              <span className="hidden xs:inline sm:inline">{t.label}</span>
+              <span>{t.label}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${tab === t.id ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400' : 'bg-zinc-200 dark:bg-white/10 text-zinc-400'}`}>
                 {t.count}
               </span>
