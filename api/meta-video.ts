@@ -73,11 +73,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (videoRes.ok) {
         const data = await videoRes.json();
         let bestThumbnail = data.picture || null;
+        let embedHtml: string | null = null;
         if (Array.isArray(data.format)) {
           const sorted = [...data.format].sort((a: any, b: any) => (b.width || 0) - (a.width || 0));
           if (sorted[0]?.picture) bestThumbnail = sorted[0].picture;
+          const withEmbed = sorted.find((f: any) => f.embed_html);
+          if (withEmbed) embedHtml = withEmbed.embed_html;
         }
-        return { source: data.source || null, picture: bestThumbnail };
+        return { source: data.source || null, picture: bestThumbnail, embedHtml };
       }
       return null;
     }
@@ -85,20 +88,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. If videoId is provided directly, resolve it
     if (videoId && typeof videoId === 'string') {
       const resolved = await resolveVideoSource(videoId);
-      if (resolved && resolved.source) {
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        return res.status(200).json({
-          type: 'video_source',
-          source: resolved.source,
-          picture: resolved.picture,
-        });
+      if (resolved) {
+        if (resolved.source) {
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          return res.status(200).json({
+            type: 'video_source',
+            source: resolved.source,
+            picture: resolved.picture,
+          });
+        } else if (resolved.embedHtml) {
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          return res.status(200).json({
+            type: 'ad_preview',
+            embed_html: resolved.embedHtml,
+            picture: resolved.picture,
+          });
+        }
       }
     }
 
     // 2. If creativeId is provided, query creative specs
     if (creativeId && typeof creativeId === 'string') {
       const creativeRes = await fetch(
-        `${base}/${creativeId}?fields=video_id,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id,effective_object_story_id,effective_instagram_story_id&access_token=${token}`
+        `${base}/${creativeId}?fields=video_id,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id,effective_object_story_id,effective_instagram_story_id,object_story_id&access_token=${token}`
       );
 
       if (creativeRes.ok) {
@@ -160,18 +172,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // 2b. Check if single video creative
         const resolvedVideoId =
           creativeData.object_story_spec?.video_data?.video_id ||
+          creativeData.object_story_spec?.link_data?.video_id ||
           creativeData.asset_feed_spec?.videos?.[0]?.video_id ||
           creativeData.video_id;
 
         if (resolvedVideoId) {
           const resolved = await resolveVideoSource(resolvedVideoId);
-          if (resolved && resolved.source) {
-            res.setHeader('Cache-Control', 'public, max-age=3600');
-            return res.status(200).json({
-              type: 'video_source',
-              source: resolved.source,
-              picture: resolved.picture || creativeData.image_url || creativeData.thumbnail_url || null,
-            });
+          if (resolved) {
+            if (resolved.source) {
+              res.setHeader('Cache-Control', 'public, max-age=3600');
+              return res.status(200).json({
+                type: 'video_source',
+                source: resolved.source,
+                picture: resolved.picture || creativeData.image_url || creativeData.thumbnail_url || null,
+              });
+            } else if (resolved.embedHtml) {
+              res.setHeader('Cache-Control', 'public, max-age=3600');
+              return res.status(200).json({
+                type: 'ad_preview',
+                embed_html: resolved.embedHtml,
+                picture: resolved.picture || creativeData.image_url || creativeData.thumbnail_url || null,
+              });
+            }
           }
         }
 
@@ -215,12 +237,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        // 2b-3. Try resolving via effective_object_story_id (e.g. Facebook Reels or organic posts used in Ads)
-        const storyId = creativeData.effective_object_story_id;
+        // 2b-3. Try resolving via effective_object_story_id or object_story_id (e.g. Facebook Reels or organic posts used in Ads)
+        const storyId = creativeData.effective_object_story_id || creativeData.object_story_id;
         if (storyId) {
           try {
             const postRes = await fetch(
-              `${base}/${storyId}?fields=attachments,source,type,object_id,message,full_picture&access_token=${token}`
+              `${base}/${storyId}?fields=attachments,source,type,object_id,message,full_picture,video_id&access_token=${token}`
             );
             if (postRes.ok) {
               const postData = await postRes.json();
@@ -235,16 +257,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
               }
 
-              // Extra check if object_id points to a video
-              if (postData.object_id && (postData.type === 'video' || postData.attachments?.data?.[0]?.type?.includes('video'))) {
-                const resolved = await resolveVideoSource(postData.object_id);
-                if (resolved && resolved.source) {
-                  res.setHeader('Cache-Control', 'public, max-age=3600');
-                  return res.status(200).json({
-                    type: 'video_source',
-                    source: resolved.source,
-                    picture: resolved.picture || postData.full_picture || creativeData.image_url || null,
-                  });
+              // Extra check if object_id or video_id points to a video
+              const postVideoId = postData.video_id || postData.object_id;
+              if (postVideoId && (postData.type === 'video' || postData.attachments?.data?.[0]?.type?.includes('video'))) {
+                const resolved = await resolveVideoSource(postVideoId);
+                if (resolved) {
+                  if (resolved.source) {
+                    res.setHeader('Cache-Control', 'public, max-age=3600');
+                    return res.status(200).json({
+                      type: 'video_source',
+                      source: resolved.source,
+                      picture: resolved.picture || postData.full_picture || creativeData.image_url || null,
+                    });
+                  } else if (resolved.embedHtml) {
+                    res.setHeader('Cache-Control', 'public, max-age=3600');
+                    return res.status(200).json({
+                      type: 'ad_preview',
+                      embed_html: resolved.embedHtml,
+                      picture: resolved.picture || postData.full_picture || creativeData.image_url || null,
+                    });
+                  }
                 }
               }
               
@@ -256,13 +288,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 // If it is a video attachment
                 if (first.target?.id && (first.type?.includes('video') || postData.type === 'video')) {
                   const resolved = await resolveVideoSource(first.target.id);
-                  if (resolved && resolved.source) {
-                    res.setHeader('Cache-Control', 'public, max-age=3600');
-                    return res.status(200).json({
-                      type: 'video_source',
-                      source: resolved.source,
-                      picture: resolved.picture || first.media?.image?.src || postData.full_picture || creativeData.image_url || null,
-                    });
+                  if (resolved) {
+                    if (resolved.source) {
+                      res.setHeader('Cache-Control', 'public, max-age=3600');
+                      return res.status(200).json({
+                        type: 'video_source',
+                        source: resolved.source,
+                        picture: resolved.picture || first.media?.image?.src || postData.full_picture || creativeData.image_url || null,
+                      });
+                    } else if (resolved.embedHtml) {
+                      res.setHeader('Cache-Control', 'public, max-age=3600');
+                      return res.status(200).json({
+                        type: 'ad_preview',
+                        embed_html: resolved.embedHtml,
+                        picture: resolved.picture || first.media?.image?.src || postData.full_picture || creativeData.image_url || null,
+                      });
+                    }
                   }
                 }
                 

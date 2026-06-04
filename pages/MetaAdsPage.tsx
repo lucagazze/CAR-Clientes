@@ -159,9 +159,31 @@ const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
               <img src={mediaData.url || undefined} alt={preview.name || 'Creative'} referrerPolicy="no-referrer" className="rounded-2xl shadow-2xl border border-white/10 max-h-[80vh] max-w-[90vw] w-full object-contain" style={{ minWidth: 'min(90vw, 400px)', minHeight: '300px' }} />
             )}
 
-            {mediaData.type === 'ad_preview' && mediaData.embed_html && (
-              <div className="rounded-2xl overflow-hidden shadow-2xl bg-zinc-900 border border-white/10" style={{ width: 'min(90vw, 420px)', maxHeight: '90vh' }} onClick={(e: React.MouseEvent) => e.stopPropagation()} dangerouslySetInnerHTML={{ __html: mediaData.embed_html.replace(/width="\d+"/g, 'width="100%"').replace(/width:\s*\d+px/g, 'width:100%').replace(/<iframe/g, '<iframe style="width:100%;max-height:80vh;border:none;"') }} />
-            )}
+            {mediaData.type === 'ad_preview' && mediaData.embed_html && (() => {
+              const widthMatch = mediaData.embed_html.match(/width="(\d+)"/);
+              const heightMatch = mediaData.embed_html.match(/height="(\d+)"/);
+              let aspect = '9/16'; // default vertical
+              if (widthMatch && heightMatch) {
+                const w = parseInt(widthMatch[1]);
+                const h = parseInt(heightMatch[1]);
+                if (w && h) {
+                  aspect = `${w}/${h}`;
+                }
+              }
+              const cleanHtml = mediaData.embed_html
+                .replace(/width="\d+"/g, 'width="100%"')
+                .replace(/height="\d+"/g, 'height="100%"')
+                .replace(/<iframe/g, `<iframe style="width:100%;height:100%;aspect-ratio:${aspect};max-height:80vh;border:none;"`);
+              
+              return (
+                <div 
+                  className="rounded-2xl overflow-hidden shadow-2xl bg-zinc-900 border border-white/10" 
+                  style={{ width: 'min(90vw, 420px)', maxHeight: '90vh' }} 
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()} 
+                  dangerouslySetInnerHTML={{ __html: cleanHtml }} 
+                />
+              );
+            })()}
 
             {mediaData.type === 'none' && (
               <div className="flex flex-col items-center gap-4">
