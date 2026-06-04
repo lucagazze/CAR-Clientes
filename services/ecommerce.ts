@@ -231,6 +231,7 @@ export const ecommerce = {
 
     const dailyData: Record<string, { revenue: number; orders: number }> = {};
     const productStats: Record<string, { title: string; quantity: number; revenue: number }> = {};
+    const variantStats: Record<string, number> = {};
     let returningCustomers = 0;
     let newCustomers = 0;
     let fulfilledOrders = 0;
@@ -273,6 +274,11 @@ export const ecommerce = {
           }
           productStats[id].quantity += item.quantity;
           productStats[id].revenue += parseFloat(item.price || 0) * item.quantity;
+
+          if (item.variant_id) {
+            const vId = String(item.variant_id);
+            variantStats[vId] = (variantStats[vId] || 0) + item.quantity;
+          }
         });
       }
     });
@@ -367,6 +373,7 @@ export const ecommerce = {
       topProducts,
       daily,
       recentOrders,
+      variantOrders: variantStats,
     };
 
     ecSetCache(cacheKey, result);

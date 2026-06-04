@@ -88,8 +88,8 @@ export default function ComentariosPage() {
   const [mobileTab, setMobileTab] = useState<'post' | 'comments'>('comments');
 
   const LANGS: { code: 'en' | 'es'; flag: string; label: string }[] = [
-    { code: 'en', flag: '🇺🇸', label: 'English' },
-    { code: 'es', flag: '🇦🇷', label: 'Español' },
+    { code: 'en', flag: '🇬🇧', label: 'English' },
+    { code: 'es', flag: '🇪🇸', label: 'Español' },
   ];
 
   const detectLang = (text: string): 'en' | 'es' => {
@@ -1193,10 +1193,10 @@ export default function ComentariosPage() {
                   <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-100 dark:bg-zinc-900">
                     {selectedPost.mediaType === 'VIDEO' ? (
                       playingVideoId === selectedPost.id ? (
-                        <video src={selectedPost.mediaUrl || selectedPost.thumbnail || ''} controls autoPlay className="w-full max-h-64 object-contain bg-black" />
+                        <video src={selectedPost.mediaUrl || selectedPost.thumbnail || ''} controls autoPlay referrerPolicy="no-referrer" className="w-full max-h-64 object-contain bg-black" />
                       ) : (
                         <div className="relative cursor-pointer" onClick={() => setPlayingVideoId(selectedPost.id)}>
-                          <img src={selectedPost.thumbnail || ''} alt="" className="w-full max-h-64 object-cover" />
+                          <img src={selectedPost.thumbnail || ''} alt="" referrerPolicy="no-referrer" className="w-full max-h-64 object-cover" />
                           <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                             <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
                               <Play className="w-6 h-6 fill-zinc-900 text-zinc-900 ml-1" />
@@ -1205,7 +1205,7 @@ export default function ComentariosPage() {
                         </div>
                       )
                     ) : (
-                      <img src={selectedPost.thumbnail || selectedPost.mediaUrl || ''} alt="" className="w-full max-h-64 object-cover" loading="lazy" />
+                      <img src={selectedPost.thumbnail || selectedPost.mediaUrl || ''} alt="" referrerPolicy="no-referrer" className="w-full max-h-64 object-cover" loading="lazy" />
                     )}
                   </div>
                 ) : null}
@@ -1340,6 +1340,7 @@ export default function ComentariosPage() {
                               <img
                                 src={comment.attachment.media.image.src}
                                 alt={comment.attachment.type || 'sticker'}
+                                referrerPolicy="no-referrer"
                                 className="max-w-[100px] max-h-[100px] rounded-lg object-contain"
                               />
                               {(comment.text || comment.message) && (
@@ -1463,7 +1464,7 @@ export default function ComentariosPage() {
                                     >
                                       {(() => {
                                         const cur = replyLangs[comment.id] || detectLang(comment.text || comment.message || '');
-                                        return LANGS.find(l => l.code === cur)?.flag ?? '🇦🇷';
+                                        return LANGS.find(l => l.code === cur)?.flag ?? '🇪🇸';
                                       })()}
                                       <svg className="w-2.5 h-2.5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                     </button>

@@ -34,6 +34,7 @@ export default function SmoothImage({ src, alt = '', className = '', containerCl
           alt={alt}
           onLoad={() => setLoaded(true)}
           onError={() => setError(true)}
+          referrerPolicy="no-referrer"
           className={`w-full h-full object-cover transition-opacity duration-300 ease-out ${loaded ? 'opacity-100' : 'opacity-0'} ${className}`}
         />
       )}

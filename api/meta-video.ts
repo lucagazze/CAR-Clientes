@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 2. If creativeId is provided, query creative specs
     if (creativeId && typeof creativeId === 'string') {
       const creativeRes = await fetch(
-        `${base}/${creativeId}?fields=video_id,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id&access_token=${token}`
+        `${base}/${creativeId}?fields=video_id,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id,effective_object_story_id&access_token=${token}`
       );
 
       if (creativeRes.ok) {
@@ -139,6 +139,99 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               source: resolved.source,
               picture: resolved.picture || creativeData.image_url || creativeData.thumbnail_url || null,
             });
+          }
+        }
+
+        // 2b-2. Try resolving via effective_object_story_id (e.g. Instagram Reels or organic posts used in Ads)
+        const storyId = creativeData.effective_object_story_id;
+        if (storyId) {
+          try {
+            const postRes = await fetch(
+              `${base}/${storyId}?fields=attachments,source,type,object_id,message,full_picture&access_token=${token}`
+            );
+            if (postRes.ok) {
+              const postData = await postRes.json();
+              
+              // If the post has a direct playable video source (common for reels / video posts)
+              if (postData.source) {
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                return res.status(200).json({
+                  type: 'video_source',
+                  source: postData.source,
+                  picture: postData.full_picture || postData.picture || creativeData.image_url || creativeData.thumbnail_url || null,
+                });
+              }
+              
+              // Check attachments for video or image
+              const attachments = postData.attachments?.data;
+              if (Array.isArray(attachments) && attachments.length > 0) {
+                const first = attachments[0];
+                
+                // If it is a video attachment
+                if (first.target?.id && (first.type?.includes('video') || postData.type === 'video')) {
+                  const resolved = await resolveVideoSource(first.target.id);
+                  if (resolved && resolved.source) {
+                    res.setHeader('Cache-Control', 'public, max-age=3600');
+                    return res.status(200).json({
+                      type: 'video_source',
+                      source: resolved.source,
+                      picture: resolved.picture || first.media?.image?.src || postData.full_picture || creativeData.image_url || null,
+                    });
+                  }
+                }
+                
+                // If it's a carousel attachment (subattachments)
+                const subAttachments = first.subattachments?.data;
+                if (Array.isArray(subAttachments) && subAttachments.length > 0) {
+                  const cards = await Promise.all(
+                    subAttachments.map(async (sub: any) => {
+                      if (sub.target?.id && (sub.type?.includes('video') || sub.type === 'video_inline')) {
+                        const resolvedVideo = await resolveVideoSource(sub.target.id);
+                        if (resolvedVideo && resolvedVideo.source) {
+                          return {
+                            url: resolvedVideo.picture || sub.media?.image?.src || '',
+                            isVideo: true,
+                            videoSrc: resolvedVideo.source,
+                            name: sub.title || '',
+                          };
+                        }
+                      }
+                      return {
+                        url: sub.media?.image?.src || '',
+                        isVideo: false,
+                        name: sub.title || '',
+                      };
+                    })
+                  );
+                  
+                  res.setHeader('Cache-Control', 'public, max-age=1800');
+                  return res.status(200).json({
+                    type: 'carousel',
+                    cards,
+                  });
+                }
+
+                // If it's a single image in attachment
+                if (first.media?.image?.src) {
+                  res.setHeader('Cache-Control', 'public, max-age=3600');
+                  return res.status(200).json({
+                    type: 'image',
+                    url: first.media.image.src,
+                  });
+                }
+              }
+
+              // Fallback to post full picture
+              if (postData.full_picture || postData.picture) {
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                return res.status(200).json({
+                  type: 'image',
+                  url: postData.full_picture || postData.picture,
+                });
+              }
+            }
+          } catch (err) {
+            console.error(`Error resolving effective_object_story_id ${storyId}:`, err);
           }
         }
 

@@ -13,8 +13,8 @@ import { db } from '../services/db';
 import SmoothImage from '../components/ui/SmoothImage';
 
 const LANGS: { code: 'en' | 'es'; flag: string; label: string }[] = [
-  { code: 'en', flag: '🇺🇸', label: 'English' },
-  { code: 'es', flag: '🇦🇷', label: 'Español' },
+  { code: 'en', flag: '🇬🇧', label: 'English' },
+  { code: 'es', flag: '🇪🇸', label: 'Español' },
 ];
 
 const detectLang = (text: string): 'en' | 'es' => {
@@ -1178,6 +1178,7 @@ export default function RedesSocialesPage() {
                                   controls
                                   autoPlay
                                   preload="none"
+                                  referrerPolicy="no-referrer"
                                   className="w-full h-full object-contain bg-black"
                                 />
                               ) : (
@@ -1392,7 +1393,7 @@ export default function RedesSocialesPage() {
                       <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                       <div>
                         <h4 className="font-bold text-amber-800 dark:text-amber-400 text-[13.5px]">Error de permisos de Facebook</h4>
-                        <p className="text-[12px] text-amber-600 dark:text-amber-500 mt-1 leading-relaxed">
+                        <p className="text-[12px] text-amber-600 dark:amber-500 mt-1 leading-relaxed">
                           No se pudo cargar el feed orgánico. Esto ocurre si el token de acceso del usuario no tiene los permisos necesarios de administrador sobre la página de Facebook del cliente:
                         </p>
                         <code className="block mt-2.5 p-2 bg-amber-100/60 dark:bg-amber-950/40 rounded-xl text-[11px] font-mono break-all text-amber-800 dark:text-amber-300">
@@ -1458,6 +1459,7 @@ export default function RedesSocialesPage() {
                                   controls
                                   autoPlay
                                   preload="none"
+                                  referrerPolicy="no-referrer"
                                   className="w-full h-full object-contain bg-black"
                                 />
                               ) : (
@@ -1672,6 +1674,7 @@ export default function RedesSocialesPage() {
                             poster={activePost.thumbnail_url || activePost.full_picture}
                             controls
                             preload="none"
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-contain"
                           />
                         </div>
@@ -1823,6 +1826,7 @@ export default function RedesSocialesPage() {
                                     <img
                                       src={comment.attachment.media.image.src}
                                       alt={comment.attachment.type || 'sticker'}
+                                      referrerPolicy="no-referrer"
                                       className="max-w-[100px] max-h-[100px] rounded-lg object-contain"
                                     />
                                     {commentText && (
@@ -1946,7 +1950,7 @@ export default function RedesSocialesPage() {
                                           >
                                             {(() => {
                                               const cur = replyLangs[comment.id] || detectLang(commentText);
-                                              return LANGS.find(l => l.code === cur)?.flag ?? '🇦🇷';
+                                              return LANGS.find(l => l.code === cur)?.flag ?? '🇪🇸';
                                             })()}
                                             <svg className="w-2.5 h-2.5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                           </button>

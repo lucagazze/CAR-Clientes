@@ -58,6 +58,7 @@ export default function InventarioPage() {
   // Top products by orders (last 30 days) — always fresh, no cache
   const [topProducts, setTopProducts] = useState<{ title: string; quantity: number }[]>([]);
   const [topProductsMap, setTopProductsMap] = useState<Record<string, number>>({});
+  const [variantOrdersMap, setVariantOrdersMap] = useState<Record<string, number>>({});
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   const getInventoryUrl = () => {
@@ -98,6 +99,7 @@ export default function InventarioPage() {
           map[p.title.toLowerCase()] = p.quantity;
         });
         setTopProductsMap(map);
+        setVariantOrdersMap(data?.variantOrders || {});
       })
       .catch(() => {})
       .finally(() => setLoadingOrders(false));
@@ -361,12 +363,20 @@ export default function InventarioPage() {
                             const qty = v.inventory_quantity ?? 0;
                             const isOut = qty <= 0;
                             const isLow = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+                            const variantOrderQty = variantOrdersMap[String(v.id)] || 0;
                             return (
                               <div key={v.id} className={`flex items-center gap-3 pl-14 pr-4 py-2.5 ${isOut ? 'bg-red-50/40 dark:bg-red-950/10' : isLow ? 'bg-amber-50/40 dark:bg-amber-950/10' : ''}`}>
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-grow flex items-center justify-between gap-2 min-w-0">
                                   <p className="text-[12px] text-zinc-700 dark:text-zinc-300 truncate">{v.title === 'Default Title' ? product.title : v.title}</p>
+                                  {variantOrderQty > 0 && (
+                                    <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                      {variantOrderQty} ped.
+                                    </span>
+                                  )}
                                 </div>
-                                <StockBadge qty={qty} />
+                                <div className="shrink-0">
+                                  <StockBadge qty={qty} />
+                                </div>
                               </div>
                             );
                           })}

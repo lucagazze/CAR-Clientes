@@ -307,9 +307,9 @@ export default function CreativeTesterPage() {
                   {previewUrl && file ? (
                     <div className="space-y-3">
                       {file.type.startsWith('video') ? (
-                        <video src={previewUrl} className="max-h-48 mx-auto rounded-xl" controls muted />
+                        <video src={previewUrl} className="max-h-48 mx-auto rounded-xl" controls muted referrerPolicy="no-referrer" />
                       ) : (
-                        <img src={previewUrl} alt="preview" className="max-h-48 mx-auto rounded-xl object-contain" />
+                        <img src={previewUrl} alt="preview" className="max-h-48 mx-auto rounded-xl object-contain" referrerPolicy="no-referrer" />
                       )}
                       <div className="flex items-center justify-center gap-2 text-[12px] text-zinc-500">
                         {file.type.startsWith('video') ? <Film className="w-3.5 h-3.5" /> : <Image className="w-3.5 h-3.5" />}
@@ -360,7 +360,7 @@ export default function CreativeTesterPage() {
                           className={`rounded-xl overflow-hidden border-2 transition-all text-left ${isSelected ? 'border-violet-500 ring-2 ring-violet-300 dark:ring-violet-700' : 'border-zinc-200 dark:border-zinc-700 hover:border-violet-400'}`}
                         >
                           <div className="aspect-square bg-zinc-100 dark:bg-zinc-800">
-                            {thumb ? <img src={thumb} alt={ad.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-zinc-400" /></div>}
+                            {thumb ? <img src={thumb} alt={ad.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Film className="w-6 h-6 text-zinc-400" /></div>}
                           </div>
                           <div className="p-2">
                             <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate">{ad.name || `Anuncio ${ad.id}`}</p>

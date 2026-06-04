@@ -122,11 +122,11 @@ const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
                     )}
                     {activeCard.isVideo && activeCard.videoSrc ? (
                       <div className="flex flex-col items-center gap-4">
-                        <video src={activeCard.videoSrc} controls autoPlay={false} playsInline className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '60vh', minWidth: 'min(90vw, 320px)' }} />
+                        <video src={activeCard.videoSrc} controls autoPlay={false} playsInline referrerPolicy="no-referrer" className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '60vh', minWidth: 'min(90vw, 320px)' }} />
                         <a href={activeCard.videoSrc} download={`video-carousel-${activeIndex}.mp4`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold rounded-full transition-all shadow-lg" onClick={e => e.stopPropagation()}><Download className="w-3.5 h-3.5" />Descargar Video</a>
                       </div>
                     ) : (
-                      <img src={activeCard.url} alt={activeCard.name || `Slide ${activeIndex + 1}`} className="rounded-2xl shadow-2xl border border-white/10 max-h-[60vh] max-w-[90vw] object-contain transition-all duration-300" />
+                      <img src={activeCard.url} alt={activeCard.name || `Slide ${activeIndex + 1}`} referrerPolicy="no-referrer" className="rounded-2xl shadow-2xl border border-white/10 max-h-[60vh] max-w-[90vw] object-contain transition-all duration-300" />
                     )}
                   </div>
                   <div className="text-center mt-4">
@@ -150,13 +150,13 @@ const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
 
             {mediaData.type === 'video_source' && (
               <div className="flex flex-col items-center gap-4">
-                <video src={mediaData.source || undefined} controls autoPlay playsInline className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '70vh', minWidth: 'min(90vw, 400px)' }} />
+                <video src={mediaData.source || undefined} controls autoPlay playsInline referrerPolicy="no-referrer" className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '70vh', minWidth: 'min(90vw, 400px)' }} />
                 <a href={mediaData.source || undefined} download={`video-${preview.videoId || 'creative'}.mp4`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-[12.5px] font-bold rounded-full transition-all shadow-lg" onClick={e => e.stopPropagation()}><Download className="w-4 h-4" />Descargar Video</a>
               </div>
             )}
 
             {mediaData.type === 'image' && (
-              <img src={mediaData.url || undefined} alt={preview.name || 'Creative'} className="rounded-2xl shadow-2xl border border-white/10 max-h-[88vh] max-w-[90vw] object-contain" />
+              <img src={mediaData.url || undefined} alt={preview.name || 'Creative'} referrerPolicy="no-referrer" className="rounded-2xl shadow-2xl border border-white/10 max-h-[88vh] max-w-[90vw] object-contain" />
             )}
 
             {mediaData.type === 'ad_preview' && mediaData.embed_html && (
@@ -166,7 +166,7 @@ const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
             {mediaData.type === 'none' && (
               <div className="flex flex-col items-center gap-4">
                 <div className="relative rounded-2xl overflow-hidden" style={{ maxWidth: 'min(90vw, 500px)' }}>
-                  <img src={preview.url} alt={preview.name} className="w-full rounded-2xl shadow-2xl border border-white/10" style={{ maxHeight: '70vh', objectFit: 'contain' }} />
+                  <img src={preview.url} alt={preview.name} referrerPolicy="no-referrer" className="w-full rounded-2xl shadow-2xl border border-white/10" style={{ maxHeight: '70vh', objectFit: 'contain' }} />
                 </div>
                 <p className="text-white/60 text-xs">No pudimos cargar una vista previa interactiva.</p>
                 <a href={preview.effectiveObjectStoryId ? (preview.effectiveObjectStoryId.includes('_') ? (() => { const [pId, ptId] = preview.effectiveObjectStoryId!.split('_'); return `https://www.facebook.com/permalink.php?story_fbid=${ptId}&id=${pId}`; })() : `https://facebook.com/${preview.effectiveObjectStoryId}`) : `https://www.facebook.com/ads/library/?id=${preview.creativeId || preview.adId}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-5 py-2.5 bg-[#1877F2] hover:bg-[#166FE5] text-white text-[13px] font-bold rounded-full transition-all shadow-lg"><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>Ver en Facebook</a>
@@ -176,7 +176,7 @@ const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
         ) : (
           <div className="flex flex-col items-center gap-4">
             <div className="relative rounded-2xl overflow-hidden" style={{ maxWidth: 'min(90vw, 500px)' }}>
-              <img src={preview.url} alt={preview.name} className="w-full rounded-2xl shadow-2xl border border-white/10" style={{ maxHeight: '70vh', objectFit: 'contain' }} />
+              <img src={preview.url} alt={preview.name} referrerPolicy="no-referrer" className="w-full rounded-2xl shadow-2xl border border-white/10" style={{ maxHeight: '70vh', objectFit: 'contain' }} />
             </div>
           </div>
         )}
@@ -645,8 +645,8 @@ export default function MetaAdsPage() {
                           onClick={() => setActivePreview({ url: thumbUrl || '', isVideo, videoId: ad.creative?.video_id, adId: ad.id, creativeId: ad.creative?.id, name: ad.name, effectiveObjectStoryId: ad.creative?.effective_object_story_id })}
                         >
                           {thumbUrl ? (<>
-                            <img src={thumbUrl} alt="" className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60" aria-hidden />
-                            <img src={thumbUrl} alt={ad.name} className="relative z-10 w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
+                            <img src={thumbUrl} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60" aria-hidden />
+                            <img src={thumbUrl} alt={ad.name} referrerPolicy="no-referrer" className="relative z-10 w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" />
                             <div className="absolute inset-0 z-20 bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center">
                               <div className={`flex items-center justify-center w-14 h-14 rounded-full shadow-2xl transition-all duration-200 ${isVideo ? 'bg-white/90 scale-90 group-hover:scale-100' : 'bg-black/50 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'}`}>
                                 {isVideo ? (<svg className="w-6 h-6 text-zinc-900 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>) : isCarousel ? (<Layers className="w-6 h-6 text-white" />) : (<ImageIcon className="w-6 h-6 text-white" />)}
