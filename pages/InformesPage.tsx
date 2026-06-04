@@ -243,11 +243,6 @@ export default function InformesPage() {
   }, [clientId, activeSince, activeUntil, refreshKey, profile]);
 
   const handleApply = () => {
-    setIgProfile(null);
-    setFbProfile(null);
-    setIgMedia([]);
-    setFbMedia([]);
-    setSocialSnapshots([]);
     setActivePreset(pendingPreset);
     setActiveSince(pendingSince);
     setActiveUntil(pendingUntil || pendingSince);
@@ -753,7 +748,7 @@ export default function InformesPage() {
                       trend={trend}
                       data={series}
                       color={m.color}
-                      loading={loadingSocial && !igProfile && !fbProfile}
+                      loading={loadingSocial}
                       active={expandedMetric === m.key}
                       onClick={() => setExpandedMetric(m.key as SocialMetricKey)}
                       info={m.info}
@@ -765,7 +760,7 @@ export default function InformesPage() {
           })()}
 
           {/* ── Metric Evolution Detail Chart ─────────────────────────────────── */}
-          {(() => {
+          {!loadingSocial && (() => {
             const isIg = activeTab === 'instagram';
             const config = (isIg ? IG_METRICS_CONFIG : FB_METRICS_CONFIG).find(m => m.key === expandedMetric);
             if (!config) return null;

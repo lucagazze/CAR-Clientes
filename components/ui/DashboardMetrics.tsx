@@ -130,39 +130,51 @@ export const DashboardMetric = ({
           className={`w-3 h-3 text-zinc-300 dark:text-zinc-600 transition-transform duration-200 ${active ? 'rotate-180 opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
         />
       </div>
-      <div className="flex items-end justify-between gap-2">
-        <div className="flex flex-col shrink-0">
-          <span className="text-[17px] sm:text-[20px] font-bold text-zinc-900 dark:text-white leading-none mb-2">
-            {loading ? "..." : value}
-          </span>
-          {!loading && change !== undefined && !isNaN(change) && (
-            <div
-              className={`flex items-center gap-1 text-[11px] sm:text-[12px] font-bold ${trend === "up" ? "text-emerald-500" : "text-rose-500"}`}
-            >
-              {trend === "up" ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingUp className="w-3 h-3 rotate-180" />
-              )}
-              {Math.abs(change).toFixed(1)}%
-            </div>
-          )}
-        </div>
-        <div className="h-8 sm:h-10 flex-1 min-w-0 max-w-[250px] ml-2 sm:ml-6 opacity-70">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
-              <Area
-                type="monotone"
-                dataKey="val"
-                stroke={color}
-                fill={color}
-                fillOpacity={0.1}
-                strokeWidth={2}
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="flex items-end justify-between gap-2 w-full">
+        {loading ? (
+          <div className="flex flex-col flex-1">
+            <div className="h-6 w-24 rounded-lg shimmer-bg mb-2 animate-pulse" />
+            <div className="h-4 w-12 rounded-md shimmer-bg animate-pulse" />
+          </div>
+        ) : (
+          <div className="flex flex-col shrink-0">
+            <span className="text-[17px] sm:text-[20px] font-bold text-zinc-900 dark:text-white leading-none mb-2">
+              {value}
+            </span>
+            {change !== undefined && !isNaN(change) && (
+              <div
+                className={`flex items-center gap-1 text-[11px] sm:text-[12px] font-bold ${trend === "up" ? "text-emerald-500" : "text-rose-500"}`}
+              >
+                {trend === "up" ? (
+                  <TrendingUp className="w-3 h-3" />
+                ) : (
+                  <TrendingUp className="w-3 h-3 rotate-180" />
+                )}
+                {Math.abs(change).toFixed(1)}%
+              </div>
+            )}
+          </div>
+        )}
+        
+        {loading ? (
+          <div className="h-8 sm:h-10 flex-1 min-w-0 max-w-[250px] ml-2 sm:ml-6 rounded-lg shimmer-bg opacity-40 animate-pulse" />
+        ) : (
+          <div className="h-8 sm:h-10 flex-1 min-w-0 max-w-[250px] ml-2 sm:ml-6 opacity-70">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data}>
+                <Area
+                  type="monotone"
+                  dataKey="val"
+                  stroke={color}
+                  fill={color}
+                  fillOpacity={0.1}
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </button>
   );

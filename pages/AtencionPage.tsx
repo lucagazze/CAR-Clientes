@@ -502,13 +502,6 @@ export default function AtencionPage() {
   }, [profile?.chatwoot_url, profile?.chatwoot_token, loading, refreshKey, selectedInboxId]);
 
   const handleApplyDate = () => {
-    setSummaryData(null);
-    setPrevSummaryData(null);
-    setChartData([]);
-    setPrevChartData([]);
-    setAllSeriesData({});
-    setAllPrevSeriesData({});
-    setInboxBreakdowns([]);
     setActivePreset(pendingPreset);
     setActiveSince(pendingSince);
     setActiveUntil(pendingUntil || pendingSince);
@@ -816,7 +809,7 @@ export default function AtencionPage() {
                   trend={trendDirection}
                   data={expandedMetric === metric.key && chartData.length > 0 ? chartData : (allSeriesData[metric.key] || [])}
                   color={metric.color}
-                  loading={loading && !summaryData}
+                  loading={loading}
                   active={expandedMetric === metric.key}
                   onClick={() => setExpandedMetric(expandedMetric === metric.key ? null : metric.key)}
                   info={metric.info}
@@ -830,7 +823,7 @@ export default function AtencionPage() {
           {summaryData && (
             <>
               {/* Time Series Detail Charts */}
-          {expandedMetric && (
+          {expandedMetric && !loading && (
             <div className="relative">
               {(() => {
                 const config = METRICS_CONFIG.find(m => m.key === expandedMetric);
@@ -951,7 +944,7 @@ export default function AtencionPage() {
                     <th className="pb-3 pl-2 text-right">Resp. Prom.</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-black/[0.03] dark:divide-white/[0.03]">
+                <tbody className={`divide-y divide-black/[0.03] dark:divide-white/[0.03] transition-opacity ${loadingBreakdowns ? 'opacity-65 pointer-events-none' : ''}`}>
                   {inboxBreakdowns.map((inbox) => (
                     <tr key={inbox.id} className="text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50/55 dark:hover:bg-white/[0.01]">
                       <td className="py-3 pr-2 font-bold text-zinc-900 dark:text-white">
@@ -976,13 +969,27 @@ export default function AtencionPage() {
                       </td>
                     </tr>
                   ))}
-                  {inboxBreakdowns.length === 0 && (
+                  {inboxBreakdowns.length === 0 && loadingBreakdowns ? (
+                    [1, 2, 3].map((n) => (
+                      <tr key={n}>
+                        <td className="py-3 pr-2">
+                          <div className="h-4 w-28 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse" />
+                        </td>
+                        <td className="py-3 px-2 text-right">
+                          <div className="h-4 w-12 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse ml-auto" />
+                        </td>
+                        <td className="py-3 pl-2 text-right">
+                          <div className="h-4 w-16 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse ml-auto" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : inboxBreakdowns.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="py-6 text-center text-zinc-400">
-                        {loadingBreakdowns ? 'Cargando canales...' : 'No hay canales conectados.'}
+                        No hay canales conectados.
                       </td>
                     </tr>
-                  )}
+                  ) : null}
                 </tbody>
               </table>
             </div>

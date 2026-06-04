@@ -117,7 +117,7 @@ export default function EmailLoader({ loading, color = '#10b981', labels = ['Ent
             width: `${progress}%`,
             background: `linear-gradient(90deg, ${color}66, ${color})`,
             boxShadow: `0 0 6px ${color}`,
-            transition: loading ? 'width 0.15s ease-out' : 'width 0.06s linear',
+            transition: progress === 0 ? 'none' : loading ? 'width 0.15s ease-out' : 'width 0.06s linear',
           }}
         />
       </div>

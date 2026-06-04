@@ -328,7 +328,7 @@ export default function TiendaPage() {
                 trend={(data.orders || 0) >= (prevData?.orders || 0) ? 'up' : 'down'} 
                 data={data.daily?.map((d: any) => ({ val: d.orders, date: d.date }))} 
                 color={PINK} 
-                loading={loading && !data} 
+                loading={loading} 
                 active={expandedMetric === 's-orders'} 
                 onClick={() => setExpandedMetric(expandedMetric === 's-orders' ? null : 's-orders')} 
                 info="Cantidad total de órdenes procesadas y confirmadas en tu tienda Shopify durante el período seleccionado."
@@ -341,7 +341,7 @@ export default function TiendaPage() {
                 trend={(data.revenue || 0) >= (prevData?.revenue || 0) ? 'up' : 'down'} 
                 data={data.daily?.map((d: any) => ({ val: d.revenue, date: d.date }))} 
                 color={PINK} 
-                loading={loading && !data} 
+                loading={loading} 
                 active={expandedMetric === 's-revenue'} 
                 onClick={() => setExpandedMetric(expandedMetric === 's-revenue' ? null : 's-revenue')} 
                 info="Suma total facturada por ventas brutas en tu tienda Shopify en el período seleccionado."
@@ -354,7 +354,7 @@ export default function TiendaPage() {
                 trend={(data.aov || 0) >= (prevData?.aov || 0) ? 'up' : 'down'} 
                 data={data.daily?.map((d: any) => ({ val: d.aov, date: d.date }))} 
                 color={PINK} 
-                loading={loading && !data} 
+                loading={loading} 
                 active={expandedMetric === 's-aov'} 
                 onClick={() => setExpandedMetric(expandedMetric === 's-aov' ? null : 's-aov')} 
                 info="El valor promedio gastado en cada pedido. Se calcula dividiendo los ingresos totales por la cantidad de pedidos."
@@ -365,7 +365,7 @@ export default function TiendaPage() {
             {data && (
               <>
                 {/* Expanded Chart */}
-                {expandedMetric && (
+                {expandedMetric && !loading && (
               <MetricDetailChart 
                 label={
                   expandedMetric === 's-orders' ? 'Pedidos' :

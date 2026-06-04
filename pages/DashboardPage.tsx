@@ -167,7 +167,7 @@ const ShopifyMetric = ({
   if (isViolet) { activeBgClass = "bg-violet-50/60 dark:bg-violet-500/5"; pulseClass = "bg-violet-500"; }
   if (isRed) { activeBgClass = "bg-rose-50/60 dark:bg-rose-500/5"; pulseClass = "bg-rose-500"; }
 
-  const showShimmer = loading && (!value || value === "...");
+  const showShimmer = loading;
 
   return (
     <button
@@ -1364,10 +1364,6 @@ export default function DashboardPage() {
   }, [activeAtencMetric, profile?.id, activeSince, activeUntil]);
 
   const handleApply = () => {
-    setCurrentStore(null);
-    setCurrentMeta(null);
-    setCurrentKlaviyo(null);
-    setChatwootSummary(null);
     setActivePreset(pendingPreset);
     setActiveSince(pendingSince);
     setActiveUntil(pendingUntil || pendingSince);
@@ -1757,7 +1753,7 @@ export default function DashboardPage() {
                       date: d.date,
                     }))}
                     color={PINK}
-                    loading={fetchingStore && !currentStore}
+                    loading={fetchingStore}
                     active={expandedMetric === "s-aov"}
                     onClick={() =>
                       setExpandedMetric(
@@ -1784,7 +1780,7 @@ export default function DashboardPage() {
                       date: d.date,
                     }))}
                     color={PINK}
-                    loading={fetchingStore && !currentStore}
+                    loading={fetchingStore}
                     active={expandedMetric === "s-orders"}
                     onClick={() =>
                       setExpandedMetric(
@@ -1811,7 +1807,7 @@ export default function DashboardPage() {
                       date: d.date,
                     }))}
                     color={PINK}
-                    loading={fetchingStore && !currentStore}
+                    loading={fetchingStore}
                     active={expandedMetric === "s-revenue"}
                     onClick={() =>
                       setExpandedMetric(
@@ -1829,7 +1825,7 @@ export default function DashboardPage() {
                       trend={currentMER >= prevMER ? "up" : "down"}
                       data={merDaily}
                       color={PINK}
-                      loading={(fetchingStore || fetchingMeta) && !currentStore && !currentMeta}
+                      loading={fetchingStore || fetchingMeta}
                       active={expandedMetric === "mer-efficiency"}
                       onClick={() =>
                         setExpandedMetric(
@@ -1840,7 +1836,7 @@ export default function DashboardPage() {
                     />
                   )}
                 </div>
-                {(expandedMetric?.startsWith("s-") || expandedMetric === "mer-efficiency") && (
+                {(expandedMetric?.startsWith("s-") || expandedMetric === "mer-efficiency") && !(expandedMetric === "mer-efficiency" ? (fetchingStore || fetchingMeta) : fetchingStore) && (
                   <MetricDetailChart
                     label={
                       expandedMetric === "mer-efficiency"
@@ -1968,7 +1964,7 @@ export default function DashboardPage() {
                       date: d.date,
                     }))}
                     color={MAIN_COLOR}
-                    loading={fetchingMeta && !currentMeta}
+                    loading={fetchingMeta}
                     active={expandedMetric === "meta-inversion"}
                     onClick={() =>
                       setExpandedMetric(
@@ -1994,7 +1990,7 @@ export default function DashboardPage() {
                       date: d.date,
                     }))}
                     color={MAIN_COLOR}
-                    loading={fetchingMeta && !currentMeta}
+                    loading={fetchingMeta}
                     active={expandedMetric === "meta-alcance"}
                     onClick={() =>
                       setExpandedMetric(
@@ -2015,7 +2011,7 @@ export default function DashboardPage() {
                         change={getMetaChange(currentMeta?.purchases, prevMeta?.purchases)}
                         trend={(currentMeta?.purchases || 0) >= (prevMeta?.purchases || 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.purchases, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta && !currentMeta} active={expandedMetric === "meta-purchases"}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-purchases"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-purchases" ? null : "meta-purchases")}
                         info="Compras totales es el número acumulado de ventas en la tienda atribuidas a la interacción directa con tus anuncios de Meta Ads."
                       />
@@ -2026,7 +2022,7 @@ export default function DashboardPage() {
                         change={getMetaChange(currentMeta?.roas, prevMeta?.roas)}
                         trend={(currentMeta?.roas || 0) >= (prevMeta?.roas || 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.roas, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta && !currentMeta} active={expandedMetric === "meta-roas"}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-roas"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-roas" ? null : "meta-roas")}
                         info="Return on Ad Spend (ROAS) es el retorno de inversión publicitaria. Se calcula como los ingresos atribuidos a Meta divididos por la inversión en pauta."
                       />
@@ -2037,7 +2033,7 @@ export default function DashboardPage() {
                         change={getMetaChange(currentMeta?.purchase_value, prevMeta?.purchase_value)}
                         trend={(currentMeta?.purchase_value || 0) >= (prevMeta?.purchase_value || 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.purchase_value, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta && !currentMeta} active={expandedMetric === "meta-roas-v"}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-roas-v"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-roas-v" ? null : "meta-roas-v")}
                         info="Retorno es el valor monetario (ingresos) generado por las compras que son atribuidas directamente a tus campañas de anuncios en Meta."
                       />
@@ -2053,7 +2049,7 @@ export default function DashboardPage() {
                         change={getMetaChange(currentMeta?.leads, prevMeta?.leads)}
                         trend={(currentMeta?.leads || 0) >= (prevMeta?.leads || 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.leads, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta && !currentMeta} active={expandedMetric === "meta-leads"}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-leads"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-leads" ? null : "meta-leads")}
                         info="Leads representa la cantidad de clientes potenciales capturados a través de formularios o eventos registrados desde tus anuncios en Meta."
                       />
@@ -2067,7 +2063,7 @@ export default function DashboardPage() {
                         )}
                         trend={(currentMeta?.leads ? currentMeta.spend / currentMeta.leads : 0) <= (prevMeta?.leads ? prevMeta.spend / prevMeta.leads : 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.leads ? d.spend / d.leads : 0, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta && !currentMeta} active={expandedMetric === "meta-cpl"}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-cpl"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-cpl" ? null : "meta-cpl")}
                         info="Costo por Lead (CPL) representa el valor promedio invertido para capturar a cada cliente potencial (Inversión total dividida por número de Leads)."
                       />
@@ -2083,7 +2079,7 @@ export default function DashboardPage() {
                         change={getMetaChange(currentMeta?.messages, prevMeta?.messages)}
                         trend={(currentMeta?.messages || 0) >= (prevMeta?.messages || 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.messages, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta && !currentMeta} active={expandedMetric === "meta-messages"}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-messages"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-messages" ? null : "meta-messages")}
                         info="Mensajes es la cantidad de conversaciones por chat (Messenger, Instagram Direct o WhatsApp) iniciadas directamente por usuarios desde tus anuncios."
                       />
@@ -2097,14 +2093,14 @@ export default function DashboardPage() {
                         )}
                         trend={(currentMeta?.messages ? currentMeta.spend / currentMeta.messages : 0) <= (prevMeta?.messages ? prevMeta.spend / prevMeta.messages : 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.messages ? d.spend / d.messages : 0, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta && !currentMeta} active={expandedMetric === "meta-cpm"}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-cpm"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-cpm" ? null : "meta-cpm")}
                         info="Costo por Mensaje es el valor promedio invertido para que un usuario inicie una nueva conversación desde tus anuncios (Inversión / Mensajes)."
                       />
                     </>
                   )}
                 </div>
-                {expandedMetric?.startsWith("meta-") && (
+                {expandedMetric?.startsWith("meta-") && !fetchingMeta && (
                   <MetricDetailChart
                     label={
                       expandedMetric === "meta-inversion" ? "Inversión"
@@ -2190,7 +2186,7 @@ export default function DashboardPage() {
                     }
                     data={currentKlaviyo?.dailySent || []}
                     color={GREEN}
-                    loading={fetchingKlaviyo && !currentKlaviyo}
+                    loading={fetchingKlaviyo}
                     active={expandedMetric === "k-sent"}
                     onClick={() =>
                       setExpandedMetric(
@@ -2224,7 +2220,7 @@ export default function DashboardPage() {
                       })) || []
                     }
                     color={GREEN}
-                    loading={fetchingKlaviyo && !currentKlaviyo}
+                    loading={fetchingKlaviyo}
                     active={expandedMetric === "k-open-rate"}
                     onClick={() =>
                       setExpandedMetric(
@@ -2258,7 +2254,7 @@ export default function DashboardPage() {
                       })) || []
                     }
                     color={GREEN}
-                    loading={fetchingKlaviyo && !currentKlaviyo}
+                    loading={fetchingKlaviyo}
                     active={expandedMetric === "k-click-rate"}
                     onClick={() =>
                       setExpandedMetric(
@@ -2285,7 +2281,7 @@ export default function DashboardPage() {
                     }
                     data={currentKlaviyo?.dailyAttributed || []}
                     color={GREEN}
-                    loading={fetchingKlaviyo && !currentKlaviyo}
+                    loading={fetchingKlaviyo}
                     active={expandedMetric === "k-attr"}
                     onClick={() =>
                       setExpandedMetric(
@@ -2295,7 +2291,7 @@ export default function DashboardPage() {
                     info="Ingresos Email es la facturación total generada en tu tienda online atribuible directamente a tus campañas y flujos de Klaviyo."
                   />}
                 </div>
-                {expandedMetric?.startsWith("k-") && (
+                {expandedMetric?.startsWith("k-") && !fetchingKlaviyo && (
                   <MetricDetailChart
                     label={
                       expandedMetric === "k-revenue"
@@ -2410,7 +2406,7 @@ export default function DashboardPage() {
                       trend={trend}
                       data={activeAtencMetric === m.key ? atencChartData : (atencSeriesAll[m.key] || [])}
                       color={'#8b5cf6'}
-                      loading={false}
+                      loading={fetchingChatwoot}
                       active={activeAtencMetric === m.key}
                       onClick={() => setActiveAtencMetric(activeAtencMetric === m.key ? null : m.key)}
                       info={m.info}
@@ -2421,7 +2417,7 @@ export default function DashboardPage() {
             ) : null}
             </EmailLoader>
             {/* Atención expanded chart */}
-            {chatwootSummary && activeAtencMetric && (
+            {chatwootSummary && activeAtencMetric && !fetchingChatwoot && (
               <div className="relative mt-2">
                 {(() => {
                   const ATENC_METRICS = [

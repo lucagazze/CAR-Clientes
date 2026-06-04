@@ -17,9 +17,21 @@ const MESSAGES = [
 ];
 
 export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => {
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(() => {
+    const lastTime = (window as any).__loadingProgressTime || 0;
+    if (Date.now() - lastTime < 3000 && (window as any).__loadingProgress !== undefined) {
+      return (window as any).__loadingProgress;
+    }
+    return 0;
+  });
   const [phase, setPhase] = useState<'loading' | 'fading' | 'done'>('loading');
-  const [msgIdx, setMsgIdx] = useState(0);
+  const [msgIdx, setMsgIdx] = useState(() => {
+    const lastTime = (window as any).__loadingProgressTime || 0;
+    if (Date.now() - lastTime < 3000 && (window as any).__loadingMsgIdx !== undefined) {
+      return (window as any).__loadingMsgIdx;
+    }
+    return 0;
+  });
   const [msgVisible, setMsgVisible] = useState(true);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -32,7 +44,13 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => 
   useEffect(() => {
     clearAllTimeouts();
     if (isLoading) {
-      setProgress(0);
+      setProgress((prev: number) => {
+        const lastTime = (window as any).__loadingProgressTime || 0;
+        if (Date.now() - lastTime < 3000 && (window as any).__loadingProgress !== undefined) {
+          return (window as any).__loadingProgress;
+        }
+        return 0;
+      });
       setPhase('loading');
       // Scheduled milestones: [delay_ms, target_%]
       const steps: [number, number][] = [
@@ -42,14 +60,25 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => 
         [1900, 83],
       ];
       steps.forEach(([delay, target]) => {
-        const t = setTimeout(() => setProgress(prev => Math.max(prev, target)), delay);
+        const t = setTimeout(() => setProgress((prev: number) => {
+          const nextVal = Math.max(prev, target);
+          (window as any).__loadingProgress = nextVal;
+          (window as any).__loadingProgressTime = Date.now();
+          return nextVal;
+        }), delay);
         timeoutsRef.current.push(t);
       });
     } else {
       // Loading finished — jump to 100 then fade out
       setProgress(100);
       setPhase('fading');
-      const t = setTimeout(() => setPhase('done'), 380);
+      const t = setTimeout(() => {
+        setPhase('done');
+        // Clear global persistent progress when fully done
+        delete (window as any).__loadingProgress;
+        delete (window as any).__loadingProgressTime;
+        delete (window as any).__loadingMsgIdx;
+      }, 380);
       timeoutsRef.current.push(t);
     }
     return clearAllTimeouts;
@@ -62,7 +91,11 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => 
     const cycle = () => {
       setMsgVisible(false);
       setTimeout(() => {
-        setMsgIdx(i => (i + 1) % MESSAGES.length);
+        setMsgIdx((i: number) => {
+          const nextIdx = (i + 1) % MESSAGES.length;
+          (window as any).__loadingMsgIdx = nextIdx;
+          return nextIdx;
+        });
         setMsgVisible(true);
       }, 350);
     };
@@ -97,11 +130,12 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => 
       <div className="w-64 space-y-3">
         <div className="w-full h-[4px] bg-zinc-800 rounded-full overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-700 ease-out"
+            className="h-full rounded-full"
             style={{
               width: `${progress}%`,
               background: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
               boxShadow: '0 0 10px rgba(139,92,246,0.7)',
+              transition: progress === 0 ? 'none' : 'width 0.7s ease-out',
             }}
           />
         </div>

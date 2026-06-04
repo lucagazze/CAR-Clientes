@@ -50,7 +50,9 @@ export const TopLoadingBar: React.FC<Props> = ({ loading, color = '#8b5cf6', inl
           opacity: progress >= 100 ? 0 : 1,
           transition: progress >= 100
             ? 'width 0.1s ease, opacity 0.3s ease 0.05s'
-            : 'width 0.18s ease',
+            : progress === 0
+              ? 'none'
+              : 'width 0.18s ease',
         }}
       />
     </div>
