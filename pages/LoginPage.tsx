@@ -211,15 +211,15 @@ export default function LoginPage() {
                 <p className={`text-[11px] font-semibold text-center leading-relaxed ${darkMode ? 'text-zinc-500' : 'text-zinc-400'}`}>
                   Si no tenés una cuenta, ingresá con Google para solicitar tu invitación.
                 </p>
-                <div className="relative w-full h-11 sm:h-12 overflow-hidden rounded-2xl">
+                <div className="relative w-full h-10 overflow-hidden rounded-xl">
                   <button
                     type="button"
                     disabled={loading}
                     onClick={handleGoogleSignIn}
-                    className={`w-full h-full flex items-center justify-center gap-2.5 rounded-2xl text-[14px] font-bold transition-all duration-200 ${
+                    className={`w-full h-full flex items-center justify-center gap-2 rounded-xl text-[13px] sm:text-[13.5px] font-semibold transition-all duration-200 ${
                       darkMode
-                        ? 'bg-white text-black hover:bg-zinc-100 shadow-lg shadow-white/5'
-                        : 'bg-zinc-900 text-white hover:bg-black shadow-lg shadow-zinc-950/20'
+                        ? 'bg-white text-black hover:bg-zinc-100 shadow-md shadow-white/5'
+                        : 'bg-zinc-950 text-white hover:bg-black shadow-md shadow-zinc-950/15'
                     }`}
                   >
                     {loading ? (
@@ -260,9 +260,9 @@ export default function LoginPage() {
                     placeholder="ejemplo@algoritmia.team o usuario"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`w-full h-11 sm:h-12 px-4 rounded-2xl border text-[13.5px] font-semibold outline-none transition-all duration-200 ${
+                    className={`w-full h-10 px-3.5 rounded-xl border text-[13px] sm:text-[13.5px] font-medium outline-none transition-all duration-200 ${
                       darkMode
-                        ? 'bg-white/5 border-white/8 text-white placeholder:text-zinc-650 focus:border-violet-500/80 focus:bg-white/[0.08]'
+                        ? 'bg-white/5 border-white/8 text-white placeholder:text-zinc-500 focus:border-violet-500/80 focus:bg-white/[0.08]'
                         : 'bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500/80 focus:bg-white shadow-[inset_0_1px_2px_rgba(0,0,0,0.015)]'
                     }`}
                   />
@@ -278,9 +278,9 @@ export default function LoginPage() {
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className={`w-full h-11 sm:h-12 pl-4 pr-11 rounded-2xl border text-[13.5px] font-semibold outline-none transition-all duration-200 ${
+                      className={`w-full h-10 pl-3.5 pr-11 rounded-xl border text-[13px] sm:text-[13.5px] font-medium outline-none transition-all duration-200 ${
                         darkMode
-                          ? 'bg-white/5 border-white/8 text-white placeholder:text-zinc-650 focus:border-violet-500/80 focus:bg-white/[0.08]'
+                          ? 'bg-white/5 border-white/8 text-white placeholder:text-zinc-500 focus:border-violet-500/80 focus:bg-white/[0.08]'
                           : 'bg-zinc-50 border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500/80 focus:bg-white shadow-[inset_0_1px_2px_rgba(0,0,0,0.015)]'
                       }`}
                     />
@@ -299,10 +299,10 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`w-full h-11 sm:h-12 rounded-2xl text-[14px] font-bold transition-all duration-200 flex items-center justify-center gap-2 ${
+                  className={`w-full h-10 rounded-xl text-[13px] sm:text-[13.5px] font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
                     darkMode
-                      ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-650/20'
-                      : 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-200/50'
+                      ? 'bg-violet-600 text-white hover:bg-violet-500 shadow-md shadow-violet-600/20'
+                      : 'bg-violet-600 text-white hover:bg-violet-700 shadow-md shadow-violet-200/40'
                   }`}
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Ingresar</span>}
