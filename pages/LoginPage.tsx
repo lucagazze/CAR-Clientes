@@ -50,7 +50,7 @@ export default function LoginPage() {
     setLoading(true);
     
     const client_id = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
-    const redirect_uri = window.location.origin;
+    const redirect_uri = `${window.location.origin}/google-callback.html`;
     const nonce = Math.random().toString(36).substring(2);
     
     const url = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -78,43 +78,46 @@ export default function LoginPage() {
       return;
     }
 
-    const interval = setInterval(async () => {
-      try {
-        if (popup.closed) {
-          clearInterval(interval);
-          setLoading(false);
-          return;
-        }
-
-        const currentUrl = popup.location.href;
-        if (currentUrl.includes(redirect_uri) && popup.location.hash) {
-          clearInterval(interval);
-          
-          const hash = popup.location.hash.substring(1);
-          const params = new URLSearchParams(hash);
-          const idToken = params.get('id_token');
-          
-          popup.close();
-          
-          if (idToken) {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data && event.data.source === 'google-oauth-popup') {
+        window.removeEventListener('message', handleMessage);
+        clearInterval(checkClosedInterval);
+        
+        const hash = event.data.hash;
+        const params = new URLSearchParams(hash.substring(1));
+        const idToken = params.get('id_token');
+        
+        popup.close();
+        
+        if (idToken) {
+          try {
             const { error } = await supabase.auth.signInWithIdToken({
               provider: 'google',
               token: idToken,
             });
             if (error) throw error;
-          } else {
-            throw new Error('No se recibió el token de Google');
+          } catch (err: any) {
+            showToast(err.message || 'Error al iniciar sesión con Google', 'error');
+            setLoading(false);
           }
-        }
-      } catch (err: any) {
-        if (err.name !== 'SecurityError' && !err.message?.includes('cross-origin')) {
-          clearInterval(interval);
-          popup.close();
-          showToast(err.message || 'Error en autenticación', 'error');
+        } else {
+          showToast('No se recibió el token de Google', 'error');
           setLoading(false);
         }
       }
-    }, 100);
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    const checkClosedInterval = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosedInterval);
+        window.removeEventListener('message', handleMessage);
+        setLoading(false);
+      }
+    }, 500);
   };
 
   return (
