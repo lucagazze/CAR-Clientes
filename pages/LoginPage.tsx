@@ -96,6 +96,7 @@ export default function LoginPage() {
             const { error } = await supabase.auth.signInWithIdToken({
               provider: 'google',
               token: idToken,
+              nonce: nonce,
             });
             if (error) throw error;
           } catch (err: any) {
