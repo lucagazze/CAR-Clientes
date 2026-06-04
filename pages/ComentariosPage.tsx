@@ -484,13 +484,13 @@ export default function ComentariosPage() {
 
     const load = async () => {
       try {
-        // Step 1: Fast initial fetch of 12 items + ads list
-        const [igMediaRes12, fbMediaRes12, adsRes] = await Promise.all([
+        // Unified deep fetch of 50 items + ads list
+        const [igMediaRes50, fbMediaRes50, adsRes] = await Promise.all([
           igId
-            ? metaAds.getInstagramMedia(igId, 12).catch(err => { setIgError(err.message); return []; })
+            ? metaAds.getInstagramMedia(igId, 50).catch(err => { setIgError(err.message); return []; })
             : Promise.resolve([]),
           fbPageId
-            ? metaAds.getFacebookPageFeed(fbPageId, 12).catch(err => { setFbError(err.message); return []; })
+            ? metaAds.getFacebookPageFeed(fbPageId, 50).catch(err => { setFbError(err.message); return []; })
             : Promise.resolve([]),
           metaAccountId
             ? metaAds.getAccountAds(metaAccountId).catch(() => ({ data: [] }))
@@ -520,43 +520,6 @@ export default function ComentariosPage() {
         });
         const uniqueTargets = Object.values(uniqueTargetsMap);
 
-        let adsCommentsResults12: any[] = [];
-        if (uniqueTargets.length > 0) {
-          const topTargets = uniqueTargets.slice(0, 20);
-          const commentsPromises = topTargets.map(async (target) => {
-            try {
-              const res = await metaAds.getAdCreativeComments(target.storyId, target.platform);
-              return { storyId: target.storyId, platform: target.platform, comments: res.data || [] };
-            } catch {
-              return { storyId: target.storyId, platform: target.platform, comments: [] };
-            }
-          });
-          adsCommentsResults12 = await Promise.all(commentsPromises);
-        }
-
-        const initialItems = processMediaRes(igMediaRes12, fbMediaRes12, relevantAds, adsCommentsResults12);
-        setPosts(initialItems);
-        setLoading(false);
-        // Update badge immediately with step-1 count (accurate but incomplete)
-        const count1 = initialItems.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
-        setPendingCommentsCount(count1);
-        if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(count1)); } catch { /* ignore */ } }
-
-        // Update cache with initial items
-        try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: initialItems.map(p => ({ ...p, comments: [] })) })); } catch { /* quota exceeded — skip cache */ }
-
-        // Step 2: Background deep fetch of 50 items
-        const [igMediaRes50, fbMediaRes50] = await Promise.all([
-          igId
-            ? metaAds.getInstagramMedia(igId, 50).catch(() => [])
-            : Promise.resolve([]),
-          fbPageId
-            ? metaAds.getFacebookPageFeed(fbPageId, 50).catch(() => [])
-            : Promise.resolve([]),
-        ]);
-
-        if (!active) return;
-
         let adsCommentsResults50: any[] = [];
         if (uniqueTargets.length > 0) {
           const topTargets = uniqueTargets.slice(0, 40);
@@ -573,6 +536,7 @@ export default function ComentariosPage() {
 
         const allItems = processMediaRes(igMediaRes50, fbMediaRes50, relevantAds, adsCommentsResults50);
         setPosts(allItems);
+        
         // Update badge with final accurate count from full deep-fetch
         const countFinal = allItems.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
         setPendingCommentsCount(countFinal);
