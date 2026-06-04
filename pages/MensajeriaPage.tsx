@@ -544,34 +544,30 @@ export default function MensajeriaPage() {
     ]);
 
     const { payload: firstPayload, hasMore: firstHasMore, meta } = firstPageRes;
-    const allFetchedConversations = [...firstPayload];
-
     const openCount = openPage1Res.meta?.all_count ?? 0;
     const openPayload = openPage1Res.payload || [];
-    allFetchedConversations.push(...openPayload);
 
+    // Combine first pages into the initial set
+    const initialConversations = [...firstPayload, ...openPayload];
+
+    // If there are more open pages, build a background promise (not awaited here)
+    let backgroundFetch: Promise<any[]> | null = null;
     if (openCount > 25) {
       const totalOpenPages = Math.min(15, Math.ceil(openCount / 25));
       const pagesToFetch = Array.from({ length: totalOpenPages - 1 }, (_, i) => i + 2);
-
-      const results = await Promise.all(
+      backgroundFetch = Promise.all(
         pagesToFetch.map(p =>
           chatwoot.getConversationsPage(cwUrl, cwToken, 'open', p).catch(() => ({ payload: [] }))
         )
-      );
-
-      results.forEach(r => {
-        if (r.payload) {
-          allFetchedConversations.push(...r.payload);
-        }
-      });
+      ).then(results => results.flatMap(r => r.payload || []));
     }
 
     return {
-      allFetchedConversations,
+      initialConversations,
       firstHasMore,
       meta,
       openCount,
+      backgroundFetch,
     };
   }, [cwUrl, cwToken, statusFilter, channelFilter, getInboxIdForChannel]);
 
@@ -604,22 +600,34 @@ export default function MensajeriaPage() {
         });
       }
 
+      // Show conversations from first pages immediately
       setConversations(prev => {
         const apiMap = new Map<number, any>();
-        prev.forEach((c: any) => {
-          if (c && c.id) apiMap.set(c.id, c);
-        });
-        data.allFetchedConversations.forEach((c: any) => {
-          if (c && c.id) apiMap.set(c.id, c);
-        });
+        prev.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
+        data.initialConversations.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
         return Array.from(apiMap.values());
       });
 
       setHasMore(data.firstHasMore);
       setCurrentPage(1);
+
+      // Hide loader NOW — don't wait for background pages
+      setLoading(false);
+
+      // Merge remaining open pages in background
+      if (data.backgroundFetch) {
+        data.backgroundFetch.then((extraConvs: any[]) => {
+          if (!extraConvs || extraConvs.length === 0) return;
+          setConversations(prev => {
+            const apiMap = new Map<number, any>();
+            prev.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
+            extraConvs.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
+            return Array.from(apiMap.values());
+          });
+        }).catch(() => { /* background load failed silently */ });
+      }
     } catch (e: any) {
       setError(e.message);
-    } finally {
       setLoading(false);
     }
   }, [cwUrl, cwToken, channelFilter, fetchConversationsData, isProfileLoading]);
@@ -753,16 +761,25 @@ export default function MensajeriaPage() {
         if (data.openCount !== undefined) {
           setTotalOpenCount(data.openCount);
         }
+        // Merge first pages immediately
         setConversations(prev => {
           const apiMap = new Map<number, any>();
-          prev.forEach((c: any) => {
-            if (c && c.id) apiMap.set(c.id, c);
-          });
-          data.allFetchedConversations.forEach((c: any) => {
-            if (c && c.id) apiMap.set(c.id, c);
-          });
+          prev.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
+          data.initialConversations.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
           return Array.from(apiMap.values());
         });
+        // Merge remaining pages in background
+        if (data.backgroundFetch) {
+          data.backgroundFetch.then((extraConvs: any[]) => {
+            if (!extraConvs || extraConvs.length === 0) return;
+            setConversations(prev => {
+              const apiMap = new Map<number, any>();
+              prev.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
+              extraConvs.forEach((c: any) => { if (c && c.id) apiMap.set(c.id, c); });
+              return Array.from(apiMap.values());
+            });
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error('[MensajeriaPage] Error polling conversations:', err);
       }

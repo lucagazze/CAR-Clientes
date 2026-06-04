@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
+import { useUnread } from '../contexts/UnreadContext';
 import { metaAds } from '../services/metaAds';
 import { db } from '../services/db';
 import { supabase, supabaseAdmin } from '../services/supabase';
@@ -51,6 +52,7 @@ export default function ComentariosPage() {
   const { profile: authProfile, user } = useAuth();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   const clientId = profile?.id;
+  const { setPendingCommentsCount } = useUnread();
 
   const fbPageId = (profile as any)?.fb_page_id;
   const igId = (profile as any)?.ig_business_id;
@@ -577,10 +579,16 @@ export default function ComentariosPage() {
     return () => { active = false; };
   }, [clientId, igId, fbPageId, igUsername, metaAccountId, refreshKey, isCommentPending]);
 
-  // Sync sidebar badge when load completes
+  // Sync sidebar badge when load completes — update count directly instead of a full API refetch
   useEffect(() => {
-    if (!loading) window.dispatchEvent(new Event('car_comments_update'));
-  }, [loading]);
+    if (!loading) {
+      const count = posts.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
+      setPendingCommentsCount(count);
+      if (clientId) {
+        try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(count)); } catch { /* ignore */ }
+      }
+    }
+  }, [loading, posts, setPendingCommentsCount, clientId]);
 
   // Open post slide-over — reload comments from API for freshness
   const openPost = async (post: PostItem) => {

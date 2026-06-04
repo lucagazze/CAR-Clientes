@@ -13,6 +13,7 @@ interface UnreadContextType {
   setUnreadCount: React.Dispatch<React.SetStateAction<number>>;
   /** Number of pending comments on IG, FB, and Ads */
   pendingCommentsCount: number;
+  setPendingCommentsCount: React.Dispatch<React.SetStateAction<number>>;
   /** Manually refresh the count (called e.g. after sending a message) */
   refresh: () => void;
   /** Instantly decrement badge by 1 when a conversation is opened — no network round-trip */
@@ -23,6 +24,7 @@ const UnreadContext = createContext<UnreadContextType>({
   unreadCount: 0,
   setUnreadCount: () => {},
   pendingCommentsCount: 0,
+  setPendingCommentsCount: () => {},
   refresh: () => {},
   markRead: () => {},
 });
@@ -306,6 +308,15 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const fetchCommentsCount = useCallback(async () => {
+    // Skip requests when the tab is in the background
+    if (document.visibilityState !== 'visible') return;
+    // Skip when the user is already on /comentarios — the page updates the count directly
+    const isComentarios = window.location.hash.toLowerCase().startsWith('#/comentarios') ||
+                          location.pathname.toLowerCase().startsWith('/comentarios');
+    if (isComentarios) {
+      console.log('[UnreadContext] fetchCommentsCount bypassed: active path is /comentarios');
+      return;
+    }
     if (!profile) return;
     const fbPageId = (profile as any)?.fb_page_id;
     const igId = (profile as any)?.ig_business_id;
@@ -440,7 +451,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error('Error in fetchCommentsCount:', e);
     }
-  }, [profile?.id, profile?.fb_page_id, (profile as any)?.ig_business_id, (profile as any)?.ig_username, profile?.meta_account_id]);
+  }, [profile?.id, profile?.fb_page_id, (profile as any)?.ig_business_id, (profile as any)?.ig_username, profile?.meta_account_id, location.pathname]);
 
   // Sync comments update event
   useEffect(() => {
@@ -454,11 +465,11 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [fetchCommentsCount]);
 
-  // Poll comments every 90 seconds
+  // Poll comments every 5 seconds
   useEffect(() => {
     if (!profile?.id) return;
     fetchCommentsCount();
-    const interval = setInterval(fetchCommentsCount, 90_000);
+    const interval = setInterval(fetchCommentsCount, 5_000);
     return () => clearInterval(interval);
   }, [profile?.id, fetchCommentsCount]);
 
@@ -475,7 +486,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [profile?.id]);
 
   return (
-    <UnreadContext.Provider value={{ unreadCount, setUnreadCount, pendingCommentsCount, refresh: fetchCount, markRead }}>
+    <UnreadContext.Provider value={{ unreadCount, setUnreadCount, pendingCommentsCount, setPendingCommentsCount, refresh: fetchCount, markRead }}>
       {children}
     </UnreadContext.Provider>
   );
