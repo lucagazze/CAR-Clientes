@@ -29,13 +29,19 @@ export default function EmailLoader({ loading, color = '#10b981', labels = ['Ent
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
     };
   }, []);
 
   useEffect(() => {
-    if (visible) {
+    if (loading) {
       setProgress(0);
+
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
 
       const startTime = Date.now();
       let phase = 'loading'; // 'loading' | 'finishing'
@@ -78,15 +84,8 @@ export default function EmailLoader({ loading, color = '#10b981', labels = ['Ent
       };
 
       animationRef.current = requestAnimationFrame(tick);
-
-      return () => {
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current);
-          animationRef.current = null;
-        }
-      };
     }
-  }, [visible]);
+  }, [loading]);
 
   if (!visible) return <>{children}</>;
 
