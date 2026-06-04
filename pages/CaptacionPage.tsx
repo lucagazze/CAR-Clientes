@@ -147,6 +147,7 @@ export default function CaptacionPage() {
   const [platformData, setPlatformData] = useState<any[]>([]);
   const [ageData, setAgeData] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [activeCampaigns, setActiveCampaigns] = useState<any[]>([]);
   const [expandedMetric, setExpandedMetric] = useState<string | null>('spend');
 
   const [prevProfileId, setPrevProfileId] = useState(profile?.id);
@@ -161,6 +162,7 @@ export default function CaptacionPage() {
     setPlatformData([]);
     setAgeData([]);
     setCampaigns([]);
+    setActiveCampaigns([]);
     setLoading(true);
   }
 
@@ -235,13 +237,16 @@ export default function CaptacionPage() {
         metaAds.getInsightsBreakdown(accountId, 'age', range),
         metaAds.getInsightsAtCampaignLevel(accountId, 'campaign_name,spend,reach,actions,action_values,purchase_roas,objective', range),
         metaAds.getInsightsAtCampaignLevel(accountId, 'campaign_name,spend,reach,actions,action_values,purchase_roas,objective', prevRange),
+        metaAds.getCampaigns(accountId),
+        metaAds.getAccountAdsets(accountId),
       ]);
       const ok = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
         r.status === 'fulfilled' ? r.value : fallback;
       if (fetchId !== fetchIdRef.current) return;
-      const [rawDaily, rawPrevDaily, gender, regions, platform, age, campaignInsights, prevCampaignInsights] = [
+      const [rawDaily, rawPrevDaily, gender, regions, platform, age, campaignInsights, prevCampaignInsights, rawCampaigns, rawAdsets] = [
         ok(settled[0], []), ok(settled[1], []), ok(settled[2], []), ok(settled[3], []),
         ok(settled[4], []), ok(settled[5], []), ok(settled[6], []), ok(settled[7], []),
+        ok(settled[8], { data: [] }), ok(settled[9], { data: [] }),
       ];
 
       const processDaily = (raw: any[], r: any) => {
@@ -384,6 +389,52 @@ export default function CaptacionPage() {
           primaryMetric,
         };
       }).sort((a: any, b: any) => b.spend - a.spend));
+
+      // Process active campaigns (prendidas) and daily budget (CBO / ABO)
+      const campaignsList = (rawCampaigns?.data || []) as any[];
+      const adsetsList = (rawAdsets?.data || []) as any[];
+
+      const activeCamps = campaignsList
+        .filter(c => c.status === 'ACTIVE')
+        .map(c => {
+          // Gasto en el período seleccionado (desde campaignInsights)
+          const matchedInsight = campaignInsights.find((ci: any) => ci.campaign_id === c.id || ci.campaign_name === c.name);
+          const spendInPeriod = matchedInsight ? parseFloat(matchedInsight.spend || 0) : 0;
+          const reachInPeriod = matchedInsight ? parseInt(matchedInsight.reach || 0) : 0;
+          
+          // Determinar presupuesto diario
+          let budgetStr = '';
+          if (c.daily_budget) {
+            budgetStr = `$ ${(parseFloat(c.daily_budget) / 100).toLocaleString('es-AR', { maximumFractionDigits: 0 })}/día`;
+          } else if (c.lifetime_budget) {
+            budgetStr = `$ ${(parseFloat(c.lifetime_budget) / 100).toLocaleString('es-AR', { maximumFractionDigits: 0 })} total`;
+          } else {
+            // ABO - Sum budgets of active adsets
+            const activeAdsetsForCamp = adsetsList.filter(a => a.campaign_id === c.id && a.status === 'ACTIVE');
+            const totalDaily = activeAdsetsForCamp.reduce((sum, a) => sum + parseFloat(a.daily_budget || 0), 0);
+            const totalLifetime = activeAdsetsForCamp.reduce((sum, a) => sum + parseFloat(a.lifetime_budget || 0), 0);
+            
+            if (totalDaily > 0) {
+              budgetStr = `$ ${(totalDaily / 100).toLocaleString('es-AR', { maximumFractionDigits: 0 })}/día`;
+            } else if (totalLifetime > 0) {
+              budgetStr = `$ ${(totalLifetime / 100).toLocaleString('es-AR', { maximumFractionDigits: 0 })} total`;
+            } else {
+              budgetStr = '—';
+            }
+          }
+
+          return {
+            id: c.id,
+            name: c.name,
+            status: c.status,
+            budgetStr,
+            spendInPeriod,
+            reachInPeriod
+          };
+        })
+        .sort((a, b) => b.spendInPeriod - a.spendInPeriod);
+
+      setActiveCampaigns(activeCamps);
 
     } catch (e) { console.error('CaptacionPage fetch error:', e); } finally { setLoading(false); }
   };
@@ -741,6 +792,57 @@ export default function CaptacionPage() {
           })()}
         </div>
       ) : null}
+
+      {/* Campañas Activas Section */}
+      {activeCampaigns.length > 0 && (
+        <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 sm:p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+              </div>
+              <div>
+                <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white">Campañas Activas</h3>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Campañas en circulación y su presupuesto diario configurado</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeCampaigns.map((camp) => (
+              <div
+                key={camp.id}
+                className="p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col justify-between gap-3 hover:border-blue-500/20 dark:hover:border-blue-500/20 transition-all duration-200"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 line-clamp-2 leading-snug">
+                      {camp.name}
+                    </p>
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 uppercase tracking-wider shrink-0">
+                      Activa
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-dashed border-zinc-150 dark:border-zinc-800/60">
+                  <div className="bg-zinc-100/50 dark:bg-white/[0.02] p-2 rounded-xl border border-zinc-200/10">
+                    <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wide mb-0.5">Presupuesto</span>
+                    <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-100">{camp.budgetStr}</span>
+                  </div>
+                  <div className="bg-zinc-100/50 dark:bg-white/[0.02] p-2 rounded-xl border border-zinc-200/10">
+                    <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wide mb-0.5">Invertido (Período)</span>
+                    <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-100">{fmt(camp.spendInPeriod, true)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Breakdowns grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -482,7 +482,7 @@ export const metaAds = {
   // ── ALL ADSETS FOR ACCOUNT (for optimization_goal lookup) ─
   getAccountAdsets: (accountId: string) =>
     apiGet(`${accountId}/adsets`, {
-      fields: 'id,name,campaign_id,optimization_goal,targeting',
+      fields: 'id,name,campaign_id,optimization_goal,targeting,status,daily_budget,lifetime_budget',
       limit: '200',
     }),
 
