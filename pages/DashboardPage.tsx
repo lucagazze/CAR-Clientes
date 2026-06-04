@@ -2608,16 +2608,23 @@ export default function DashboardPage() {
                   month: '2-digit',
                   hour: '2-digit',
                   minute: '2-digit',
+                  timeZone: 'America/Argentina/Buenos_Aires',
                 });
-                const todayDate = new Date();
-                const isOrderToday = date.getFullYear() === todayDate.getFullYear() &&
-                                     date.getMonth() === todayDate.getMonth() &&
-                                     date.getDate() === todayDate.getDate();
+                const getArgDate = (d: Date) => new Intl.DateTimeFormat('sv-SE', {
+                  timeZone: 'America/Argentina/Buenos_Aires',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit'
+                }).format(d);
+
+                const orderDateStr = getArgDate(date);
+                const todayDateStr = getArgDate(new Date());
                 const yesterdayDate = new Date();
                 yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-                const isOrderYesterday = date.getFullYear() === yesterdayDate.getFullYear() &&
-                                         date.getMonth() === yesterdayDate.getMonth() &&
-                                         date.getDate() === yesterdayDate.getDate();
+                const yesterdayDateStr = getArgDate(yesterdayDate);
+
+                const isOrderToday = orderDateStr === todayDateStr;
+                const isOrderYesterday = orderDateStr === yesterdayDateStr;
 
                 // Payment Status
                 let paymentText = 'Pendiente';

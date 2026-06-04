@@ -20,6 +20,14 @@ function ecSetCache(key: string, data: any) {
 
 const BASE = '/api/shopify';
 
+const getArgentinaDateStr = (date: Date): string => {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+};
 
 export const ecommerce = {
   getShopifyOrders: async (domain: string, token: string, since: string, until: string) => {
@@ -28,8 +36,8 @@ export const ecommerce = {
     if (cached) return cached;
 
     try {
-      const sinceIso = new Date(`${since}T00:00:00Z`).toISOString();
-      const untilIso = new Date(`${until}T23:59:59Z`).toISOString();
+      const sinceIso = new Date(`${since}T00:00:00-03:00`).toISOString();
+      const untilIso = new Date(`${until}T23:59:59-03:00`).toISOString();
       const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
       let allOrders: any[] = [];
@@ -228,14 +236,19 @@ export const ecommerce = {
     let fulfilledOrders = 0;
     let unfulfilledOrders = 0;
 
-    const start = new Date(`${since}T00:00:00`);
-    const end = new Date(`${until}T23:59:59`);
-    for (let d = new Date(start), limit = 0; d <= end && limit++ < 400; d.setDate(d.getDate() + 1)) {
-      dailyData[d.toISOString().split('T')[0]] = { revenue: 0, orders: 0 };
+    const start = new Date(`${since}T00:00:00-03:00`);
+    const end = new Date(`${until}T23:59:59-03:00`);
+    const limit = 400;
+    let currentMs = start.getTime();
+    let iter = 0;
+    while (currentMs <= end.getTime() && iter++ < limit) {
+      const d = new Date(currentMs);
+      dailyData[getArgentinaDateStr(d)] = { revenue: 0, orders: 0 };
+      currentMs += 24 * 60 * 60 * 1000;
     }
 
     validOrders.forEach((o: any) => {
-      const date = o.created_at?.split('T')[0];
+      const date = getArgentinaDateStr(new Date(o.created_at));
       if (!date) return;
       if (dailyData[date]) {
         dailyData[date].revenue += parseFloat(o.total_price || 0);
