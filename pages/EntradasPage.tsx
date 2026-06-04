@@ -231,14 +231,14 @@ export default function EntradasPage() {
               return (
                 <div
                   key={inbox.id}
-                  className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
+                  className="bg-white dark:bg-[#161618] border border-zinc-100 dark:border-zinc-800/60 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700 transition-all group"
                 >
                   <div className="flex items-start gap-3.5 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center flex-shrink-0 shadow-inner">
                       {getChannelIcon(type)}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-[14px] font-black text-zinc-800 dark:text-zinc-250 truncate">{inbox.name}</h3>
+                      <h3 className="text-[14px] font-black text-zinc-800 dark:text-zinc-200 truncate">{inbox.name}</h3>
                       <p className="text-[10px] text-zinc-400 font-bold uppercase mt-0.5 tracking-wider flex items-center gap-1">
                         <span>ID: {inbox.id}</span>
                         <span>•</span>
@@ -305,7 +305,7 @@ export default function EntradasPage() {
                 if (wizardStep === 'form') setWizardStep('select');
                 else setShowWizard(false);
               }}
-              className="absolute left-6 top-6 flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-250 transition-colors"
+              className="absolute left-6 top-6 flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               Atrás
@@ -334,7 +334,7 @@ export default function EntradasPage() {
                     <Globe className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 group-hover:text-violet-600 dark:group-hover:text-violet-400">Widget Chat Web</h4>
+                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-200 group-hover:text-violet-600 dark:group-hover:text-violet-400">Widget Chat Web</h4>
                     <p className="text-[10.5px] text-zinc-400 mt-1 leading-relaxed">Agrega un globito de chat en vivo directo en tu sitio web de WordPress, Shopify o HTML.</p>
                   </div>
                 </button>
@@ -352,7 +352,7 @@ export default function EntradasPage() {
                     <Code className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 group-hover:text-violet-600 dark:group-hover:text-violet-400">Canal API</h4>
+                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-200 group-hover:text-violet-600 dark:group-hover:text-violet-400">Canal API</h4>
                     <p className="text-[10.5px] text-zinc-400 mt-1 leading-relaxed">Conecta flujos de trabajo personalizados, webhooks de terceros o integra tu propio chat.</p>
                   </div>
                 </button>
@@ -369,7 +369,7 @@ export default function EntradasPage() {
                     <Facebook className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 group-hover:text-violet-600 dark:group-hover:text-violet-400">Facebook Messenger</h4>
+                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-200 group-hover:text-violet-600 dark:group-hover:text-violet-400">Facebook Messenger</h4>
                     <p className="text-[10.5px] text-zinc-400 mt-1 leading-relaxed">Conecta páginas de Facebook para leer y responder chats grupales o de clientes directamente.</p>
                   </div>
                 </button>
@@ -386,7 +386,7 @@ export default function EntradasPage() {
                     <Instagram className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 group-hover:text-violet-600 dark:group-hover:text-violet-400">Instagram Direct</h4>
+                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-200 group-hover:text-violet-600 dark:group-hover:text-violet-400">Instagram Direct</h4>
                     <p className="text-[10.5px] text-zinc-400 mt-1 leading-relaxed">Gestiona DMs de perfiles comerciales, comentarios públicos e interactúa en historias.</p>
                   </div>
                 </button>
@@ -403,7 +403,7 @@ export default function EntradasPage() {
                     <MessageCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 group-hover:text-violet-600 dark:group-hover:text-violet-400">WhatsApp</h4>
+                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-200 group-hover:text-violet-600 dark:group-hover:text-violet-400">WhatsApp</h4>
                     <p className="text-[10.5px] text-zinc-400 mt-1 leading-relaxed">Vincula tu número comercial de WhatsApp Cloud API para automatizar y delegar conversaciones.</p>
                   </div>
                 </button>
@@ -420,7 +420,7 @@ export default function EntradasPage() {
                     <Mail className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-250 group-hover:text-violet-600 dark:group-hover:text-violet-400">Correo Electrónico</h4>
+                    <h4 className="text-[13px] font-black text-zinc-800 dark:text-zinc-200 group-hover:text-violet-600 dark:group-hover:text-violet-400">Correo Electrónico</h4>
                     <p className="text-[10.5px] text-zinc-400 mt-1 leading-relaxed">Conecta tu cuenta de Gmail, Outlook o tu servidor SMTP/IMAP para delegar correos entrantes.</p>
                   </div>
                 </button>
@@ -523,7 +523,7 @@ export default function EntradasPage() {
               {['facebook', 'instagram', 'whatsapp', 'email'].includes(selectedChannel) && (
                 <div className="space-y-5 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-5 bg-zinc-50/40 dark:bg-zinc-950/5">
                   <div className="space-y-1.5">
-                    <h4 className="text-[13.5px] font-black text-zinc-800 dark:text-zinc-250">
+                    <h4 className="text-[13.5px] font-black text-zinc-800 dark:text-zinc-200">
                       Vincular Canal con Chatwoot
                     </h4>
                     <p className="text-[11.5px] text-zinc-400 leading-relaxed">
@@ -566,8 +566,8 @@ export default function EntradasPage() {
               {/* WEBSITE WIDGET OUTPUT (Code snippet) */}
               {selectedChannel === 'web_widget' && (
                 <div className="space-y-3">
-                  <p className="text-[12px] text-zinc-550 dark:text-zinc-400 font-bold leading-normal">
-                    Copia y pega este script de JavaScript justo antes de la etiqueta de cierre <code className="bg-zinc-100 dark:bg-zinc-850 px-1 py-0.5 rounded font-bold font-mono text-[10.5px]">&lt;/body&gt;</code> en tu sitio web para mostrar el globito de chat:
+                  <p className="text-[12px] text-zinc-500 dark:text-zinc-400 font-bold leading-normal">
+                    Copia y pega este script de JavaScript justo antes de la etiqueta de cierre <code className="bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-bold font-mono text-[10.5px]">&lt;/body&gt;</code> en tu sitio web para mostrar el globito de chat:
                   </p>
                   <div className="relative">
                     <pre className="bg-zinc-900 dark:bg-zinc-950 text-zinc-100 p-4 rounded-2xl text-[11px] font-mono leading-relaxed overflow-x-auto max-h-[220px]">

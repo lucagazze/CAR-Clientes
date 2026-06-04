@@ -345,7 +345,7 @@ export const MainLayout = () => {
                   <p>
                     Tu solicitud para vincular el negocio <strong className="text-zinc-800 dark:text-zinc-200">"{businessName}"</strong> ha sido registrada con éxito.
                   </p>
-                  <div className="bg-zinc-50 dark:bg-zinc-800/40 p-3.5 rounded-2xl border border-zinc-150/50 dark:border-zinc-800/60 text-left text-[12px] text-zinc-600 dark:text-zinc-300">
+                  <div className="bg-zinc-50 dark:bg-zinc-800/40 p-3.5 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/60 text-left text-[12px] text-zinc-600 dark:text-zinc-300">
                     <span className="font-bold text-amber-600 dark:text-amber-400 block mb-1">💬 ¿Qué pasa ahora?</span>
                     Te enviaremos una notificación por <strong>WhatsApp</strong> en cuanto el administrador apruebe tu acceso. Una vez que la recibas, ya podrás ingresar al ecosistema.
                   </div>

@@ -639,7 +639,7 @@ export default function MensajesDMPage() {
       <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowConnectModal(false)} />
         <div className="relative bg-white dark:bg-zinc-900 rounded-[24px] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 max-w-[450px] w-full text-left flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="pb-4 border-b border-zinc-150 dark:border-zinc-800 flex items-center justify-between">
+          <div className="pb-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
             <h3 className="text-[16px] font-black text-zinc-900 dark:text-white flex items-center gap-2">
               <Facebook className="w-5 h-5 text-blue-600" />
               Seleccioná tu página
@@ -662,7 +662,7 @@ export default function MensajesDMPage() {
               </div>
             ) : selectablePages.length === 0 ? (
               <div className="text-center py-10 space-y-2">
-                <p className="text-[12px] font-bold text-zinc-550 dark:text-zinc-400">No encontramos páginas vinculadas.</p>
+                <p className="text-[12px] font-bold text-zinc-500 dark:text-zinc-400">No encontramos páginas vinculadas.</p>
                 <p className="text-[11px] text-zinc-400">Asegurate de iniciar sesión con una cuenta de Facebook que administre tu página comercial de Instagram.</p>
               </div>
             ) : (
@@ -679,7 +679,7 @@ export default function MensajesDMPage() {
                       className="w-full text-left p-3 border border-zinc-200 dark:border-zinc-800 hover:border-violet-300 dark:hover:border-violet-800 hover:bg-violet-50/20 dark:hover:bg-violet-950/10 rounded-2xl flex items-center justify-between transition-all group active:scale-[0.99]"
                     >
                       <div className="min-w-0 flex-1 pr-3">
-                        <p className="text-[13px] font-bold text-zinc-800 dark:text-zinc-250 truncate group-hover:text-violet-600 dark:group-hover:text-violet-400">{page.name}</p>
+                        <p className="text-[13px] font-bold text-zinc-800 dark:text-zinc-200 truncate group-hover:text-violet-600 dark:group-hover:text-violet-400">{page.name}</p>
                         <p className="text-[10px] text-zinc-400 font-bold mt-0.5 uppercase tracking-wider flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                           FB Page
@@ -713,7 +713,7 @@ export default function MensajesDMPage() {
         </div>
         <div className="space-y-2">
           <h2 className="text-[20px] font-black text-zinc-900 dark:text-white tracking-tight">Conectá tu cuenta de Instagram</h2>
-          <p className="text-[13px] text-zinc-550 dark:text-zinc-450 leading-relaxed font-semibold">
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-450 leading-relaxed font-semibold">
             Vinculá tus redes sociales en segundos para poder recibir, leer y responder todos tus mensajes directos de Instagram y Facebook desde esta bandeja de entrada unificada.
           </p>
         </div>
@@ -786,7 +786,7 @@ export default function MensajesDMPage() {
         <div className="flex-1 flex gap-0 overflow-hidden mt-4 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm">
 
           {/* ── LEFT: Conversation list ── */}
-          <div className="w-full md:w-[340px] lg:w-[380px] flex-shrink-0 border-r border-zinc-150 dark:border-zinc-800 flex flex-col overflow-hidden">
+          <div className="w-full md:w-[340px] lg:w-[380px] flex-shrink-0 border-r border-zinc-100 dark:border-zinc-800 flex flex-col overflow-hidden">
 
             {/* Search + filter */}
             <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 space-y-2 flex-shrink-0">
@@ -944,7 +944,7 @@ export default function MensajesDMPage() {
             ) : (
               <>
                 {/* Chat header */}
-                <div className="px-5 py-3 border-b border-zinc-150 dark:border-zinc-800 flex items-center gap-3 bg-white dark:bg-zinc-900 flex-shrink-0">
+                <div className="px-5 py-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-3 bg-white dark:bg-zinc-900 flex-shrink-0">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-xs flex-shrink-0 ${
                     selectedConv.platform === 'instagram'
                       ? 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600'
@@ -1033,7 +1033,7 @@ export default function MensajesDMPage() {
                 </div>
 
                 {/* Reply box */}
-                <div className="p-4 border-t border-zinc-150 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2 flex-shrink-0">
+                <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2 flex-shrink-0">
                   {replyError && (
                     <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-xl flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-400">
                       <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-500" />

@@ -830,7 +830,7 @@ export default function CostosPage() {
                 </div>
 
                 {/* Mass percentage edit */}
-                <div className="flex items-center gap-2 justify-end bg-zinc-50 dark:bg-white/[0.02] p-2 px-3 rounded-xl border border-zinc-150 dark:border-white/[0.04]">
+                <div className="flex items-center gap-2 justify-end bg-zinc-50 dark:bg-white/[0.02] p-2 px-3 rounded-xl border border-zinc-100 dark:border-white/[0.04]">
                   <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
                   <span className="text-[11.5px] font-bold text-zinc-650 dark:text-zinc-300">Costo Masivo:</span>
                   <div className="relative">
@@ -839,7 +839,7 @@ export default function CostosPage() {
                       placeholder="30"
                       value={massPercentage}
                       onChange={e => setMassPercentage(e.target.value)}
-                      className="w-16 h-8 px-2 pr-5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-250 dark:border-white/[0.08] text-[12px] font-black text-center text-zinc-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      className="w-16 h-8 px-2 pr-5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.08] text-[12px] font-black text-center text-zinc-900 dark:text-white focus:outline-none focus:border-violet-500"
                     />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">%</span>
                   </div>
@@ -862,10 +862,10 @@ export default function CostosPage() {
                     No se encontraron productos en el catálogo.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto border border-zinc-150 dark:border-white/[0.05] rounded-2xl bg-white dark:bg-[#111113]">
+                  <div className="overflow-x-auto border border-zinc-100 dark:border-white/[0.05] rounded-2xl bg-white dark:bg-[#111113]">
                     <table className="w-full text-[12px] text-left border-collapse">
                       <thead>
-                        <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-150 dark:border-white/[0.05] text-zinc-400 font-bold select-none">
+                        <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-100 dark:border-white/[0.05] text-zinc-400 font-bold select-none">
                           <th className="p-3.5 pl-5">Producto / Variante</th>
                           <th className="p-3.5">Precio de Venta</th>
                           <th className="p-3.5">Costo Unitario</th>
@@ -914,7 +914,7 @@ export default function CostosPage() {
                                       {hasMultipleVariants ? (
                                         <div className="flex items-center gap-2 pl-4">
                                           <div className="w-1.5 h-1.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-                                          <span className="text-zinc-550 dark:text-zinc-400">{v.title}</span>
+                                          <span className="text-zinc-500 dark:text-zinc-400">{v.title}</span>
                                         </div>
                                       ) : (
                                         <div className="flex items-center gap-2">
@@ -1189,7 +1189,7 @@ export default function CostosPage() {
 
                 <div className="space-y-2.5">
                   {/* PagoNube */}
-                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-150 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-100 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 text-[10px] font-black">PN</div>
                       <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">pagonube</span>
@@ -1208,7 +1208,7 @@ export default function CostosPage() {
                   </div>
 
                   {/* Mercado Pago */}
-                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-150 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-100 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-500 text-[10px] font-black">MP</div>
                       <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">mercado pago</span>
@@ -1227,7 +1227,7 @@ export default function CostosPage() {
                   </div>
 
                   {/* GO cuotas */}
-                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-150 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-100 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center text-pink-500 text-[10px] font-black">GC</div>
                       <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">GO cuotas</span>
@@ -1246,7 +1246,7 @@ export default function CostosPage() {
                   </div>
 
                   {/* Ualá Bis */}
-                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-150 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-100 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-500 text-[10px] font-black">UB</div>
                       <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">ualábis</span>
@@ -1265,7 +1265,7 @@ export default function CostosPage() {
                   </div>
 
                   {/* MODO */}
-                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-150 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-100 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 text-[10px] font-black">MD</div>
                       <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">MODO</span>
@@ -1459,10 +1459,10 @@ export default function CostosPage() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto border border-zinc-150 dark:border-white/[0.05] rounded-xl">
+                <div className="overflow-x-auto border border-zinc-100 dark:border-white/[0.05] rounded-xl">
                   <table className="w-full text-[12px] text-left border-collapse">
                     <thead>
-                      <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-150 dark:border-white/[0.05] text-zinc-400 font-bold">
+                      <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-100 dark:border-white/[0.05] text-zinc-400 font-bold">
                         <th className="p-3">Nombre</th>
                         <th className="p-3">Fecha Inicio</th>
                         <th className="p-3">Fecha Fin / Recurrencia</th>
@@ -1573,10 +1573,10 @@ export default function CostosPage() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto border border-zinc-150 dark:border-white/[0.05] rounded-xl">
+                <div className="overflow-x-auto border border-zinc-100 dark:border-white/[0.05] rounded-xl">
                   <table className="w-full text-[12px] text-left border-collapse">
                     <thead>
-                      <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-150 dark:border-white/[0.05] text-zinc-400 font-bold">
+                      <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-100 dark:border-white/[0.05] text-zinc-400 font-bold">
                         <th className="p-3">Nombre</th>
                         <th className="p-3">Fecha Inicio</th>
                         <th className="p-3">Fecha Fin / Recurrencia</th>
@@ -1681,10 +1681,10 @@ export default function CostosPage() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto border border-zinc-150 dark:border-white/[0.05] rounded-xl">
+                <div className="overflow-x-auto border border-zinc-100 dark:border-white/[0.05] rounded-xl">
                   <table className="w-full text-[12px] text-left border-collapse">
                     <thead>
-                      <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-150 dark:border-white/[0.05] text-zinc-400 font-bold">
+                      <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-100 dark:border-white/[0.05] text-zinc-400 font-bold">
                         <th className="p-3">Nombre</th>
                         <th className="p-3">Fecha Inicio</th>
                         <th className="p-3">Fecha Fin / Recurrencia</th>
@@ -1811,7 +1811,7 @@ export default function CostosPage() {
               <button 
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-150 dark:hover:bg-white/5"
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -83,7 +83,7 @@ export default function EmailLoader({ loading, color = '#10b981', labels = ['Ent
                   style={{ backgroundColor: color }} 
                 />
               </div>
-              <span className="text-[10px] sm:text-[11px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-widest truncate">
+              <span className="text-[10px] sm:text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest truncate">
                 {label}
               </span>
             </div>
@@ -110,7 +110,7 @@ export default function EmailLoader({ loading, color = '#10b981', labels = ['Ent
       </div>
 
       {/* Progress bar — thin strip at the bottom, no extra height */}
-      <div className="h-0.5 bg-zinc-100 dark:bg-zinc-850/60 relative overflow-hidden">
+      <div className="h-0.5 bg-zinc-100 dark:bg-zinc-800/60 relative overflow-hidden">
         <div
           className="absolute inset-y-0 left-0 transition-all"
           style={{

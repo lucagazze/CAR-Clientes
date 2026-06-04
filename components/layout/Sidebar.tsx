@@ -89,7 +89,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     if (path === '/') {
       return location.pathname === '/';
     }
-    return location.pathname.startsWith(path);
+    // Exact match for /admin to avoid it activating for /admin/usuarios etc.
+    if (path === '/admin') {
+      return location.pathname === '/admin';
+    }
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   const userDisplayName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Usuario';

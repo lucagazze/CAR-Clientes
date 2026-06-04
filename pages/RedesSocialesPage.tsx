@@ -1003,13 +1003,13 @@ export default function RedesSocialesPage() {
 
         <div className="flex items-center gap-2 flex-wrap justify-start md:justify-end">
           {/* Tab Selector Buttons */}
-          <div className="flex items-center gap-1 bg-zinc-150/80 dark:bg-zinc-800/60 p-1 rounded-2xl border border-zinc-250/20 dark:border-zinc-700/60">
+          <div className="flex items-center gap-1 bg-zinc-100/80 dark:bg-zinc-800/60 p-1 rounded-2xl border border-zinc-200/20 dark:border-zinc-700/60">
             <button
               onClick={() => setActiveTab('instagram')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-black transition-all ${
                 activeTab === 'instagram'
                   ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20'
-                  : 'text-zinc-550 hover:text-zinc-850 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
               }`}
             >
               <Instagram className="w-3.5 h-3.5" />
@@ -1021,7 +1021,7 @@ export default function RedesSocialesPage() {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-black transition-all ${
                 activeTab === 'facebook'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                  : 'text-zinc-555 hover:text-zinc-850 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
               }`}
             >
               <span className="w-3.5 h-3.5 font-black flex items-center justify-center text-[15px] leading-none">f</span>
@@ -1133,8 +1133,8 @@ export default function RedesSocialesPage() {
                             onClick={() => setMediaFilter(f.id as any)}
                             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all whitespace-nowrap ${
                               mediaFilter === f.id
-                                ? 'bg-white dark:bg-zinc-900 text-zinc-850 dark:text-white shadow-sm'
-                                : 'text-zinc-500 hover:text-zinc-850 dark:hover:text-zinc-200'
+                                ? 'bg-white dark:bg-zinc-900 text-zinc-800 dark:text-white shadow-sm'
+                                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
                             }`}
                           >
                             <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1151,7 +1151,7 @@ export default function RedesSocialesPage() {
                   {filteredMedia.length === 0 ? (
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-12 text-center">
                       <ImageIcon className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
-                      <p className="text-[13.5px] font-bold text-zinc-550">No se encontraron publicaciones</p>
+                      <p className="text-[13.5px] font-bold text-zinc-500">No se encontraron publicaciones</p>
                       <p className="text-[12px] text-zinc-400 mt-1">Intentá cambiando el filtro o cargando más adelante.</p>
                     </div>
                   ) : (
@@ -1261,7 +1261,7 @@ export default function RedesSocialesPage() {
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400">
                                   <span>{dateStr}</span>
-                                  <span className="uppercase text-[9px] tracking-widest text-zinc-350 dark:text-zinc-555">{m.media_type}</span>
+                                  <span className="uppercase text-[9px] tracking-widest text-zinc-350 dark:text-zinc-500">{m.media_type}</span>
                                 </div>
 
                                 {m.caption && (
@@ -1280,7 +1280,7 @@ export default function RedesSocialesPage() {
                               </div>
 
                               <div className="flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-800/60 mt-auto">
-                                <div className="flex items-center gap-3 text-zinc-555 dark:text-zinc-400 text-[12px] font-bold">
+                                <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400 text-[12px] font-bold">
                                   <span className="flex items-center gap-1 cursor-default"><Heart className="w-3.5 h-3.5 text-zinc-450" /> {m.like_count || 0}</span>
                                   <button 
                                     onClick={(e) => { e.stopPropagation(); openCommentsModal(m.id, m.permalink, 'instagram'); }}
@@ -1415,8 +1415,8 @@ export default function RedesSocialesPage() {
                             onClick={() => setFbMediaFilter(f.id as any)}
                             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all whitespace-nowrap ${
                               fbMediaFilter === f.id
-                                ? 'bg-white dark:bg-zinc-900 text-zinc-850 dark:text-white shadow-sm'
-                                : 'text-zinc-550 hover:text-zinc-850 dark:hover:text-zinc-200'
+                                ? 'bg-white dark:bg-zinc-900 text-zinc-800 dark:text-white shadow-sm'
+                                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
                             }`}
                           >
                             <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1432,7 +1432,7 @@ export default function RedesSocialesPage() {
                   {filteredFbMedia.length === 0 ? (
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-12 text-center">
                       <ImageIcon className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
-                      <p className="text-[13.5px] font-bold text-zinc-550">No se encontraron publicaciones</p>
+                      <p className="text-[13.5px] font-bold text-zinc-500">No se encontraron publicaciones</p>
                       <p className="text-[12px] text-zinc-400 mt-1">Intentá cambiando el filtro o cargando más adelante.</p>
                     </div>
                   ) : (
@@ -1515,7 +1515,7 @@ export default function RedesSocialesPage() {
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400">
                                   <span>{dateStr}</span>
-                                  <span className="uppercase text-[9px] tracking-widest text-zinc-350 dark:text-zinc-550">
+                                  <span className="uppercase text-[9px] tracking-widest text-zinc-350 dark:text-zinc-500">
                                     {m.full_picture ? 'FOTO/VIDEO' : 'ESTADO'}
                                   </span>
                                 </div>
@@ -1536,7 +1536,7 @@ export default function RedesSocialesPage() {
                               </div>
 
                               <div className="flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-800/60 mt-auto">
-                                <div className="flex items-center gap-3 text-zinc-555 dark:text-zinc-400 text-[12px] font-bold">
+                                <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400 text-[12px] font-bold">
                                   <span className="flex items-center gap-1 cursor-default"><ThumbsUp className="w-3.5 h-3.5 text-zinc-450" /> {m.likes?.summary?.total_count || 0}</span>
                                   <button 
                                     onClick={(e) => { e.stopPropagation(); openCommentsModal(m.id, m.permalink_url, 'facebook'); }}
@@ -1620,7 +1620,7 @@ export default function RedesSocialesPage() {
                 </div>
                 <button 
                   onClick={closeCommentsModal}
-                  className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-xl text-zinc-400 hover:text-zinc-655 dark:hover:text-zinc-200 transition-colors"
+                  className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-zinc-655 dark:hover:text-zinc-200 transition-colors"
                 >
                   <X className="w-4.5 h-4.5" />
                 </button>
@@ -1630,7 +1630,7 @@ export default function RedesSocialesPage() {
               <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-5 h-full">
                 
                 {/* Column 1: Post Media Context (Left Side - 40% width on md/lg, hidden on mobile) */}
-                <div className="hidden md:flex md:col-span-2 flex-col justify-start border-r border-zinc-150 dark:border-zinc-800 bg-zinc-50/15 dark:bg-zinc-950/10 p-5 overflow-y-auto h-full space-y-4">
+                <div className="hidden md:flex md:col-span-2 flex-col justify-start border-r border-zinc-100 dark:border-zinc-800 bg-zinc-50/15 dark:bg-zinc-950/10 p-5 overflow-y-auto h-full space-y-4">
                   {activePost ? (
                     <>
                       {/* Media Player */}
@@ -1670,11 +1670,11 @@ export default function RedesSocialesPage() {
 
                       {/* Engagement Metrics */}
                       <div className="grid grid-cols-2 gap-3 pt-2">
-                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-850/60 rounded-2xl text-center">
+                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl text-center">
                           <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Me gusta</span>
                           <span className="text-[14px] font-extrabold text-zinc-800 dark:text-zinc-200">{fmtNumber(activePost.like_count || activePost.likes?.summary?.total_count || 0)}</span>
                         </div>
-                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-850/60 rounded-2xl text-center">
+                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl text-center">
                           <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Comentarios</span>
                           <span className="text-[14px] font-extrabold text-zinc-800 dark:text-zinc-200">{fmtNumber(activePost.comments_count || activePost.comments?.summary?.total_count || 0)}</span>
                         </div>
@@ -1698,7 +1698,7 @@ export default function RedesSocialesPage() {
                     ) : comments.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center p-5">
                         <MessageSquare className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mb-2.5" />
-                        <p className="text-[13.5px] font-bold text-zinc-550">Sin comentarios</p>
+                        <p className="text-[13.5px] font-bold text-zinc-500">Sin comentarios</p>
                         <p className="text-[11.5px] text-zinc-450 mt-1">Nadie comentó en esta publicación aún.</p>
                       </div>
                     ) : (
@@ -1744,7 +1744,7 @@ export default function RedesSocialesPage() {
                                 {/* Comment header */}
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-850 flex items-center justify-center font-bold text-[10px] text-zinc-550 dark:text-zinc-400 flex-shrink-0">
+                                    <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center font-bold text-[10px] text-zinc-500 dark:text-zinc-400 flex-shrink-0">
                                       {commentUser ? commentUser.slice(0, 2).toUpperCase() : 'U'}
                                     </div>
                                     <div>
@@ -1965,7 +1965,7 @@ export default function RedesSocialesPage() {
                   </div>
 
                   {/* Bottom Actions & Input */}
-                  <div className="p-4 border-t border-zinc-150/80 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex-shrink-0">
+                  <div className="p-4 border-t border-zinc-100/80 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex-shrink-0">
                     {submitError && (
                       <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 text-[12px] text-amber-700 dark:text-amber-400 leading-relaxed font-semibold mb-3">
                         <div className="flex items-start gap-1.5">
@@ -1981,7 +1981,7 @@ export default function RedesSocialesPage() {
                         onChange={(e) => setCommentInput(e.target.value)}
                         placeholder="Escribí un nuevo comentario en el post..."
                         disabled={submittingReply}
-                        className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-250 dark:border-zinc-800 rounded-xl px-3.5 py-2 text-[13px] text-zinc-850 dark:text-zinc-100 placeholder:text-zinc-450 outline-none focus:border-violet-500 dark:focus:border-violet-500 transition-colors shadow-inner font-medium leading-normal"
+                        className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3.5 py-2 text-[13px] text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-450 outline-none focus:border-violet-500 dark:focus:border-violet-500 transition-colors shadow-inner font-medium leading-normal"
                       />
                       <button
                         type="submit"

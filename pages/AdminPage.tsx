@@ -1626,14 +1626,14 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[500px]">
                 <thead>
-                  <tr className="border-b border-zinc-150 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
                     <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Usuario</th>
                     <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Web / Negocio</th>
                     <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Asociar a Negocio</th>
                     <th className="px-4 py-2.5 text-[11px] font-bold text-zinc-500 uppercase tracking-wider text-right">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-150 dark:divide-zinc-800">
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {unlinkedUsers.map(u => (
                     <UnlinkedUserRow
                       key={u.id}
@@ -1710,7 +1710,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                   className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 rounded-xl px-5 py-4 cursor-pointer hover:border-violet-300 dark:hover:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/[0.02] dark:hover:shadow-none transition-all flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-800 dark:to-zinc-850 border border-zinc-200/60 dark:border-zinc-700/60 flex items-center justify-center text-zinc-700 dark:text-zinc-300 text-[13px] font-semibold flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-zinc-50 to-zinc-100 dark:from-zinc-800 dark:to-zinc-800 border border-zinc-200/60 dark:border-zinc-700/60 flex items-center justify-center text-zinc-700 dark:text-zinc-300 text-[13px] font-semibold flex-shrink-0 group-hover:scale-105 transition-transform">
                       {c.business_name.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0">
@@ -1771,7 +1771,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
           <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl h-full md:h-[85vh] rounded-none md:rounded-2xl flex overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800 flex-col md:flex-row animate-in fade-in zoom-in-95 duration-200">
             
             {/* Mobile Top Navigation & Header */}
-            <div className="flex md:hidden flex-col bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-150 dark:border-zinc-800 flex-shrink-0">
+            <div className="flex md:hidden flex-col bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
               {/* Header: Logo, Client Name, Close button, View As */}
               <div className="flex items-center justify-between p-4 pb-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -1821,7 +1821,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
               </div>
 
               {/* Tab Selector Mobile: Horizontal Scrollable Row */}
-              <div className="flex border-t border-zinc-150 dark:border-zinc-800/80 px-2 overflow-x-auto scrollbar-none">
+              <div className="flex border-t border-zinc-100 dark:border-zinc-800/80 px-2 overflow-x-auto scrollbar-none">
                 {[
                   { id: "general", label: "General", icon: UserPlus },
                   { id: "integrations", label: "Conexiones", icon: Globe },
@@ -1850,7 +1850,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
             </div>
 
             {/* Sidebar navigation (desktop only) */}
-            <div className="hidden md:flex w-64 bg-zinc-50 dark:bg-zinc-955 border-r border-zinc-150 dark:border-zinc-800 p-5 flex-col justify-between flex-shrink-0">
+            <div className="hidden md:flex w-64 bg-zinc-50 dark:bg-zinc-950 border-r border-zinc-100 dark:border-zinc-800 p-5 flex-col justify-between flex-shrink-0">
               <div className="space-y-6">
                 {/* Client Profile Header */}
                 <div className="space-y-2">
@@ -1882,7 +1882,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                   className={`w-full py-2 px-3 rounded-lg text-[11px] font-bold flex items-center justify-center gap-2 transition-all border ${
                     viewAsProfile?.id === editingClient.id
                       ? "bg-violet-600 text-white border-violet-600 shadow-md shadow-violet-500/10"
-                      : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-850"
+                      : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                   }`}
                 >
                   <MonitorPlay className="w-4 h-4" />
@@ -1907,7 +1907,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                         className={`w-full py-2 px-3 rounded-lg text-[12px] font-semibold flex items-center gap-2.5 transition-all text-left ${
                           isActive
                             ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white font-bold"
-                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/60 dark:hover:bg-zinc-850"
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100/60 dark:hover:bg-zinc-800"
                         }`}
                       >
                         <Icon className={`w-3.5 h-3.5 ${isActive ? "text-violet-500" : "text-zinc-400"}`} />
@@ -1931,7 +1931,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
             {/* Content pane */}
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
               {/* Header inside pane (desktop only) */}
-              <div className="hidden md:flex px-6 py-4 border-b border-zinc-150 dark:border-zinc-850 justify-between items-center bg-white dark:bg-zinc-900">
+              <div className="hidden md:flex px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 justify-between items-center bg-white dark:bg-zinc-900">
                 <h3 className="text-[15px] font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                   {activeTab === "general" && <UserPlus className="w-4 h-4 text-violet-500" />}
                   {activeTab === "integrations" && <Globe className="w-4 h-4 text-violet-500" />}
@@ -2347,10 +2347,10 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                               <Loader2 className="w-5 h-5 animate-spin text-zinc-400" />
                             </div>
                           ) : (
-                            <div className="rounded-[10px] border border-zinc-150 dark:border-zinc-800 overflow-hidden">
+                            <div className="rounded-[10px] border border-zinc-100 dark:border-zinc-800 overflow-hidden">
                               <table className="w-full text-left">
                                 <thead>
-                                  <tr className="bg-zinc-50 dark:bg-zinc-850 border-b border-zinc-150 dark:border-zinc-800">
+                                  <tr className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800">
                                     <th className="px-4 py-2 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Email</th>
                                     <th className="px-4 py-2 text-[11px] font-bold text-zinc-500 uppercase tracking-wider hidden sm:table-cell">Creado</th>
                                     <th className="px-4 py-2 text-[11px] font-bold text-zinc-500 uppercase tracking-wider text-right">Acciones</th>
@@ -2438,7 +2438,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                           )}
 
                           {/* Agregar cuenta */}
-                          <div className="mt-4 pt-4 border-t border-zinc-150 dark:border-zinc-800 space-y-3">
+                          <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
                             <h5 className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">
                               Agregar Cuenta de Acceso
                             </h5>
@@ -2489,7 +2489,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                               {clientLinks.map((link, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex gap-2 items-start bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800"
+                                  className="flex gap-2 items-start bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800"
                                 >
                                   <div className="flex-1 space-y-2">
                                     <input
@@ -2527,7 +2527,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                               <button
                                 type="button"
                                 onClick={handleAddLink}
-                                className="w-full h-10 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 text-[12px] font-semibold hover:border-violet-500 hover:text-violet-500 transition-all flex items-center justify-center gap-2 bg-zinc-50/30 dark:bg-zinc-850/30"
+                                className="w-full h-10 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 text-[12px] font-semibold hover:border-violet-500 hover:text-violet-500 transition-all flex items-center justify-center gap-2 bg-zinc-50/30 dark:bg-zinc-800/30"
                               >
                                 + Agregar Acceso Directo
                               </button>
@@ -2540,7 +2540,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                 </div>
 
                 {/* Footer buttons */}
-                <div className="flex items-center justify-end gap-3 pt-6 mt-6 border-t border-zinc-150 dark:border-zinc-800">
+                <div className="flex items-center justify-end gap-3 pt-6 mt-6 border-t border-zinc-100 dark:border-zinc-800">
                   <button
                     type="button"
                     onClick={() => closeEdit()}
