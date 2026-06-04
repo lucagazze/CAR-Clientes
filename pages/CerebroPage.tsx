@@ -286,7 +286,6 @@ export default function CerebroPage() {
     <CenteredPageLoader isLoading={loading}>
     <div className="w-full pt-4 pb-20 md:pt-6 px-4 md:px-0 animate-fade-in">
 
-      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4 min-w-0">
           {/* Title */}
@@ -302,11 +301,15 @@ export default function CerebroPage() {
               <p className="text-[12px] text-zinc-400 font-medium">Todo lo que sabe la IA sobre tu negocio — alimenta comentarios, mensajería y más.</p>
             </div>
           </div>
+        </div>
 
-          {/* Context score — clickable modal (junto al título) */}
+        {/* Actions at top-right */}
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+          {/* Context score — clickable modal */}
           <button
+            type="button"
             onClick={() => setShowContextModal(true)}
-            className="hidden sm:flex items-center gap-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 shadow-sm hover:border-violet-300 dark:hover:border-violet-700 transition-all shrink-0"
+            className="flex items-center gap-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 shadow-sm hover:border-violet-300 dark:hover:border-violet-700 transition-all shrink-0"
           >
             <div className="relative w-9 h-9">
               <svg viewBox="0 0 36 36" className="w-9 h-9 -rotate-90">
@@ -320,21 +323,25 @@ export default function CerebroPage() {
               <p className="text-[11px] font-black text-zinc-700 dark:text-zinc-300">Contexto IA</p>
               <p className="text-[10px] text-zinc-400">{contextScore}/{sections.length} secciones</p>
             </div>
-            <ChevronRight className="w-3 h-3 text-zinc-400" />
+            <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
           </button>
-        </div>
 
-        {/* Save button at top (derecha) */}
-        {activeTab === 'identidad' && (
-          <button
-            onClick={() => handleSaveSettings()}
-            disabled={saving}
-            className={`flex items-center gap-2 px-5 py-2.5 disabled:opacity-50 text-white rounded-xl text-[13px] font-black shadow-md transition-all shrink-0 ${savedOk ? 'bg-emerald-500 shadow-emerald-200 dark:shadow-none' : 'bg-violet-600 hover:bg-violet-700 shadow-violet-200 dark:shadow-none'}`}
-          >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedOk ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {saving ? 'Guardando…' : savedOk ? '¡Guardado!' : 'Guardar cambios'}
-          </button>
-        )}
+          {activeTab === 'identidad' && (
+            <button
+              type="button"
+              onClick={() => handleSaveSettings()}
+              disabled={saving}
+              className={`flex items-center gap-2 px-5 py-2.5 disabled:opacity-50 rounded-xl text-[13px] font-black shadow-sm transition-all shrink-0 ${
+                savedOk 
+                  ? 'bg-emerald-600 text-white shadow-emerald-200 dark:shadow-none' 
+                  : 'bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 text-white shadow-sm dark:shadow-none'
+              }`}
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : savedOk ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+              {saving ? 'Guardando…' : savedOk ? '¡Guardado!' : 'Guardar cambios'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Tabs ── */}
@@ -377,15 +384,15 @@ export default function CerebroPage() {
               <Pill active={!!(profile as any)?.ig_business_id} label={(profile as any)?.ig_username ? `@${(profile as any).ig_username}` : 'Instagram'} icon={Instagram} />
               <Pill active={!!(profile as any)?.fb_page_id} label={(profile as any)?.fb_page_name || 'Facebook'} icon={Globe} />
             </div>
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-                <Calendar className="w-3.5 h-3.5" />
-                <span className="font-medium">{fmtDate(brainUpdatedAt)}</span>
-              </div>
+            <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
               <button type="button" onClick={() => websiteUrl.trim() && setShowConfirmScan(true)} disabled={!websiteUrl.trim()}
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-[12px] font-bold shadow-md shadow-violet-500/20 transition-all">
                 <Sparkles className="w-3.5 h-3.5" />Escanear y Entrenar
               </button>
+              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                <Calendar className="w-3.5 h-3.5" />
+                <span className="font-medium">{fmtDate(brainUpdatedAt)}</span>
+              </div>
             </div>
             <p className="text-[10px] text-zinc-400 -mt-1">Escanea el sitio web y redes sociales — extrae descripción, tono, ofertas y preguntas frecuentes automáticamente.</p>
           </div>
@@ -427,7 +434,11 @@ export default function CerebroPage() {
 
           <div className="flex justify-end">
             <button type="submit" disabled={saving}
-              className={`flex items-center gap-2 px-6 py-2.5 disabled:opacity-50 text-white rounded-xl text-[13px] font-black shadow-md transition-all ${savedOk ? 'bg-emerald-500 shadow-emerald-200 dark:shadow-none' : 'bg-violet-600 hover:bg-violet-700 shadow-violet-200 dark:shadow-none'}`}>
+              className={`flex items-center gap-2 px-6 py-2.5 disabled:opacity-50 rounded-xl text-[13px] font-black shadow-md transition-all ${
+                savedOk 
+                  ? 'bg-emerald-600 text-white shadow-emerald-200 dark:shadow-none' 
+                  : 'bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 text-white shadow-sm dark:shadow-none'
+              }`}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : savedOk ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
               {saving ? 'Guardando...' : savedOk ? '¡Guardado con éxito!' : 'Guardar Cambios'}
             </button>
