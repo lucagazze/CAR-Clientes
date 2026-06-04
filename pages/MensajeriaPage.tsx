@@ -212,51 +212,7 @@ export default function MensajeriaPage() {
   });
   const [isFirstLoadDone, setIsFirstLoadDone] = useState(false);
 
-  const [prevProfileId, setPrevProfileId] = useState(profileId);
-  if (profileId !== prevProfileId) {
-    setPrevProfileId(profileId);
-    
-    // Clear/load cached conversations
-    const key = profileId ? `car_convs_${profileId}` : null;
-    let cachedConvs: any[] = [];
-    if (key) {
-      try {
-        const cached = sessionStorage.getItem(key);
-        if (cached) cachedConvs = JSON.parse(cached);
-      } catch {}
-    }
-    setConversations(cachedConvs);
-    
-    // Clear/load cached convMeta
-    let cachedMeta: any = null;
-    if (profileId) {
-      try {
-        const saved = sessionStorage.getItem(`car_conv_meta_${profileId}`);
-        if (saved) cachedMeta = JSON.parse(saved);
-      } catch {}
-    }
-    setConvMeta(cachedMeta);
 
-    // Clear/load cached channelMetas
-    let cachedChannelMetas: any = {};
-    if (profileId) {
-      try {
-        const saved = sessionStorage.getItem(`car_channel_metas_${profileId}`);
-        if (saved) cachedChannelMetas = JSON.parse(saved);
-      } catch {}
-    }
-    setChannelMetas(cachedChannelMetas);
-
-    setIsFirstLoadDone(false);
-    setSelected(null);
-    setMessages([]);
-    setInboxes([]);
-    setCustomLinks([]);
-    setCannedResponses([]);
-    setShopifyProducts([]);
-    setSummary(null);
-    setSelectedIds(new Set());
-  }
 
   // Synchronize conversations list to sessionStorage cache automatically on every state change
   useEffect(() => {
@@ -368,6 +324,52 @@ export default function MensajeriaPage() {
       return next;
     });
   };
+
+  const [prevProfileId, setPrevProfileId] = useState(profileId);
+  if (profileId !== prevProfileId) {
+    setPrevProfileId(profileId);
+    
+    // Clear/load cached conversations
+    const key = profileId ? `car_convs_${profileId}` : null;
+    let cachedConvs: any[] = [];
+    if (key) {
+      try {
+        const cached = sessionStorage.getItem(key);
+        if (cached) cachedConvs = JSON.parse(cached);
+      } catch {}
+    }
+    setConversations(cachedConvs);
+    
+    // Clear/load cached convMeta
+    let cachedMeta: any = null;
+    if (profileId) {
+      try {
+        const saved = sessionStorage.getItem(`car_conv_meta_${profileId}`);
+        if (saved) cachedMeta = JSON.parse(saved);
+      } catch {}
+    }
+    setConvMeta(cachedMeta);
+
+    // Clear/load cached channelMetas
+    let cachedChannelMetas: any = {};
+    if (profileId) {
+      try {
+        const saved = sessionStorage.getItem(`car_channel_metas_${profileId}`);
+        if (saved) cachedChannelMetas = JSON.parse(saved);
+      } catch {}
+    }
+    setChannelMetas(cachedChannelMetas);
+
+    setIsFirstLoadDone(false);
+    setSelected(null);
+    setMessages([]);
+    setInboxes([]);
+    setCustomLinks([]);
+    setCannedResponses([]);
+    setShopifyProducts([]);
+    setSummary(null);
+    setSelectedIds(new Set());
+  }
 
   const isConvUnread = useCallback((c: any) => {
     if (!c) return false;
