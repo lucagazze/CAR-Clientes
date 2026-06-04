@@ -54,8 +54,8 @@ export default function EmailLoader({ loading, color = '#10b981', labels = ['Ent
 
         if (phase === 'loading') {
           const elapsed = Date.now() - startTime;
-          if (elapsed <= 700) {
-            currentProgress = (elapsed / 700) * 75;
+          if (elapsed <= 500) {
+            currentProgress = (elapsed / 500) * 75;
             setProgress(currentProgress);
           } else {
             if (!loadingRef.current) {
@@ -63,7 +63,7 @@ export default function EmailLoader({ loading, color = '#10b981', labels = ['Ent
               finishStartTime = Date.now();
               startProgress = currentProgress;
             } else {
-              const slowElapsed = elapsed - 700;
+              const slowElapsed = elapsed - 500;
               currentProgress = 75 + (1 - Math.exp(-slowElapsed / 8000)) * (98 - 75);
               setProgress(currentProgress);
             }
