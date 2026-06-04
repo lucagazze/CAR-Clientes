@@ -352,6 +352,9 @@ export default function ComentariosPage() {
     setLoading(!hasCache);
     setIgError(null);
     setFbError(null);
+    // Reset badge immediately so we never show a stale cached number while loading
+    setPendingCommentsCount(0);
+    if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, '0'); } catch { /* ignore */ } }
 
     const processMediaRes = (igRes: any, fbRes: any, activeAds: any[] = [], adsComments: any[] = []) => {
       const items: PostItem[] = [];
@@ -534,6 +537,10 @@ export default function ComentariosPage() {
         const initialItems = processMediaRes(igMediaRes12, fbMediaRes12, relevantAds, adsCommentsResults12);
         setPosts(initialItems);
         setLoading(false);
+        // Update badge immediately with step-1 count (accurate but incomplete)
+        const count1 = initialItems.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
+        setPendingCommentsCount(count1);
+        if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(count1)); } catch { /* ignore */ } }
 
         // Update cache with initial items
         try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: initialItems.map(p => ({ ...p, comments: [] })) })); } catch { /* quota exceeded — skip cache */ }
@@ -566,6 +573,10 @@ export default function ComentariosPage() {
 
         const allItems = processMediaRes(igMediaRes50, fbMediaRes50, relevantAds, adsCommentsResults50);
         setPosts(allItems);
+        // Update badge with final accurate count from full deep-fetch
+        const countFinal = allItems.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
+        setPendingCommentsCount(countFinal);
+        if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(countFinal)); } catch { /* ignore */ } }
         try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: allItems })); } catch { /* quota exceeded — skip cache */ }
 
       } catch (err) {
@@ -580,6 +591,7 @@ export default function ComentariosPage() {
   }, [clientId, igId, fbPageId, igUsername, metaAccountId, refreshKey, isCommentPending]);
 
   // Sync sidebar badge when load completes — update count directly instead of a full API refetch
+  // Note: badge is also updated inline inside load() at each step for responsiveness
   useEffect(() => {
     if (!loading) {
       const count = posts.reduce((sum, p) => sum + (p.pendingComments || 0), 0);

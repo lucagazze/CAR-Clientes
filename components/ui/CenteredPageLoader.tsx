@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface Props {
   isLoading: boolean;
@@ -16,55 +16,47 @@ const MESSAGES = [
   'Traemos la info más fresca...',
 ];
 
-// Global cache variables to track previous loader state during page transitions
-let globalProgress = 0;
-let globalPhase: 'loading' | 'fading' | 'done' = 'loading';
-let globalMsgIdx = 0;
-let lastUnmountTime = 0;
-
 export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children }) => {
-  // Reuse progress state if a loader was unmounted within the last 250ms and was still loading
-  const shouldReuse = Date.now() - lastUnmountTime < 250 && globalPhase === 'loading';
-
-  const [progress, setProgress] = useState(shouldReuse ? globalProgress : 0);
-  const [phase, setPhase] = useState<'loading' | 'fading' | 'done'>(shouldReuse ? globalPhase : 'loading');
-  const [msgIdx, setMsgIdx] = useState(shouldReuse ? globalMsgIdx : 0);
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<'loading' | 'fading' | 'done'>('loading');
+  const [msgIdx, setMsgIdx] = useState(0);
   const [msgVisible, setMsgVisible] = useState(true);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Sync state with global cache variables on every state change to persist it on unmount
-  useEffect(() => {
-    globalProgress = progress;
-    globalPhase = phase;
-    globalMsgIdx = msgIdx;
-  }, [progress, phase, msgIdx]);
+  const clearAllTimeouts = () => {
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+  };
 
+  // Progress simulation — always 0→100, strictly monotonic (never backwards)
   useEffect(() => {
-    return () => {
-      lastUnmountTime = Date.now();
-    };
-  }, []);
-
-  // Progress simulation
-  useEffect(() => {
+    clearAllTimeouts();
     if (isLoading) {
-      if (!shouldReuse) {
-        setProgress(0);
-        setPhase('loading');
-      }
-      const t1 = setTimeout(() => setProgress(prev => Math.max(prev, 18)), 80);
-      const t2 = setTimeout(() => setProgress(prev => Math.max(prev, 42)), 400);
-      const t3 = setTimeout(() => setProgress(prev => Math.max(prev, 67)), 950);
-      const t4 = setTimeout(() => setProgress(prev => Math.max(prev, 83)), 1900);
-      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+      setProgress(0);
+      setPhase('loading');
+      // Scheduled milestones: [delay_ms, target_%]
+      const steps: [number, number][] = [
+        [80,   18],
+        [400,  42],
+        [950,  67],
+        [1900, 83],
+      ];
+      steps.forEach(([delay, target]) => {
+        const t = setTimeout(() => setProgress(prev => Math.max(prev, target)), delay);
+        timeoutsRef.current.push(t);
+      });
     } else {
+      // Loading finished — jump to 100 then fade out
       setProgress(100);
       setPhase('fading');
       const t = setTimeout(() => setPhase('done'), 380);
-      return () => clearTimeout(t);
+      timeoutsRef.current.push(t);
     }
-  }, [isLoading, shouldReuse]);
+    return clearAllTimeouts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
-  // Rotating messages with fade
+  // Rotating messages with fade animation
   useEffect(() => {
     if (phase !== 'loading') return;
     const cycle = () => {
