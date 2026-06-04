@@ -335,7 +335,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       let igPosts: any[] = [];
       if (igId) {
         try {
-          const res = await metaAds.getInstagramMedia(igId, 12);
+          const res = await metaAds.getInstagramMedia(igId, 50);
           igPosts = res?.data || res || [];
         } catch (e) {
           console.error('Error fetching IG media for unread count:', e);
@@ -346,7 +346,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       let fbPosts: any[] = [];
       if (fbPageId) {
         try {
-          const res = await metaAds.getFacebookPageFeed(fbPageId, 12);
+          const res = await metaAds.getFacebookPageFeed(fbPageId, 50);
           fbPosts = res?.data || res || [];
         } catch (e) {
           console.error('Error fetching FB feed for unread count:', e);
@@ -417,11 +417,11 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const uniqueTargets = Object.values(uniqueTargetsMap);
 
           if (uniqueTargets.length > 0) {
-            // Fetch comments for top 12 unique targets
-            const targetsToFetch = uniqueTargets.slice(0, 12);
+            // Fetch comments for top 40 unique targets
+            const targetsToFetch = uniqueTargets.slice(0, 40);
             const commentsPromises = targetsToFetch.map(async (target) => {
               try {
-                const res = await metaAds.getAdCreativeComments(target.storyId);
+                const res = await metaAds.getAdCreativeComments(target.storyId, target.platform);
                 return { target, comments: res.data || [] };
               } catch {
                 return { target, comments: [] };
