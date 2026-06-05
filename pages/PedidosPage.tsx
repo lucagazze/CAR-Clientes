@@ -38,6 +38,7 @@ const daysAgo = (n: number) => {
   const d = new Date(); d.setDate(d.getDate() - n);
   return d.toISOString().split('T')[0];
 };
+const yesterdayStr = () => daysAgo(1);
 
 // ─── badges ───────────────────────────────────────────────────────────────
 
@@ -93,21 +94,19 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
     <>
       <tr
         onClick={handleToggle}
-        className={`border-b border-zinc-100/80 dark:border-white/[0.04] cursor-pointer transition-colors group ${
-          open
-            ? 'bg-zinc-50 dark:bg-white/[0.025]'
-            : 'hover:bg-zinc-50/70 dark:hover:bg-white/[0.015]'
+        className={`border-b border-zinc-100/80 dark:border-white/[0.04] cursor-pointer ${
+          open ? 'bg-zinc-50 dark:bg-white/[0.025]' : 'hover:bg-zinc-50/70 dark:hover:bg-white/[0.015]'
         }`}
       >
         {/* # */}
-        <td className="px-5 py-3.5">
+        <td className="px-5 py-3">
           <span className="text-[12px] font-black text-zinc-800 dark:text-zinc-100">
             #{order.order_number || order.name}
           </span>
         </td>
 
         {/* Fecha */}
-        <td className="px-4 py-3.5">
+        <td className="px-4 py-3">
           <div className="flex flex-col gap-1">
             {dateTag && (
               <span className={`self-start text-[9px] font-black uppercase tracking-wider px-1.5 py-[2px] rounded ${
@@ -124,7 +123,7 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
         </td>
 
         {/* Cliente */}
-        <td className="px-4 py-3.5">
+        <td className="px-4 py-3">
           <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 truncate max-w-[150px]">{customerName}</p>
           {order.customer?.email && (
             <p className="text-[10px] text-zinc-400 truncate max-w-[150px] mt-0.5">{order.customer.email}</p>
@@ -132,17 +131,17 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
         </td>
 
         {/* Productos */}
-        <td className="px-4 py-3.5">
+        <td className="px-4 py-3">
           {firstItem ? (
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06] shadow-sm">
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06]">
                 {firstImage
-                  ? <img src={firstImage} alt={firstItem.title} className="w-full h-full object-cover" loading="lazy" />
+                  ? <img src={firstImage} alt={firstItem.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                   : <Package className="w-3.5 h-3.5 text-zinc-400" />
                 }
               </div>
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[200px] leading-snug">
+                <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[180px] leading-snug">
                   {firstItem.title}
                 </p>
                 <p className="text-[10px] text-zinc-400 mt-0.5">
@@ -162,24 +161,22 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
         </td>
 
         {/* Pago */}
-        <td className="px-4 py-3.5"><PaymentBadge status={order.financial_status} /></td>
+        <td className="px-4 py-3"><PaymentBadge status={order.financial_status} /></td>
 
         {/* Envío */}
-        <td className="px-4 py-3.5"><FulfillmentBadge status={order.fulfillment_status} /></td>
+        <td className="px-4 py-3"><FulfillmentBadge status={order.fulfillment_status} /></td>
 
         {/* Total */}
-        <td className="px-4 py-3.5 text-right">
+        <td className="px-4 py-3 text-right">
           <span className="text-[13px] font-black text-zinc-900 dark:text-white whitespace-nowrap">
             {fmtCurr(parseFloat(order.total_price || 0))}
           </span>
         </td>
 
         {/* Expand */}
-        <td className="px-4 py-3.5">
-          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
-            open
-              ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200'
-              : 'text-zinc-400 group-hover:bg-zinc-100 dark:group-hover:bg-zinc-800'
+        <td className="px-4 py-3">
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+            open ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200' : 'text-zinc-400'
           }`}>
             {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </div>
@@ -202,9 +199,9 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
                     const img = item._wc_image || productImages[String(item.product_id)];
                     return (
                       <div key={i} className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06] shadow-sm">
+                        <div className="w-11 h-11 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06]">
                           {img
-                            ? <img src={img} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                            ? <img src={img} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                             : <Package className="w-4 h-4 text-zinc-400" />
                           }
                         </div>
@@ -325,10 +322,10 @@ const Pagination = memo(function Pagination({ page, totalPages, onChange }: { pa
   }
 
   return (
-    <div className="flex items-center justify-center gap-1.5 py-5">
+    <div className="flex items-center justify-center gap-1.5 py-5 flex-wrap">
       <button
         onClick={() => onChange(page - 1)} disabled={page === 1}
-        className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -339,7 +336,7 @@ const Pagination = memo(function Pagination({ page, totalPages, onChange }: { pa
             <button
               key={p}
               onClick={() => onChange(p as number)}
-              className={`w-8 h-8 rounded-xl text-[12px] font-bold transition-all ${
+              className={`w-8 h-8 rounded-xl text-[12px] font-bold ${
                 page === p
                   ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm'
                   : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -351,7 +348,7 @@ const Pagination = memo(function Pagination({ page, totalPages, onChange }: { pa
       )}
       <button
         onClick={() => onChange(page + 1)} disabled={page === totalPages}
-        className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <ChevronRightIcon className="w-4 h-4" />
       </button>
@@ -362,10 +359,12 @@ const Pagination = memo(function Pagination({ page, totalPages, onChange }: { pa
 // ─── presets ──────────────────────────────────────────────────────────────
 
 const PRESETS = [
-  { label: 'Hoy',     since: () => todayStr(),    until: () => todayStr() },
-  { label: '7 días',  since: () => daysAgo(6),    until: () => todayStr() },
-  { label: '30 días', since: () => daysAgo(29),   until: () => todayStr() },
-  { label: '90 días', since: () => daysAgo(89),   until: () => todayStr() },
+  { label: 'Hoy',      since: () => todayStr(),     until: () => todayStr() },
+  { label: 'Ayer',     since: () => yesterdayStr(),  until: () => yesterdayStr() },
+  { label: '7 días',   since: () => daysAgo(6),      until: () => todayStr() },
+  { label: '14 días',  since: () => daysAgo(13),     until: () => todayStr() },
+  { label: '30 días',  since: () => daysAgo(29),     until: () => todayStr() },
+  { label: '90 días',  since: () => daysAgo(89),     until: () => todayStr() },
 ];
 
 // ─── main ─────────────────────────────────────────────────────────────────
@@ -375,15 +374,14 @@ export default function PedidosPage() {
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = (isViewingAs ? viewAsProfile : authProfile) as any;
 
-  const platform         = profile?.ecommerce_platform || '';
-  const shopifyDomain    = (profile?.shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const shopifyToken     = profile?.shopify_access_token || '';
-  const wordpressUrl     = (profile?.wordpress_url || '').replace(/\/$/, '');
-  const wooConsumerKey   = profile?.woo_consumer_key || '';
+  const shopifyDomain     = (profile?.shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const shopifyToken      = profile?.shopify_access_token || '';
+  const wordpressUrl      = (profile?.wordpress_url || '').replace(/\/$/, '');
+  const wooConsumerKey    = profile?.woo_consumer_key || '';
   const wooConsumerSecret = profile?.woo_consumer_secret || '';
-  const isShopify        = !!(shopifyDomain && shopifyToken);
-  const isWoo            = !!(wordpressUrl && wooConsumerKey && wooConsumerSecret);
-  const hasEcommerce     = isShopify || isWoo || !!(profile?.tiendanube_store_id);
+  const isShopify         = !!(shopifyDomain && shopifyToken);
+  const isWoo             = !!(wordpressUrl && wooConsumerKey && wooConsumerSecret);
+  const hasEcommerce      = isShopify || isWoo || !!(profile?.tiendanube_store_id);
 
   const [orders, setOrders]               = useState<any[]>([]);
   const [productImages, setProductImages] = useState<Record<string, string>>({});
@@ -391,14 +389,14 @@ export default function PedidosPage() {
   const [error, setError]                 = useState<string | null>(null);
   const [initialLoad, setInitialLoad]     = useState(true);
 
-  const [search, setSearch]                     = useState('');
-  const [filterPayment, setFilterPayment]       = useState<string>('all');
+  const [search, setSearch]                       = useState('');
+  const [filterPayment, setFilterPayment]         = useState<string>('all');
   const [filterFulfillment, setFilterFulfillment] = useState<string>('all');
-  const [preset, setPreset]                     = useState(2);
-  const [since, setSince]                       = useState(daysAgo(29));
-  const [until, setUntil]                       = useState(todayStr());
-  const [sortAsc, setSortAsc]                   = useState(false);
-  const [page, setPage]                         = useState(1);
+  const [preset, setPreset]                       = useState(4); // 30 días default
+  const [since, setSince]                         = useState(daysAgo(29));
+  const [until, setUntil]                         = useState(todayStr());
+  const [sortAsc, setSortAsc]                     = useState(false);
+  const [page, setPage]                           = useState(1);
 
   const load = useCallback(async (s: string, u: string, isInitial = false) => {
     if (!isShopify && !isWoo) return;
@@ -420,16 +418,10 @@ export default function PedidosPage() {
             : Promise.resolve(null),
         ]);
         if (products !== null) setProductImages(products);
-        const sorted = [...raw].sort((a: any, b: any) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setOrders(sorted);
+        setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       } else if (isWoo) {
         const raw = await ecommerce.getWooCommerceOrders(wordpressUrl, wooConsumerKey, wooConsumerSecret, s, u);
-        const sorted = [...raw].sort((a: any, b: any) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setOrders(sorted);
+        setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       }
     } catch (e: any) {
       setError(e?.message || 'Error al cargar pedidos');
@@ -439,23 +431,21 @@ export default function PedidosPage() {
     }
   }, [isShopify, isWoo, shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret]);
 
-  // Products for Shopify are now fetched in parallel inside `load`. For refreshes (non-initial), skip re-fetching products.
   useEffect(() => {
     load(since, until, true);
   }, [shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret]);
 
-  // Re-fetch on date range change (not initial)
   useEffect(() => {
     if (initialLoad) return;
     load(since, until, false);
   }, [since, until]);
 
-  const setPresetRange = (idx: number) => {
+  const setPresetRange = useCallback((idx: number) => {
     setPreset(idx);
     setSince(PRESETS[idx].since());
     setUntil(PRESETS[idx].until());
     setPage(1);
-  };
+  }, []);
 
   const filtered = useMemo(() => {
     let list = orders;
@@ -467,8 +457,8 @@ export default function PedidosPage() {
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(o => {
-        const num  = String(o.order_number || o.name || '').toLowerCase();
-        const name = `${o.customer?.first_name || ''} ${o.customer?.last_name || ''}`.toLowerCase();
+        const num   = String(o.order_number || o.name || '').toLowerCase();
+        const name  = `${o.customer?.first_name || ''} ${o.customer?.last_name || ''}`.toLowerCase();
         const email = (o.customer?.email || '').toLowerCase();
         return num.includes(q) || name.includes(q) || email.includes(q);
       });
@@ -476,11 +466,11 @@ export default function PedidosPage() {
     return sortAsc ? [...list].reverse() : list;
   }, [orders, filterPayment, filterFulfillment, search, sortAsc]);
 
-  const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage    = Math.min(page, totalPages);
-  const paginated   = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage   = Math.min(page, totalPages);
+  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const handleFilterChange = (fn: () => void) => { fn(); setPage(1); };
+  const handleFilterChange = useCallback((fn: () => void) => { fn(); setPage(1); }, []);
 
   const stats = useMemo(() => {
     const valid = orders.filter(o => !o.cancelled_at && o.financial_status !== 'voided');
@@ -495,7 +485,7 @@ export default function PedidosPage() {
   if (!hasEcommerce) {
     return (
       <CenteredPageLoader isLoading={false}>
-        <div className="w-full pt-4 pb-20 md:pt-6 animate-fade-in flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
+        <div className="w-full pt-4 pb-20 md:pt-6 flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
           <div className="w-14 h-14 rounded-[18px] bg-pink-500/10 flex items-center justify-center">
             <ShoppingCart className="w-7 h-7 text-pink-500" />
           </div>
@@ -508,10 +498,10 @@ export default function PedidosPage() {
 
   return (
     <CenteredPageLoader isLoading={initialLoad && loading}>
-      <div className="w-full pt-4 pb-20 md:pt-6 animate-fade-in space-y-5">
+      <div className="w-full pt-4 pb-20 md:pt-6 space-y-4">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(236,72,153,0.12)' }}>
               <ShoppingCart className="w-[18px] h-[18px]" style={{ color: PINK }} />
@@ -524,22 +514,22 @@ export default function PedidosPage() {
           <button
             onClick={() => load(since, until)}
             disabled={loading}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#111] border border-zinc-200 dark:border-white/[0.06] text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all disabled:opacity-50 shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#111] border border-zinc-200 dark:border-white/[0.06] text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 shadow-sm"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Actualizar
+            <span className="hidden sm:inline">Actualizar</span>
           </button>
         </div>
 
         {/* ── Stats ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {([
-            { label: 'Total pedidos', value: stats.total.toString(),    icon: ShoppingCart, color: 'text-pink-500',    bg: 'bg-pink-500/10' },
-            { label: 'Ingresos',      value: fmtCurr(stats.revenue),    icon: CreditCard,   color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-            { label: 'Pagados',       value: stats.paid.toString(),      icon: CheckCircle,  color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-            { label: 'Sin enviar',    value: stats.unshipped.toString(), icon: Package,      color: 'text-orange-500',  bg: 'bg-orange-500/10' },
+            { label: 'Pedidos',     value: stats.total.toString(),    icon: ShoppingCart, color: 'text-pink-500',    bg: 'bg-pink-500/10' },
+            { label: 'Ingresos',    value: fmtCurr(stats.revenue),    icon: CreditCard,   color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+            { label: 'Pagados',     value: stats.paid.toString(),      icon: CheckCircle,  color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+            { label: 'Sin enviar',  value: stats.unshipped.toString(), icon: Package,      color: 'text-orange-500',  bg: 'bg-orange-500/10' },
           ] as const).map(({ label, value, icon: Icon, color, bg }) => (
-            <div key={label} className="bg-white dark:bg-[#111] rounded-[16px] border border-black/[0.06] dark:border-white/[0.05] p-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)] dark:shadow-none">
+            <div key={label} className="bg-white dark:bg-[#111] rounded-[14px] border border-black/[0.06] dark:border-white/[0.05] p-4 shadow-[0_1px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
               <div className="flex items-center gap-2 mb-2">
                 <div className={`w-6 h-6 rounded-lg ${bg} flex items-center justify-center`}>
                   <Icon className={`w-3.5 h-3.5 ${color}`} />
@@ -552,15 +542,15 @@ export default function PedidosPage() {
         </div>
 
         {/* ── Filters ── */}
-        <div className="bg-white dark:bg-[#111] rounded-[16px] border border-black/[0.06] dark:border-white/[0.05] shadow-[0_2px_12px_rgba(0,0,0,0.04)] dark:shadow-none p-4 space-y-3">
+        <div className="bg-white dark:bg-[#111] rounded-[14px] border border-black/[0.06] dark:border-white/[0.05] shadow-[0_1px_8px_rgba(0,0,0,0.04)] dark:shadow-none p-4 space-y-3">
 
-          {/* Presets + date range */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Presets */}
+          <div className="flex flex-wrap gap-1.5">
             {PRESETS.map((p, i) => (
               <button
                 key={p.label}
                 onClick={() => setPresetRange(i)}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold ${
                   preset === i
                     ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm'
                     : 'bg-zinc-100 dark:bg-zinc-800/70 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
@@ -569,22 +559,11 @@ export default function PedidosPage() {
                 {p.label}
               </button>
             ))}
-            <div className="flex items-center gap-2 ml-auto">
-              <input type="date" value={since} max={until}
-                onChange={e => { setPreset(-1); setSince(e.target.value); setPage(1); }}
-                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-              />
-              <span className="text-[11px] text-zinc-400">—</span>
-              <input type="date" value={until} min={since}
-                onChange={e => { setPreset(-1); setUntil(e.target.value); setPage(1); }}
-                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-              />
-            </div>
           </div>
 
-          {/* Search + status */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
+          {/* Search + status filters */}
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
               <input
                 type="text"
@@ -594,29 +573,35 @@ export default function PedidosPage() {
                 className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[12px] text-zinc-700 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
               />
             </div>
-            <select value={filterPayment} onChange={e => handleFilterChange(() => setFilterPayment(e.target.value))}
-              className="px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[11px] font-bold text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-            >
-              <option value="all">Todos los pagos</option>
-              <option value="paid">Pagado</option>
-              <option value="pending">Pendiente</option>
-              <option value="refunded">Reembolsado</option>
-              <option value="partially_refunded">Reemb. parcial</option>
-              <option value="voided">Anulado</option>
-            </select>
-            <select value={filterFulfillment} onChange={e => handleFilterChange(() => setFilterFulfillment(e.target.value))}
-              className="px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[11px] font-bold text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-            >
-              <option value="all">Todos los envíos</option>
-              <option value="unfulfilled">Sin enviar</option>
-              <option value="fulfilled">Enviado</option>
-              <option value="partial">Parcial</option>
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={filterPayment}
+                onChange={e => handleFilterChange(() => setFilterPayment(e.target.value))}
+                className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[11px] font-bold text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                <option value="all">Todos los pagos</option>
+                <option value="paid">Pagado</option>
+                <option value="pending">Pendiente</option>
+                <option value="refunded">Reembolsado</option>
+                <option value="partially_refunded">Reemb. parcial</option>
+                <option value="voided">Anulado</option>
+              </select>
+              <select
+                value={filterFulfillment}
+                onChange={e => handleFilterChange(() => setFilterFulfillment(e.target.value))}
+                className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[11px] font-bold text-zinc-600 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                <option value="all">Todos los envíos</option>
+                <option value="unfulfilled">Sin enviar</option>
+                <option value="fulfilled">Enviado</option>
+                <option value="partial">Parcial</option>
+              </select>
+            </div>
           </div>
         </div>
 
         {/* ── Table ── */}
-        <div className="bg-white dark:bg-[#111] rounded-[16px] border border-black/[0.06] dark:border-white/[0.05] shadow-[0_2px_12px_rgba(0,0,0,0.04)] dark:shadow-none overflow-hidden">
+        <div className="bg-white dark:bg-[#111] rounded-[14px] border border-black/[0.06] dark:border-white/[0.05] shadow-[0_1px_8px_rgba(0,0,0,0.04)] dark:shadow-none overflow-hidden">
 
           {loading && !initialLoad ? (
             <div className="flex items-center justify-center py-14 gap-3">
@@ -630,8 +615,10 @@ export default function PedidosPage() {
               </div>
               <p className="text-[13px] font-bold text-zinc-700 dark:text-zinc-300">Error al cargar</p>
               <p className="text-[12px] text-zinc-400 max-w-[280px]">{error}</p>
-              <button onClick={() => load(since, until)}
-                className="mt-1 px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-[12px] font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all">
+              <button
+                onClick={() => load(since, until)}
+                className="mt-1 px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-[12px] font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              >
                 Reintentar
               </button>
             </div>
@@ -647,32 +634,32 @@ export default function PedidosPage() {
           ) : (
             <>
               {/* Table meta */}
-              <div className="px-5 py-3 border-b border-zinc-100 dark:border-white/[0.04] flex items-center justify-between">
+              <div className="px-5 py-3 border-b border-zinc-100 dark:border-white/[0.04] flex items-center justify-between gap-2">
                 <p className="text-[11px] font-bold text-zinc-400">
                   {filtered.length} pedido{filtered.length !== 1 ? 's' : ''}
                   {orders.length !== filtered.length && <span className="text-zinc-300 dark:text-zinc-600"> de {orders.length}</span>}
-                  {totalPages > 1 && <span className="ml-2 text-zinc-300 dark:text-zinc-600">· pág. {safePage}/{totalPages}</span>}
+                  {totalPages > 1 && <span className="ml-1.5 text-zinc-300 dark:text-zinc-600">· pág. {safePage}/{totalPages}</span>}
                 </p>
                 <button
                   onClick={() => { setSortAsc(v => !v); setPage(1); }}
-                  className="flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                  className="flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 >
                   {sortAsc ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {sortAsc ? 'Más antiguos primero' : 'Más recientes primero'}
+                  <span className="hidden sm:inline">{sortAsc ? 'Más antiguos' : 'Más recientes'}</span>
                 </button>
               </div>
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px]">
+                <table className="w-full min-w-[680px]">
                   <thead>
                     <tr className="border-b border-zinc-100 dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.015]">
                       {['Pedido', 'Fecha', 'Cliente', 'Productos', 'Pago', 'Envío', 'Total', ''].map(h => (
-                        <th key={h} className="px-5 py-3 text-left text-[10px] font-black text-zinc-400 uppercase tracking-[0.1em]">{h}</th>
+                        <th key={h} className="px-5 py-2.5 text-left text-[10px] font-black text-zinc-400 uppercase tracking-[0.1em]">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className={`transition-opacity duration-150 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+                  <tbody>
                     {paginated.map(order => (
                       <OrderRow key={order.id} order={order} productImages={productImages} />
                     ))}
@@ -680,8 +667,11 @@ export default function PedidosPage() {
                 </table>
               </div>
 
-              {/* Pagination */}
-              <Pagination page={safePage} totalPages={totalPages} onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+              <Pagination
+                page={safePage}
+                totalPages={totalPages}
+                onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              />
             </>
           )}
         </div>
