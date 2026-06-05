@@ -57,10 +57,13 @@ export default function AnalisisProductosPage() {
   };
 
   const loadProductAnalysis = async (forceRefresh = false) => {
-    if (!p?.shopify_domain || !p?.shopify_access_token) return;
+    if (!p?.ecommerce_platform) return;
+    const isShopify = p.ecommerce_platform === 'shopify' && p.shopify_domain && p.shopify_access_token;
+    const cacheKey = isShopify ? `pa:${p.shopify_domain}` : `pa:${p.id}`;
+
     if (!forceRefresh) {
       try {
-        const raw = localStorage.getItem(`pa:${p.shopify_domain}`);
+        const raw = localStorage.getItem(cacheKey);
         if (raw) {
           const { data, ts } = JSON.parse(raw) as { data: any[]; ts: number };
           setProductAnalysis(data);
@@ -85,12 +88,21 @@ export default function AnalisisProductosPage() {
             setProductAnalysis(dbData.results);
             const calcDate = new Date(dbData.calculated_at);
             setProductCacheDate(calcDate);
-            try { localStorage.setItem(`pa:${p.shopify_domain}`, JSON.stringify({ data: dbData.results, ts: calcDate.getTime() })); } catch { }
+            try { localStorage.setItem(cacheKey, JSON.stringify({ data: dbData.results, ts: calcDate.getTime() })); } catch { }
             return;
           }
         }
       } catch { }
     }
+
+    if (!isShopify) {
+      setProductLoading(false);
+      if (forceRefresh) {
+        setProductError('El cálculo en tiempo real solo está disponible para Shopify. Para WooCommerce y Tiendanube, el análisis se calcula periódicamente en segundo plano.');
+      }
+      return;
+    }
+
     setProductLoading(true);
     setProductError(null);
     try {
@@ -98,7 +110,7 @@ export default function AnalisisProductosPage() {
       setProductAnalysis(results);
       const now = new Date();
       setProductCacheDate(now);
-      try { localStorage.setItem(`pa:${p.shopify_domain}`, JSON.stringify({ data: results, ts: now.getTime() })); } catch { }
+      try { localStorage.setItem(cacheKey, JSON.stringify({ data: results, ts: now.getTime() })); } catch { }
       if (p.id) saveAnalysisToDB(results, p.id);
     } catch (err: any) {
       setProductError(err.message || 'Error al analizar productos');

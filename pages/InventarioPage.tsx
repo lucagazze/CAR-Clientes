@@ -19,7 +19,7 @@ interface Variant {
 interface Product {
   id: number;
   title: string;
-  image?: { src: string };
+  image?: string | { src: string } | null;
   variants: Variant[];
 }
 
@@ -226,8 +226,6 @@ export default function InventarioPage() {
           <p className="text-[14px] font-semibold text-zinc-500">Configuración incompleta</p>
           <p className="text-[12px] text-zinc-400 max-w-xs">Falta el dominio o ID de la tienda.</p>
         </div>
-      ) : platform !== 'shopify' ? (
-        <p className="text-[11px] text-zinc-400 text-center">Se abre en una nueva pestaña. Iniciá sesión en tu tienda si todavía no lo hiciste.</p>
       ) : (
         <>
           {/* Top products last 30 days */}
@@ -344,13 +342,16 @@ export default function InventarioPage() {
                         onClick={() => !isSingle && toggle(product.id)}
                       >
                         {/* Image */}
-                        {product.image?.src ? (
-                          <img src={product.image.src} alt="" className="w-7 h-7 rounded-lg object-cover shrink-0 bg-zinc-100" />
-                        ) : (
-                          <div className="w-7 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
-                            <Package className="w-3.5 h-3.5 text-zinc-400" />
-                          </div>
-                        )}
+                        {(() => {
+                          const imgUrl = typeof product.image === 'string' ? product.image : (product.image as any)?.src;
+                          return imgUrl ? (
+                            <img src={imgUrl} alt="" className="w-7 h-7 rounded-lg object-cover shrink-0 bg-zinc-100" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                              <Package className="w-3.5 h-3.5 text-zinc-400" />
+                            </div>
+                          );
+                        })()}
 
                         {/* Title + order count */}
                         <div className="flex-1 min-w-0">

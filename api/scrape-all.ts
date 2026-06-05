@@ -214,10 +214,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let userClientId: string | null = null;
 
   if (!isCron) {
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader.trim().toLowerCase().startsWith('bearer')) {
       return res.status(401).json({ error: 'Missing or invalid Authorization header' });
     }
-    const token = authHeader.split(' ')[1];
+    const parts = authHeader.split(' ');
+    const token = parts.length > 1 ? parts[1] : '';
+    if (!token) {
+      return res.status(401).json({ error: 'Empty token in Authorization header' });
+    }
 
     let user: any = null;
     let dbProfile: any = null;
