@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
+import { supabase } from '../services/supabase';
 import { metaAds } from '../services/metaAds';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 import {
@@ -213,11 +214,13 @@ export default function CreativeTesterPage() {
 
       if (frames.length > 0) {
         try {
+          const { data: { session: freshSession } } = await supabase.auth.getSession();
+          const token = freshSession?.access_token || '';
           const r = await fetch('/api/scrape-all', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token || ''}`
+              'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({ type: 'analyze-creative', frames, isVideo }),
           });

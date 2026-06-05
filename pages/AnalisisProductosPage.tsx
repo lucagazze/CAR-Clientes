@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
+import { supabase } from '../services/supabase';
 import { ecommerce } from '../services/ecommerce';
 import {
   Package, Search, RefreshCw, Loader2, ChevronRight,
@@ -42,11 +43,13 @@ export default function AnalisisProductosPage() {
 
   const saveAnalysisToDB = async (results: any[], clientId: string) => {
     try {
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const token = freshSession?.access_token || '';
       await fetch('/api/scrape-all', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ type: 'save-analysis', clientId, data: results }),
       });
@@ -66,11 +69,13 @@ export default function AnalisisProductosPage() {
         }
       } catch { }
       try {
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        const token = freshSession?.access_token || '';
         const dbRes = await fetch('/api/scrape-all', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token || ''}`
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({ type: 'load-analysis', clientId: p.id }),
         });
