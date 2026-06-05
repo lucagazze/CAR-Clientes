@@ -592,7 +592,7 @@ export default function PedidosPage() {
 
           {loading && !initialLoad ? (
             <div className="flex items-center justify-center py-14 gap-3">
-              <RefreshCw className="w-4 h-4 animate-spin text-pink-500" />
+              <RefreshCw className="w-4 h-4 animate-spin text-violet-500" />
               <p className="text-[13px] font-bold text-zinc-400">Cargando pedidos...</p>
             </div>
           ) : error ? (
