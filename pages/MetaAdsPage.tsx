@@ -122,7 +122,7 @@ const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
                     )}
                     {activeCard.isVideo && activeCard.videoSrc ? (
                       <div className="flex flex-col items-center gap-4">
-                        <video src={activeCard.videoSrc} controls autoPlay={false} playsInline referrerPolicy="no-referrer" className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '60vh', minWidth: 'min(90vw, 320px)' }} />
+                        <video src={activeCard.videoSrc} controls autoPlay={false} playsInline {...{ referrerPolicy: "no-referrer" }} className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '60vh', minWidth: 'min(90vw, 320px)' }} />
                         <a href={`/api/meta-video?action=download&url=${encodeURIComponent(activeCard.videoSrc)}&filename=video-carousel-${activeIndex}.mp4`} download={`video-carousel-${activeIndex}.mp4`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold rounded-full transition-all shadow-lg" onClick={e => e.stopPropagation()}><Download className="w-3.5 h-3.5" />Descargar Video</a>
                       </div>
                     ) : (
@@ -150,7 +150,7 @@ const CreativePreviewModal = ({ preview, prefetchedData, onClose }: {
 
             {mediaData.type === 'video_source' && (
               <div className="flex flex-col items-center gap-4">
-                <video src={mediaData.source || undefined} controls autoPlay playsInline referrerPolicy="no-referrer" className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '70vh', minWidth: 'min(90vw, 400px)' }} />
+                <video src={mediaData.source || undefined} controls autoPlay playsInline {...{ referrerPolicy: "no-referrer" }} className="rounded-2xl shadow-2xl border border-white/10 bg-black" style={{ maxWidth: '90vw', maxHeight: '70vh', minWidth: 'min(90vw, 400px)' }} />
                 <a href={mediaData.source ? `/api/meta-video?action=download&url=${encodeURIComponent(mediaData.source)}&filename=video-${preview.videoId || 'creative'}.mp4` : undefined} download={`video-${preview.videoId || 'creative'}.mp4`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-[12.5px] font-bold rounded-full transition-all shadow-lg" onClick={e => e.stopPropagation()}><Download className="w-4 h-4" />Descargar Video</a>
               </div>
             )}

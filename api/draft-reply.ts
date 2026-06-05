@@ -103,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1. Fetch client from Supabase
     const { data: client, error: dbError } = await supabase
       .from('car_clients')
-      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url, meta_account_id, klaviyo_api_key')
+      .select('business_name, ecommerce_platform, shopify_domain, shopify_access_token, wordpress_url, woo_consumer_key, woo_consumer_secret, tiendanube_store_id, tiendanube_access_token, business_description, custom_instructions, scraped_content, instagram_context, website_url, meta_account_id, klaviyo_api_key, products_catalog')
       .eq('id', clientId)
       .maybeSingle();
 
@@ -117,8 +117,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const {
       business_name, shopify_domain, shopify_access_token,
+      wordpress_url, woo_consumer_key, woo_consumer_secret,
+      tiendanube_store_id, tiendanube_access_token,
       business_description, custom_instructions, scraped_content, instagram_context,
-      website_url,
+      website_url, products_catalog
     } = client as any;
     const meta_account_id: string | null = (client as any).meta_account_id ?? null;
 
@@ -169,103 +171,187 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (p.url) return p.url.replace(/^https?:\/\//i, 'www.').replace(/^www\.www\./, 'www.');
       if (p.handle) return `${canonicalSite}/products/${p.handle}`;
       return canonicalSite;
+    };    let parsedCatalog: any[] = [];
+    if (products_catalog) {
+      try {
+        if (typeof products_catalog === 'string') {
+          parsedCatalog = JSON.parse(products_catalog);
+        } else if (Array.isArray(products_catalog)) {
+          parsedCatalog = products_catalog;
+        }
+      } catch (e) {
+        console.error('Error parsing products_catalog from DB:', e);
+      }
+    }
+
+    // Fallback to live API fetches only if the database cached catalog is empty
+    if (parsedCatalog.length === 0) {
+      // Meta catalog
+      if (meta_account_id) {
+        try {
+          const { data: tokenRow } = await supabase
+            .from('AgencySettings').select('value').eq('key', 'meta_ads_token').maybeSingle();
+          const metaToken: string = (tokenRow as any)?.value || '';
+          if (metaToken) {
+            const accountId = meta_account_id.startsWith('act_') ? meta_account_id : `act_${meta_account_id}`;
+            const cRes = await fetch(`https://graph.facebook.com/v21.0/${accountId}/product_catalogs?fields=id,name,product_count&access_token=${metaToken}`);
+            const cData = await cRes.json() as any;
+            const best = (cData.data || []).sort((a: any, b: any) => (b.product_count || 0) - (a.product_count || 0))[0];
+            if (best) {
+              let allProds: any[] = [];
+              let nextUrl: string | null = `https://graph.facebook.com/v21.0/${best.id}/products?fields=id,name,price,currency,url,product_type,availability&limit=200&access_token=${metaToken}`;
+              while (nextUrl && allProds.length < 300) {
+                const pRes = await fetch(nextUrl);
+                const pData = await pRes.json() as any;
+                allProds = allProds.concat(pData.data || []);
+                nextUrl = pData.paging?.next || null;
+              }
+              parsedCatalog = allProds
+                .filter((p: any) => !p.availability || p.availability === 'in stock' || p.availability === 'available')
+                .map((p: any) => {
+                  const priceNum = (p.price || '').replace(/[^0-9.]/g, '');
+                  const priceCur = (p.price || '').replace(/[0-9. ]/g, '').trim();
+                  return {
+                    title: p.name || '',
+                    price: priceNum ? `${priceCur || '$'}${parseFloat(priceNum).toFixed(2)}` : 'Consultar',
+                    url: p.url || '', type: p.product_type || '', handle: '', variants: [],
+                  };
+                });
+            }
+          }
+        } catch (_) { /* ignore */ }
+      }
+
+      // Shopify catalog
+      if (shopify_domain && shopify_access_token) {
+        try {
+          const sRes = await fetch(
+            `https://${cleanDomain}/admin/api/2024-01/products.json?limit=250&fields=title,handle,variants,status,product_type`,
+            { headers: { 'X-Shopify-Access-Token': shopify_access_token, 'Accept': 'application/json' } }
+          );
+          if (sRes.ok) {
+            const sData = await sRes.json() as any;
+            for (const sp of (sData.products || []).filter((p: any) => p.status === 'active')) {
+              if (parsedCatalog.some((p: any) => p.title.toLowerCase() === (sp.title || '').toLowerCase())) continue;
+              const vs = sp.variants || [];
+              const rawPrices: string[] = Array.from(new Set(vs.map((v: any) => v.price).filter(Boolean))) as string[];
+              const nums = rawPrices.map(Number).filter(n => !isNaN(n));
+              const priceStr = nums.length === 1 ? `$${nums[0]}` : nums.length > 1 ? `$${Math.min(...nums)}-$${Math.max(...nums)}` : 'Consultar';
+              parsedCatalog.push({
+                title: sp.title, price: priceStr, url: '', handle: sp.handle,
+                type: sp.product_type || '',
+                variants: vs.map((v: any) => v.title).filter((t: string) => t && t !== 'Default Title'),
+              });
+            }
+          }
+        } catch (_) { /* ignore */ }
+      }
+
+      // WooCommerce catalog
+      if (wordpress_url && woo_consumer_key && woo_consumer_secret) {
+        try {
+          const base = (wordpress_url as string).replace(/\/$/, '');
+          const creds = Buffer.from(`${woo_consumer_key}:${woo_consumer_secret}`).toString('base64');
+          for (let page = 1; page <= 2; page++) {
+            const r = await fetch(`${base}/wp-json/wc/v3/products?per_page=100&page=${page}&status=publish`, {
+              headers: { Authorization: `Basic ${creds}` },
+            });
+            if (!r.ok) break;
+            const wooData = await r.json() as any[];
+            if (!wooData.length) break;
+            for (const wp of wooData) {
+              if (parsedCatalog.some((p: any) => p.title.toLowerCase() === (wp.name || '').toLowerCase())) continue;
+              parsedCatalog.push({
+                title: wp.name || '', price: `$${wp.price || wp.regular_price || '?'}`,
+                url: wp.permalink || '', handle: wp.slug || '',
+                type: (wp.categories && wp.categories[0]?.name) || '', variants: [],
+              });
+            }
+          }
+        } catch (_) { /* ignore */ }
+      }
+
+      // Tiendanube catalog
+      if (tiendanube_store_id && tiendanube_access_token) {
+        try {
+          for (let page = 1; page <= 2; page++) {
+            const r = await fetch(`https://api.tiendanube.com/v1/${tiendanube_store_id}/products?per_page=200&page=${page}`, {
+              headers: { 'Authentication': `bearer ${tiendanube_access_token}`, 'User-Agent': 'AlgorBot/1.0' }
+            });
+            if (!r.ok) break;
+            const data = await r.json() as any[];
+            if (!data.length) break;
+            for (const p of data) {
+              if (parsedCatalog.some((pc: any) => pc.title.toLowerCase() === (p.name?.es || p.name?.en || '').toLowerCase())) continue;
+              parsedCatalog.push({
+                title: p.name?.es || p.name?.en || Object.values(p.name || {})[0] || '',
+                price: `$${p.variants?.[0]?.price || '?'}`,
+                url: p.canonical_url || '', handle: p.handle || '',
+                type: p.categories?.[0]?.name?.es || '',
+                variants: (p.variants || []).map((v: any) => v.values?.map((val: any) => val.es || val.en).join(' / ') || ''),
+              });
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Simple Levenshtein distance for fuzzy word matching
+    const getEditDistance = (a: string, b: string): number => {
+      if (a.length === 0) return b.length;
+      if (b.length === 0) return a.length;
+      const matrix = [];
+      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1,
+              Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
+            );
+          }
+        }
+      }
+      return matrix[b.length][a.length];
     };
 
-    let parsedCatalog: any[] = [];
+    // Normalize Spanish terms (accents, common typo letters, seseo, double letters)
+    const normalizeText = (str: string): string => {
+      return (str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ss/g, 's')
+        .replace(/z/g, 's')
+        .replace(/c/g, 's') // For seseo
+        .replace(/ll/g, 'l')
+        .replace(/y/g, 'i')
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim();
+    };
 
-    // Meta catalog
-    if (meta_account_id) {
-      try {
-        const { data: tokenRow } = await supabase
-          .from('AgencySettings').select('value').eq('key', 'meta_ads_token').maybeSingle();
-        const metaToken: string = (tokenRow as any)?.value || '';
-        if (metaToken) {
-          const accountId = meta_account_id.startsWith('act_') ? meta_account_id : `act_${meta_account_id}`;
-          const cRes = await fetch(`https://graph.facebook.com/v21.0/${accountId}/product_catalogs?fields=id,name,product_count&access_token=${metaToken}`);
-          const cData = await cRes.json() as any;
-          const best = (cData.data || []).sort((a: any, b: any) => (b.product_count || 0) - (a.product_count || 0))[0];
-          if (best) {
-            let allProds: any[] = [];
-            let nextUrl: string | null = `https://graph.facebook.com/v21.0/${best.id}/products?fields=id,name,price,currency,url,product_type,availability&limit=200&access_token=${metaToken}`;
-            while (nextUrl && allProds.length < 300) {
-              const pRes = await fetch(nextUrl);
-              const pData = await pRes.json() as any;
-              allProds = allProds.concat(pData.data || []);
-              nextUrl = pData.paging?.next || null;
-            }
-            parsedCatalog = allProds
-              .filter((p: any) => !p.availability || p.availability === 'in stock' || p.availability === 'available')
-              .map((p: any) => {
-                const priceNum = (p.price || '').replace(/[^0-9.]/g, '');
-                const priceCur = (p.price || '').replace(/[0-9. ]/g, '').trim();
-                return {
-                  title: p.name || '',
-                  price: priceNum ? `${priceCur || '$'}${parseFloat(priceNum).toFixed(2)}` : 'Consultar',
-                  url: p.url || '', type: p.product_type || '', handle: '', variants: [],
-                };
-              });
-          }
-        }
-      } catch (_) { /* ignore */ }
-    }
+    const queryNorm = normalizeText(itemText);
+    const queryWords = queryNorm.split(/\s+/).filter(w => w.length >= 3);
 
-    // Shopify catalog
-    if (shopify_domain && shopify_access_token) {
-      try {
-        const sRes = await fetch(
-          `https://${cleanDomain}/admin/api/2024-01/products.json?limit=250&fields=title,handle,variants,status,product_type`,
-          { headers: { 'X-Shopify-Access-Token': shopify_access_token, 'Accept': 'application/json' } }
-        );
-        if (sRes.ok) {
-          const sData = await sRes.json() as any;
-          for (const sp of (sData.products || []).filter((p: any) => p.status === 'active')) {
-            if (parsedCatalog.some((p: any) => p.title.toLowerCase() === (sp.title || '').toLowerCase())) continue;
-            const vs = sp.variants || [];
-            const rawPrices: string[] = Array.from(new Set(vs.map((v: any) => v.price).filter(Boolean))) as string[];
-            const nums = rawPrices.map(Number).filter(n => !isNaN(n));
-            const priceStr = nums.length === 1 ? `$${nums[0]}` : nums.length > 1 ? `$${Math.min(...nums)}-$${Math.max(...nums)}` : 'Consultar';
-            parsedCatalog.push({
-              title: sp.title, price: priceStr, url: '', handle: sp.handle,
-              type: sp.product_type || '',
-              variants: vs.map((v: any) => v.title).filter((t: string) => t && t !== 'Default Title'),
-            });
-          }
-        }
-      } catch (_) { /* ignore */ }
-    }
-
-    // WooCommerce catalog (columns may not exist in DB, skip if undefined)
-    const woo_consumer_key = undefined;
-    const woo_consumer_secret = undefined;
-    const wordpress_url = undefined;
-    if (wordpress_url && woo_consumer_key && woo_consumer_secret) {
-      try {
-        const base = (wordpress_url as string).replace(/\/$/, '');
-        const creds = Buffer.from(`${woo_consumer_key}:${woo_consumer_secret}`).toString('base64');
-        for (let page = 1; page <= 2; page++) {
-          const r = await fetch(`${base}/wp-json/wc/v3/products?per_page=100&page=${page}&status=publish`, {
-            headers: { Authorization: `Basic ${creds}` },
-          });
-          if (!r.ok) break;
-          const wooData = await r.json() as any[];
-          if (!wooData.length) break;
-          for (const wp of wooData) {
-            if (parsedCatalog.some((p: any) => p.title.toLowerCase() === (wp.name || '').toLowerCase())) continue;
-            parsedCatalog.push({
-              title: wp.name || '', price: `$${wp.price || wp.regular_price || '?'}`,
-              url: wp.permalink || '', handle: wp.slug || '',
-              type: (wp.categories && wp.categories[0]?.name) || '', variants: [],
-            });
-          }
-        }
-      } catch (_) { /* ignore */ }
-    }
-
-    // Filter catalog to relevant products (max 40)
-    const queryLower = itemText.toLowerCase();
+    // Filter catalog to relevant products (max 40) using smart fuzzy matching
     const matched = parsedCatalog.filter((p: any) => {
-      const words = (p.title || '').toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
-      return words.some((w: string) => queryLower.includes(w));
+      const titleNorm = normalizeText(p.title);
+      const titleWords = titleNorm.split(/\s+/).filter(w => w.length >= 3);
+      
+      return titleWords.some(tw => {
+        if (queryNorm.includes(tw) || tw.includes(queryNorm)) return true;
+        
+        return queryWords.some(qw => {
+          if (qw === tw) return true;
+          if (qw.includes(tw) || tw.includes(qw)) return true;
+          const dist = getEditDistance(qw, tw);
+          const maxAllowed = Math.min(2, Math.floor(Math.max(qw.length, tw.length) / 3));
+          return dist <= maxAllowed;
+        });
+      });
     });
     const others = parsedCatalog.filter((p: any) => !matched.includes(p)).slice(0, 40 - matched.length);
     const relevantCatalog = matched.concat(others);
@@ -356,12 +442,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let verifiedFacts = '';
     if ((askingPrice || askingProduct) && !isGenericGreeting) {
       if (matched.length > 0) {
-        verifiedFacts = `\n⚠️ DATOS VERIFICADOS DEL CATÁLOGO (ÚNICOS QUE PODÉS USAR):\n${
-          matched.map((p: any) => {
-            const vars = p.variants?.length ? ` | variantes: ${p.variants.slice(0,4).join(', ')}` : '';
-            return `  • ${p.title}: PRECIO=${p.price}${vars} → ${buildLink(p)}`;
-          }).join('\n')
-        }\nUsá SOLO estos datos. Si el precio dice "Consultar" → no digas precio.`;
+        verifiedFacts = `\n⚠️ EL PRODUCTO SÍ EXISTE EN EL CATÁLOGO: El producto por el que consulta el cliente está en el catálogo.\n` +
+          `DATOS DEL CATÁLOGO:\n${
+            matched.map((p: any) => {
+              const vars = p.variants?.length ? ` | variantes: ${p.variants.slice(0,4).join(', ')}` : '';
+              return `  • ${p.title}: PRECIO=${p.price}${vars} → ${buildLink(p)}`;
+            }).join('\n')
+          }\n` +
+          `⛔ REGLAS DE RESPUESTA PARA PRODUCTO EXISTENTE:\n` +
+          `1. Respondé DIRECTAMENTE al cliente con el precio y la información del producto del catálogo y los detalles del CEREBRO DEL NEGOCIO (por ejemplo, si preguntan el ancho, material, etc., buscalos en la sección CEREBRO DEL NEGOCIO).\n` +
+          `2. NO digas "Te respondemos por privado 📩" ni "Ahora mismo verifico y te confirmo en seguida 🙌" porque el producto ya está en el catálogo y debés darle la información disponible.\n` +
+          `3. Si te preguntan por características adicionales (ancho, peso, colores) que no están en el catálogo, pero están en el CEREBRO DEL NEGOCIO (descripción, web scrape, etc.), usá esa información del Cerebro para responder.\n` +
+          `4. Usá únicamente el precio especificado en el catálogo (no inventes ni supongas otros precios).`;
       } else {
         verifiedFacts = `\n⚠️ BÚSQUEDA EN CATÁLOGO: El producto que pregunta NO existe en el catálogo disponible.\nRespuesta obligatoria para comentarios: "Te respondemos por privado 📩"\nRespuesta obligatoria para DMs: "Ahora mismo verifico y te confirmo en seguida 🙌"`;
       }
@@ -388,10 +480,11 @@ Sos la persona detrás de las redes de "${business_name}". No un bot. Un humano 
 
 ════ REGLA ABSOLUTA — PRODUCTOS, PRECIOS, MEDIDAS, DISPONIBILIDAD ════
 ${verifiedFacts || ''}
-⛔ PROHIBICIÓN TOTAL: Nunca menciones ningún precio, medida, talle, color específico, disponibilidad de stock, ni nombre de producto que NO esté en los DATOS VERIFICADOS de arriba o en el catálogo de arriba. Ninguna excepción.
-⛔ Si no tenés datos verificados sobre lo que pregunta → usá exactamente: "${isDM ? 'Ahora mismo verifico y te confirmo en seguida 🙌' : 'Te respondemos por privado 📩'}"
-⛔ El texto de la memoria web y redes sociales puede tener información desactualizada sobre productos. Para respuestas sobre precios y productos, SOLO el catálogo es fuente válida.
-⛔ NUNCA supongas medidas, variantes ni precios que no estén escritos textualmente en el catálogo.
+⛔ REGLAS GENERALES:
+- Si el producto NO está en el catálogo, debés usar obligatoriamente la frase de derivación/fallback de arriba ("Te respondemos por privado 📩" o "Ahora mismo verifico y te confirmo en seguida 🙌").
+- Si el producto SÍ está en el catálogo, NO uses la frase de derivación/fallback. Respondé con el precio del catálogo y respondé a las preguntas del cliente.
+- Podés usar la información del "CEREBRO DEL NEGOCIO" (descripción, web, redes, FAQ, etc.) para responder preguntas sobre características del producto (por ejemplo, ancho de una tela, composición, talle, etc.) si ese producto ya está en el catálogo.
+- Para los precios y disponibilidad, la única fuente válida es el catálogo. Nunca inventes ni supongas precios o promociones que no estén en el catálogo.
 
 ════ CÓMO RESPONDER ════
 ${isDM

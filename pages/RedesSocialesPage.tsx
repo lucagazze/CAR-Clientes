@@ -1190,7 +1190,7 @@ export default function RedesSocialesPage() {
                                   controls
                                   autoPlay
                                   preload="none"
-                                  referrerPolicy="no-referrer"
+                                  {...{ referrerPolicy: "no-referrer" }}
                                   className="w-full h-full object-contain bg-black"
                                 />
                               ) : (
@@ -1471,7 +1471,7 @@ export default function RedesSocialesPage() {
                                   controls
                                   autoPlay
                                   preload="none"
-                                  referrerPolicy="no-referrer"
+                                  {...{ referrerPolicy: "no-referrer" }}
                                   className="w-full h-full object-contain bg-black"
                                 />
                               ) : (
@@ -1686,7 +1686,7 @@ export default function RedesSocialesPage() {
                             poster={activePost.thumbnail_url || activePost.full_picture}
                             controls
                             preload="none"
-                            referrerPolicy="no-referrer"
+                            {...{ referrerPolicy: "no-referrer" }}
                             className="w-full h-full object-contain"
                           />
                         </div>

@@ -447,7 +447,7 @@ RESPONDÉ SOLO CON JSON VALIDO. Sin markdown, sin texto fuera del JSON.`;
   if (action === 'sync-catalog') {
     const { data: cl } = await supabase
       .from('car_clients')
-      .select('meta_account_id, shopify_domain, shopify_access_token, website_url')
+      .select('meta_account_id, shopify_domain, shopify_access_token, website_url, wordpress_url, woo_consumer_key, woo_consumer_secret, tiendanube_store_id, tiendanube_access_token')
       .eq('id', clientId)
       .maybeSingle();
     if (!cl) return res.status(404).json({ error: 'Client not found' });
@@ -512,7 +512,67 @@ RESPONDÉ SOLO CON JSON VALIDO. Sin markdown, sin texto fuera del JSON.`;
       } catch (e) { console.error('[sync-catalog] Shopify failed:', e); }
     }
 
-    if (catalog.length === 0) return res.status(400).json({ error: 'No se encontró catálogo. Configurá Meta Ads o Shopify.' });
+    if (catalog.length === 0 && cl.wordpress_url && cl.woo_consumer_key && cl.woo_consumer_secret) {
+      try {
+        const base = (cl.wordpress_url as string).replace(/\/$/, '');
+        const creds = Buffer.from(`${cl.woo_consumer_key}:${cl.woo_consumer_secret}`).toString('base64');
+        let allWoo: any[] = [];
+        for (let page = 1; page <= 3; page++) {
+          const r = await fetch(`${base}/wp-json/wc/v3/products?per_page=100&page=${page}&status=publish`, {
+            headers: { Authorization: `Basic ${creds}` },
+          });
+          if (!r.ok) break;
+          const wooData = await r.json() as any[];
+          if (!wooData.length) break;
+          allWoo = allWoo.concat(wooData);
+        }
+        catalog = allWoo.map((wp: any) => {
+          return {
+            id: wp.id || '',
+            title: wp.name || '',
+            handle: wp.slug || '',
+            type: (wp.categories && wp.categories[0]?.name) || '',
+            tags: (wp.tags && wp.tags.map((t: any) => t.name).join(', ')) || '',
+            price: wp.price || wp.regular_price ? `$${wp.price || wp.regular_price}` : 'Consultar',
+            variants: [],
+            source: 'woocommerce',
+            url: wp.permalink || ''
+          };
+        });
+        source = `WooCommerce (${catalog.length} productos publicados)`;
+      } catch (e) { console.error('[sync-catalog] WooCommerce failed:', e); }
+    }
+
+    if (catalog.length === 0 && cl.tiendanube_store_id && cl.tiendanube_access_token) {
+      try {
+        let allTN: any[] = [];
+        for (let page = 1; page <= 3; page++) {
+          const r = await fetch(`https://api.tiendanube.com/v1/${cl.tiendanube_store_id}/products?per_page=200&page=${page}`, {
+            headers: { 'Authentication': `bearer ${cl.tiendanube_access_token}`, 'User-Agent': 'AlgorBot/1.0' }
+          });
+          if (!r.ok) break;
+          const data = await r.json() as any[];
+          if (!data.length) break;
+          allTN = allTN.concat(data);
+        }
+        catalog = allTN.map((p: any) => {
+          return {
+            id: p.id || '',
+            title: p.name?.es || p.name?.en || Object.values(p.name || {})[0] || '',
+            handle: p.handle || '',
+            type: p.categories?.[0]?.name?.es || '',
+            tags: '',
+            price: p.variants?.[0]?.price ? `$${p.variants[0].price}` : 'Consultar',
+            variants: (p.variants || []).map((v: any) => v.values?.map((val: any) => val.es || val.en).join(' / ') || '').filter(Boolean),
+            source: 'tiendanube',
+            url: p.canonical_url || ''
+          };
+        });
+        source = `Tiendanube (${catalog.length} productos)`;
+      } catch (e) { console.error('[sync-catalog] Tiendanube failed:', e); }
+    }
+
+    if (catalog.length === 0) return res.status(400).json({ error: 'No se encontró catálogo. Configurá Meta Ads, Shopify, WooCommerce o Tiendanube.' });
 
     const syncedAt = new Date().toISOString();
     const { error: ue } = await supabase.from('car_clients').update({ products_catalog: JSON.stringify(catalog), catalog_synced_at: syncedAt }).eq('id', clientId);

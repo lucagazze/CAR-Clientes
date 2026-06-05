@@ -1196,7 +1196,7 @@ export default function ComentariosPage() {
                   <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-100 dark:bg-zinc-900">
                     {selectedPost.mediaType === 'VIDEO' ? (
                       playingVideoId === selectedPost.id ? (
-                        <video src={selectedPost.mediaUrl || selectedPost.thumbnail || ''} controls autoPlay referrerPolicy="no-referrer" className="w-full max-h-64 object-contain bg-black" />
+                        <video src={selectedPost.mediaUrl || selectedPost.thumbnail || ''} controls autoPlay {...{ referrerPolicy: "no-referrer" }} className="w-full max-h-64 object-contain bg-black" />
                       ) : (
                         <div className="relative cursor-pointer" onClick={() => setPlayingVideoId(selectedPost.id)}>
                           <img src={selectedPost.thumbnail || ''} alt="" referrerPolicy="no-referrer" className="w-full max-h-64 object-cover" />

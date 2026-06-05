@@ -310,7 +310,7 @@ export default function CreativeTesterPage() {
                   {previewUrl && file ? (
                     <div className="space-y-3">
                       {file.type.startsWith('video') ? (
-                        <video src={previewUrl} className="max-h-48 mx-auto rounded-xl" controls muted referrerPolicy="no-referrer" />
+                        <video src={previewUrl} className="max-h-48 mx-auto rounded-xl" controls muted {...{ referrerPolicy: "no-referrer" }} />
                       ) : (
                         <img src={previewUrl} alt="preview" className="max-h-48 mx-auto rounded-xl object-contain" referrerPolicy="no-referrer" />
                       )}

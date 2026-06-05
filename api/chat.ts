@@ -441,7 +441,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const activeClientText = (activeBusinessName && fallbackClientId)
     ? `ACTIVE CLIENT: "${activeBusinessName}" — clientId="${fallbackClientId}". Always pass this exact clientId to every tool call.`
     : fallbackClientId
-    ? `ACTIVE CLIENT: "${profile?.business_name || 'User'}" — clientId="${fallbackClientId}". Always pass this exact clientId.`
+    ? `ACTIVE CLIENT: "${dbProfile?.business_name || 'User'}" — clientId="${fallbackClientId}". Always pass this exact clientId.`
     : 'No active client. Use list_clients to find one.';
 
   const systemMessage = `FECHA Y HORA ACTUAL (ARGENTINA): ${argentineTime}.
