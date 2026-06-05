@@ -257,6 +257,7 @@ export default function AdminPage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingShopify, setTestingShopify] = useState(false);
   const [testingWoo, setTestingWoo] = useState(false);
+  const [testingTiendanube, setTestingTiendanube] = useState(false);
   const [testingKlaviyo, setTestingKlaviyo] = useState(false);
   const [testingMeta, setTestingMeta] = useState(false);
   const [testingChatwoot, setTestingChatwoot] = useState(false);
@@ -1110,6 +1111,49 @@ setStatuses((p) => ({ ...p, shopify: "error" }));
     }
   };
 
+  const testTiendanube = async () => {
+    if (!editForm.tiendanube_store_id || !editForm.tiendanube_access_token) {
+      showToast("Ingresá el Store ID y el Access Token de Tiendanube", "warning");
+      return;
+    }
+    setTestingTiendanube(true);
+    try {
+      const res = await fetch('/api/scrape-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`
+        },
+        body: JSON.stringify({
+          clientId: editingClient?.id || '',
+          type: 'products',
+          platform: 'tiendanube',
+          tiendanube_store_id: editForm.tiendanube_store_id,
+          tiendanube_access_token: editForm.tiendanube_access_token
+        })
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (!data.products) {
+        throw new Error("No se pudo conectar con Tiendanube.");
+      }
+      showToast('¡Conexión con Tiendanube exitosa! ✓', 'success');
+      if (editingClient) saveConnOk(editingClient.id, 'shopify');
+      setConnTick(t => t + 1);
+      setStatuses((p) => ({ ...p, shopify: 'ok' }));
+    } catch (err: any) {
+      showToast('Error Tiendanube: ' + (err.message || 'Verificá los datos'), 'error');
+      if (editingClient) saveConnErr(editingClient.id, 'shopify');
+      setConnTick(t => t + 1);
+      setStatuses((p) => ({ ...p, shopify: 'error' }));
+    } finally {
+      setTestingTiendanube(false);
+    }
+  };
+
   const testKlaviyo = async () => {
     if (!editForm.klaviyo_api_key) {
       showToast("Ingresá la API Key de Klaviyo para probar", "warning");
@@ -1358,6 +1402,33 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
         testResults.shopify = 'error';
         saveConnErr(editingClient.id, 'shopify');
         errors.push('WooCommerce');
+      }
+    }
+    if (editForm.ecommerce_platform === 'tiendanube' && editForm.tiendanube_store_id && editForm.tiendanube_access_token) {
+      try {
+        const res = await fetch('/api/scrape-all', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || ''}`
+          },
+          body: JSON.stringify({
+            clientId: editingClient.id,
+            type: 'products',
+            platform: 'tiendanube',
+            tiendanube_store_id: editForm.tiendanube_store_id,
+            tiendanube_access_token: editForm.tiendanube_access_token
+          })
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (!data.products) throw new Error();
+        testResults.shopify = 'ok';
+        saveConnOk(editingClient.id, 'shopify');
+      } catch {
+        testResults.shopify = 'error';
+        saveConnErr(editingClient.id, 'shopify');
+        errors.push('Tiendanube');
       }
     }
     if (editForm.meta_account_id) {
@@ -2504,9 +2575,16 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                             </div>
                           )}
                           {editForm.ecommerce_platform === "tiendanube" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <Field label="Store ID"><input type="text" value={editForm.tiendanube_store_id} onChange={e => ef("tiendanube_store_id", e.target.value)} placeholder="1234567" className={inputCls} /></Field>
-                              <Field label="Access Token"><input type="password" value={editForm.tiendanube_access_token} onChange={e => ef("tiendanube_access_token", e.target.value)} placeholder="token" className={inputCls} /></Field>
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <Field label="Store ID"><input type="text" value={editForm.tiendanube_store_id} onChange={e => ef("tiendanube_store_id", e.target.value)} placeholder="1234567" className={inputCls} /></Field>
+                                <Field label="Access Token"><input type="password" value={editForm.tiendanube_access_token} onChange={e => ef("tiendanube_access_token", e.target.value)} placeholder="token" className={inputCls} /></Field>
+                              </div>
+                              <button type="button" onClick={testTiendanube} disabled={testingTiendanube || !editForm.tiendanube_store_id || !editForm.tiendanube_access_token}
+                                className={`w-full h-10 rounded-xl text-[12px] font-black flex items-center justify-center gap-2 transition-all disabled:opacity-40 ${statuses.shopify === "ok" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-zinc-900 dark:bg-white hover:bg-zinc-700 dark:hover:bg-zinc-100 text-white dark:text-zinc-900"}`}>
+                                {testingTiendanube ? <Loader2 className="w-4 h-4 animate-spin" /> : statuses.shopify === "ok" ? <Check className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                {testingTiendanube ? "Verificando..." : statuses.shopify === "ok" ? "Conexión Tiendanube verificada ✓" : "Verificar Tiendanube"}
+                              </button>
                             </div>
                           )}
                           {editForm.ecommerce_platform === "wordpress" && (
