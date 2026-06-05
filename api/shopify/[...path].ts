@@ -12,7 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers early
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'x-shopify-domain, x-shop-domain, x-shopify-access-token, x-wc-base-url, x-wc-consumer-key, x-wc-consumer-secret, Content-Type, Accept');
+  res.setHeader('Access-Control-Allow-Headers', 'x-shopify-domain, x-shop-domain, x-shopify-access-token, x-wc-base-url, x-wc-consumer-key, x-wc-consumer-secret, x-tn-store-id, x-tn-token, Content-Type, Accept');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -41,6 +41,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(wcRes.status).json(data);
     } catch (err: any) {
       return res.status(502).json({ error: 'WooCommerce proxy error', detail: err.message });
+    }
+  }
+
+  // ── Tiendanube proxy ──
+  const tnStoreId = req.headers['x-tn-store-id'] as string;
+  const tnToken   = req.headers['x-tn-token'] as string;
+
+  if (tnStoreId && tnToken) {
+    const tnMatch = req.url?.match(/^\/api\/shopify\/tn\/(.*)/);
+    const tnPathAndQuery = tnMatch ? tnMatch[1] : 'orders';
+    const targetUrl = `https://api.tiendanube.com/v1/${tnStoreId}/${tnPathAndQuery}`;
+    try {
+      const tnRes = await fetch(targetUrl, {
+        headers: { Authentication: `bearer ${tnToken}`, 'User-Agent': 'Algoritmia (lucagazze@gmail.com)', 'Content-Type': 'application/json' },
+      });
+      const linkHeader = tnRes.headers.get('Link');
+      if (linkHeader) res.setHeader('Link', linkHeader);
+      const data = await tnRes.json();
+      return res.status(tnRes.status).json(data);
+    } catch (err: any) {
+      return res.status(502).json({ error: 'Tiendanube proxy error', detail: err.message });
     }
   }
 

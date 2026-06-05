@@ -374,14 +374,17 @@ export default function PedidosPage() {
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = (isViewingAs ? viewAsProfile : authProfile) as any;
 
-  const shopifyDomain     = (profile?.shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const shopifyToken      = profile?.shopify_access_token || '';
-  const wordpressUrl      = (profile?.wordpress_url || '').replace(/\/$/, '');
-  const wooConsumerKey    = profile?.woo_consumer_key || '';
-  const wooConsumerSecret = profile?.woo_consumer_secret || '';
-  const isShopify         = !!(shopifyDomain && shopifyToken);
-  const isWoo             = !!(wordpressUrl && wooConsumerKey && wooConsumerSecret);
-  const hasEcommerce      = isShopify || isWoo || !!(profile?.tiendanube_store_id);
+  const shopifyDomain       = (profile?.shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const shopifyToken        = profile?.shopify_access_token || '';
+  const wordpressUrl        = (profile?.wordpress_url || '').replace(/\/$/, '');
+  const wooConsumerKey      = profile?.woo_consumer_key || '';
+  const wooConsumerSecret   = profile?.woo_consumer_secret || '';
+  const tiendanubeStoreId   = profile?.tiendanube_store_id || '';
+  const tiendanubeToken     = profile?.tiendanube_access_token || '';
+  const isShopify           = !!(shopifyDomain && shopifyToken);
+  const isWoo               = !!(wordpressUrl && wooConsumerKey && wooConsumerSecret);
+  const isTiendaNube        = !!(tiendanubeStoreId && tiendanubeToken);
+  const hasEcommerce        = isShopify || isWoo || isTiendaNube;
 
   const [orders, setOrders]               = useState<any[]>([]);
   const [productImages, setProductImages] = useState<Record<string, string>>({});
@@ -399,12 +402,13 @@ export default function PedidosPage() {
   const [page, setPage]                           = useState(1);
 
   const load = useCallback(async (s: string, u: string, isInitial = false) => {
-    if (!isShopify && !isWoo) return;
+    if (!isShopify && !isWoo && !isTiendaNube) return;
     setLoading(true);
     setError(null);
     try {
+      let raw: any[] = [];
       if (isShopify) {
-        const [raw, products] = await Promise.all([
+        const [orders, products] = await Promise.all([
           ecommerce.getShopifyOrders(shopifyDomain, shopifyToken, s, u),
           isInitial
             ? ecommerce.getProducts(shopifyDomain, shopifyToken).then(prods => {
@@ -418,22 +422,24 @@ export default function PedidosPage() {
             : Promise.resolve(null),
         ]);
         if (products !== null) setProductImages(products);
-        setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        raw = orders;
       } else if (isWoo) {
-        const raw = await ecommerce.getWooCommerceOrders(wordpressUrl, wooConsumerKey, wooConsumerSecret, s, u);
-        setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        raw = await ecommerce.getWooCommerceOrders(wordpressUrl, wooConsumerKey, wooConsumerSecret, s, u);
+      } else if (isTiendaNube) {
+        raw = await ecommerce.getTiendaNubeOrders(tiendanubeStoreId, tiendanubeToken, s, u);
       }
+      setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     } catch (e: any) {
       setError(e?.message || 'Error al cargar pedidos');
     } finally {
       setLoading(false);
       if (isInitial) setInitialLoad(false);
     }
-  }, [isShopify, isWoo, shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret]);
+  }, [isShopify, isWoo, isTiendaNube, shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret, tiendanubeStoreId, tiendanubeToken]);
 
   useEffect(() => {
     load(since, until, true);
-  }, [shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret]);
+  }, [shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret, tiendanubeStoreId, tiendanubeToken]);
 
   useEffect(() => {
     if (initialLoad) return;

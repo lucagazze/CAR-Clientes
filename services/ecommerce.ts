@@ -433,6 +433,82 @@ export const ecommerce = {
     }
   },
 
+  getTiendaNubeOrders: async (storeId: string, token: string, since: string, until: string): Promise<any[]> => {
+    const cacheKey = `tn_orders:${storeId}:${since}:${until}`;
+    const cached = ecGetCached(cacheKey);
+    if (cached) return cached;
+
+    const sinceIso = new Date(`${since}T00:00:00-03:00`).toISOString();
+    const untilIso = new Date(`${until}T23:59:59-03:00`).toISOString();
+
+    const tnStatusToFulfillment = (s: string): string | null => {
+      if (s === 'shipped' || s === 'delivered') return 'fulfilled';
+      return null;
+    };
+
+    let allOrders: any[] = [];
+    let page = 1;
+
+    while (page <= 15) {
+      const params = new URLSearchParams({ created_at_min: sinceIso, created_at_max: untilIso, per_page: '200', page: String(page) });
+      const res = await fetch(`/api/shopify/tn/orders?${params.toString()}`, {
+        headers: { 'x-tn-store-id': storeId, 'x-tn-token': token },
+      });
+      if (!res.ok) throw new Error(`Tiendanube API Error: ${res.status}`);
+      const data: any[] = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      allOrders = allOrders.concat(data);
+      if (data.length < 200) break;
+      page++;
+    }
+
+    const normalized = allOrders.map((o: any) => {
+      const isCancelled = o.status === 'cancelled';
+      const payStatus = o.payment_status;
+      const financial_status = payStatus === 'paid' ? 'paid' : payStatus === 'refunded' ? 'refunded' : payStatus === 'voided' ? 'voided' : 'pending';
+      return {
+        id: o.id,
+        order_number: o.number,
+        name: `#${o.number}`,
+        created_at: o.created_at,
+        cancelled_at: isCancelled ? (o.updated_at || new Date().toISOString()) : null,
+        financial_status,
+        fulfillment_status: tnStatusToFulfillment(o.shipping_status || ''),
+        total_price: String(o.total || '0'),
+        subtotal_price: String(o.subtotal || '0'),
+        total_tax: String(o.tax || '0'),
+        total_discounts: String(o.discount || '0'),
+        shipping_lines: o.shipping_cost_owner ? [{ title: 'Envío', price: String(o.shipping_cost_owner) }] : [],
+        discount_codes: o.promotional_discount?.code ? [{ code: o.promotional_discount.code }] : [],
+        customer: o.customer ? {
+          first_name: (o.customer.name || '').split(' ')[0] || '',
+          last_name: (o.customer.name || '').split(' ').slice(1).join(' ') || '',
+          email: o.customer.email || '',
+          phone: o.customer.phone || '',
+          orders_count: 0,
+          total_spent: '0',
+        } : null,
+        shipping_address: o.shipping_address ? {
+          address1: o.shipping_address.address,
+          city: o.shipping_address.city,
+          province: o.shipping_address.province,
+          country: o.shipping_address.country,
+        } : null,
+        line_items: (o.products || []).map((it: any) => ({
+          product_id: it.product_id,
+          title: it.name,
+          variant_title: it.variant_values ? it.variant_values.map((vv: any) => vv.es || vv.en || Object.values(vv || {})[0] || '').filter(Boolean).join(' / ') : null,
+          quantity: it.quantity,
+          price: String(it.price || 0),
+          _wc_image: it.image?.src || null,
+        })),
+      };
+    });
+
+    ecSetCache(cacheKey, normalized);
+    return normalized;
+  },
+
   getWooCommerceOrders: async (baseUrl: string, ck: string, cs: string, since: string, until: string): Promise<any[]> => {
     const cacheKey = `wc_orders:${baseUrl}:${since}:${until}`;
     const cached = ecGetCached(cacheKey);
