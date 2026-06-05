@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { db } from '../services/db';
 import { useToast } from '../components/Toast';
+import { supabase } from '../services/supabase';
 import {
   Brain, Globe, Save, RefreshCw, Sparkles, FileText, CheckCircle2,
   ShieldAlert, ArrowUpRight, Instagram, Calendar, ShoppingBag, Package,
@@ -143,6 +144,9 @@ export default function CerebroPage() {
     if (!plt) return;
     setProductsLoading(true); setProductsError(null);
     try {
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const token = freshSession?.access_token || '';
+
       const body: any = { type: 'products', platform: plt, clientId: p.id };
       if (plt === 'shopify') { body.shopify_domain = (p as any).shopify_domain; body.shopify_access_token = (p as any).shopify_access_token; }
       else if (plt === 'wordpress') { body.wordpress_url = (p as any).wordpress_url; body.woo_consumer_key = (p as any).woo_consumer_key; body.woo_consumer_secret = (p as any).woo_consumer_secret; }
@@ -151,7 +155,7 @@ export default function CerebroPage() {
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`
+          'Authorization': `Bearer ${token}`
         }, 
         body: JSON.stringify(body) 
       });
@@ -183,6 +187,9 @@ export default function CerebroPage() {
     const addLog = (msg: string) => setScanLog(prev => [...prev, msg]);
 
     try {
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const token = freshSession?.access_token || '';
+
       // ── STEP 1: Scan website ──────────────────────────────────────────
       setScanCurrentStep(0);
       addLog(`Abriendo ${websiteUrl}...`);
@@ -191,7 +198,7 @@ export default function CerebroPage() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ clientId: profile.id, url: websiteUrl, action: 'scrape-website' })
       });
@@ -217,7 +224,7 @@ export default function CerebroPage() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ clientId: profile.id, url: websiteUrl, action: 'sync-instagram' })
       });
@@ -242,7 +249,7 @@ export default function CerebroPage() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ clientId: profile.id, action: 'generate-fields' })
       });
