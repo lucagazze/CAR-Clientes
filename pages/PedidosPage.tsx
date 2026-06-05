@@ -22,9 +22,10 @@ const fmtDate = (iso: string) => {
   const today = new Date();
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
   const toStr = (d: Date) => d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  if (toStr(d) === toStr(today)) return { label: toStr(d), tag: 'Hoy' };
-  if (toStr(d) === toStr(yesterday)) return { label: toStr(d), tag: 'Ayer' };
-  return { label: toStr(d), tag: null };
+  const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  if (toStr(d) === toStr(today)) return { label: toStr(d), tag: 'Hoy', time };
+  if (toStr(d) === toStr(yesterday)) return { label: toStr(d), tag: 'Ayer', time };
+  return { label: toStr(d), tag: null, time };
 };
 
 const fmtDateTime = (iso: string) => {
@@ -84,7 +85,7 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
   const firstImage = firstItem
     ? (firstItem._wc_image || productImages[String(firstItem.product_id)] || null)
     : null;
-  const { label: dateLabel, tag: dateTag } = fmtDate(order.created_at);
+  const { label: dateLabel, tag: dateTag, time: dateTime } = fmtDate(order.created_at);
 
   const handleToggle = useCallback(() => setOpen(v => !v), []);
 
@@ -107,17 +108,20 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
 
         {/* Fecha */}
         <td className="px-4 py-3.5">
-          <div className="flex items-center gap-1.5">
-            {dateTag && (
-              <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-[2px] rounded ${
-                dateTag === 'Hoy'
-                  ? 'bg-pink-500/10 dark:bg-pink-500/20 text-pink-500 dark:text-pink-400'
-                  : 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400'
-              }`}>
-                {dateTag}
-              </span>
-            )}
-            <span className="text-[11px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{dateLabel}</span>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              {dateTag && (
+                <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-[2px] rounded ${
+                  dateTag === 'Hoy'
+                    ? 'bg-pink-500/10 dark:bg-pink-500/20 text-pink-500 dark:text-pink-400'
+                    : 'bg-violet-500/10 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400'
+                }`}>
+                  {dateTag}
+                </span>
+              )}
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{dateLabel}</span>
+            </div>
+            <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500">{dateTime}</span>
           </div>
         </td>
 
