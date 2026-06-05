@@ -435,11 +435,14 @@ export const ecommerce = {
 
   getWooUnfulfilledCount: async (baseUrl: string, ck: string, cs: string): Promise<number> => {
     try {
-      const res = await fetch(`/api/shopify/wc/orders?status=processing&per_page=1`, {
+      const res = await fetch(`/api/shopify/wc/orders?status=processing&per_page=100`, {
         headers: { 'x-wc-base-url': baseUrl.replace(/\/$/, ''), 'x-wc-consumer-key': ck, 'x-wc-consumer-secret': cs },
       });
       if (!res.ok) return 0;
-      return parseInt(res.headers.get('X-WP-Total') || '0', 10);
+      const data = await res.json();
+      if (!Array.isArray(data)) return 0;
+      const headerTotal = parseInt(res.headers.get('X-WP-Total') || '0', 10);
+      return headerTotal > 0 ? headerTotal : data.length;
     } catch { return 0; }
   },
 
