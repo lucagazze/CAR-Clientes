@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 const PINK = '#ec4899';
-const PAGE_SIZE = 40;
+const PAGE_SIZE = 30;
 
 const fmtCurr = (n: number) => {
   if (typeof n !== 'number' || isNaN(n)) return '—';
