@@ -445,13 +445,14 @@ export const ecommerce = {
 
   getTiendaNubeUnfulfilledCount: async (storeId: string, token: string): Promise<number> => {
     try {
-      const params = new URLSearchParams({ payment_status: 'paid', shipping_status: 'unpacked', per_page: '200', page: '1' });
+      const params = new URLSearchParams({ payment_status: 'paid', per_page: '200', page: '1' });
       const res = await fetch(`/api/shopify/tn/orders?${params}`, {
         headers: { 'x-tn-store-id': storeId, 'x-tn-token': token },
       });
       if (!res.ok) return 0;
       const data = await res.json();
-      return Array.isArray(data) ? data.length : 0;
+      if (!Array.isArray(data)) return 0;
+      return data.filter((o: any) => o.shipping_status !== 'shipped' && o.shipping_status !== 'delivered').length;
     } catch { return 0; }
   },
 
