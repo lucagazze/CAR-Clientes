@@ -1404,6 +1404,11 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
         ecommerce_platform: editForm.ecommerce_platform || null,
         shopify_domain: editForm.shopify_domain || null,
         shopify_access_token: editForm.shopify_access_token || null,
+        tiendanube_store_id: editForm.tiendanube_store_id || null,
+        tiendanube_access_token: editForm.tiendanube_access_token || null,
+        wordpress_url: editForm.wordpress_url || null,
+        woo_consumer_key: editForm.woo_consumer_key || null,
+        woo_consumer_secret: editForm.woo_consumer_secret || null,
         fb_page_id: editForm.fb_page_id || null,
         fb_page_name: editForm.fb_page_name || null,
         fb_page_access_token: editForm.fb_page_access_token || null,
@@ -1419,8 +1424,6 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
         console.error('[saveConfig] Supabase error:', JSON.stringify(error));
         throw new Error(error.message || JSON.stringify(error));
       }
-
-      // Note: wordpress/tiendanube columns don't exist in current DB schema — skip to avoid 400s
 
       const isValidUuid = (v?: string) => !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
       if (editForm.new_password && supabaseAdmin) {
