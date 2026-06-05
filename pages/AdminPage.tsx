@@ -1071,21 +1071,38 @@ setStatuses((p) => ({ ...p, shopify: "error" }));
     }
     setTestingWoo(true);
     try {
-      const base = editForm.wordpress_url.replace(/\/$/, '');
-      const creds = btoa(`${editForm.woo_consumer_key}:${editForm.woo_consumer_secret}`);
-      const res = await fetch(`${base}/wp-json/wc/v3/products?per_page=1`, {
-        headers: { 'Authorization': `Basic ${creds}` },
+      const res = await fetch('/api/scrape-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`
+        },
+        body: JSON.stringify({
+          clientId: editingClient?.id || '',
+          type: 'products',
+          platform: 'wordpress',
+          wordpress_url: editForm.wordpress_url,
+          woo_consumer_key: editForm.woo_consumer_key,
+          woo_consumer_secret: editForm.woo_consumer_secret
+        })
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (!data.products) {
+        throw new Error("No se pudo conectar con WooCommerce.");
+      }
       showToast('¡Conexión con WooCommerce exitosa! ✓', 'success');
       if (editingClient) saveConnOk(editingClient.id, 'shopify');
-        setConnTick(t => t + 1);
-setStatuses((p) => ({ ...p, shopify: 'ok' }));
+      setConnTick(t => t + 1);
+      setStatuses((p) => ({ ...p, shopify: 'ok' }));
     } catch (err: any) {
       showToast('Error WooCommerce: ' + (err.message || 'Verificá los datos'), 'error');
       if (editingClient) saveConnErr(editingClient.id, 'shopify');
-        setConnTick(t => t + 1);
-setStatuses((p) => ({ ...p, shopify: 'error' }));
+      setConnTick(t => t + 1);
+      setStatuses((p) => ({ ...p, shopify: 'error' }));
     } finally {
       setTestingWoo(false);
     }
@@ -1312,6 +1329,34 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
         testResults.shopify = 'ok';
         saveConnOk(editingClient.id, 'shopify');
       } catch { testResults.shopify = 'error'; saveConnErr(editingClient.id, 'shopify'); errors.push('Shopify'); }
+    }
+    if (editForm.ecommerce_platform === 'wordpress' && editForm.wordpress_url && editForm.woo_consumer_key && editForm.woo_consumer_secret) {
+      try {
+        const res = await fetch('/api/scrape-all', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || ''}`
+          },
+          body: JSON.stringify({
+            clientId: editingClient.id,
+            type: 'products',
+            platform: 'wordpress',
+            wordpress_url: editForm.wordpress_url,
+            woo_consumer_key: editForm.woo_consumer_key,
+            woo_consumer_secret: editForm.woo_consumer_secret
+          })
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (!data.products || data.products.length === 0) throw new Error();
+        testResults.shopify = 'ok';
+        saveConnOk(editingClient.id, 'shopify');
+      } catch {
+        testResults.shopify = 'error';
+        saveConnErr(editingClient.id, 'shopify');
+        errors.push('WooCommerce');
+      }
     }
     if (editForm.meta_account_id) {
       try {
@@ -1925,7 +1970,18 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                         <ConnBadge hasValue={!!c.ig_username} clientId={c.id} connectionStatuses={(c as any).connection_statuses} type="instagram" label={c.ig_username ? `Instagram: @${c.ig_username}` : 'Instagram'} tick={connTick}>
                           <Instagram className="w-2.5 h-2.5" />
                         </ConnBadge>
-                        <ConnBadge hasValue={!!c.ecommerce_platform && !!c.shopify_access_token} clientId={c.id} connectionStatuses={(c as any).connection_statuses} type="shopify" label={c.ecommerce_platform ? `Tienda: ${c.ecommerce_platform}` : 'Sin tienda'} tick={connTick}>
+                        <ConnBadge 
+                          hasValue={!!c.ecommerce_platform && (
+                            (c.ecommerce_platform === 'shopify' && !!c.shopify_access_token) ||
+                            (c.ecommerce_platform === 'wordpress' && !!c.woo_consumer_key && !!c.woo_consumer_secret) ||
+                            (c.ecommerce_platform === 'tiendanube' && !!c.tiendanube_access_token)
+                          )} 
+                          clientId={c.id} 
+                          connectionStatuses={(c as any).connection_statuses} 
+                          type="shopify" 
+                          label={c.ecommerce_platform ? `Tienda: ${c.ecommerce_platform}` : 'Sin tienda'} 
+                          tick={connTick}
+                        >
                           {c.ecommerce_platform === 'shopify' ? 'S' : c.ecommerce_platform === 'tiendanube' ? 'TN' : c.ecommerce_platform === 'wordpress' ? 'WP' : 'T'}
                         </ConnBadge>
                         <ConnBadge hasValue={!!c.klaviyo_api_key} clientId={c.id} connectionStatuses={(c as any).connection_statuses} type="klaviyo" label="Klaviyo" tick={connTick}>K</ConnBadge>
@@ -2329,11 +2385,21 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                               <p className="text-[10px] text-zinc-400">Shopify · Tiendanube · WooCommerce</p>
                             </div>
                           </div>
-                          {editForm.ecommerce_platform && editForm.shopify_access_token ? (
-                            statuses.shopify === "ok" ? <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400"><Check className="w-3.5 h-3.5" /> Conectado</span>
-                            : statuses.shopify === "error" ? <span className="flex items-center gap-1.5 text-[11px] font-bold text-red-500"><X className="w-3.5 h-3.5" /> Error</span>
-                            : <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">⚠ Sin verificar</span>
-                          ) : <span className="text-[11px] text-zinc-400">No configurado</span>}
+                          {(() => {
+                            const hasCreds = editForm.ecommerce_platform && (
+                              (editForm.ecommerce_platform === "shopify" && !!editForm.shopify_access_token) ||
+                              (editForm.ecommerce_platform === "wordpress" && !!editForm.woo_consumer_key && !!editForm.woo_consumer_secret) ||
+                              (editForm.ecommerce_platform === "tiendanube" && !!editForm.tiendanube_access_token)
+                            );
+                            if (!hasCreds) return <span className="text-[11px] text-zinc-400">No configurado</span>;
+                            return statuses.shopify === "ok" ? (
+                              <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400"><Check className="w-3.5 h-3.5" /> Conectado</span>
+                            ) : statuses.shopify === "error" ? (
+                              <span className="flex items-center gap-1.5 text-[11px] font-bold text-red-500"><X className="w-3.5 h-3.5" /> Error</span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">⚠ Sin verificar</span>
+                            );
+                          })()}
                         </div>
                         <div className="p-5 space-y-3">
                           <div className="grid grid-cols-3 gap-2">
@@ -2374,10 +2440,10 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                                 <Field label="Consumer Key (ck_...)"><input type="password" value={editForm.woo_consumer_key} onChange={e => ef("woo_consumer_key", e.target.value)} placeholder="ck_xxx" className={inputCls} /></Field>
                                 <Field label="Consumer Secret (cs_...)"><input type="password" value={editForm.woo_consumer_secret} onChange={e => ef("woo_consumer_secret", e.target.value)} placeholder="cs_xxx" className={inputCls} /></Field>
                               </div>
-                              <button type="button" onClick={testWoo} disabled={testingWoo || !editForm.wordpress_url}
-                                className={`w-full h-10 rounded-xl text-[12px] font-black flex items-center justify-center gap-2 transition-all disabled:opacity-40 ${statuses.shopify === "ok" ? "bg-emerald-600 text-white" : "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"}`}>
-                                {testingWoo ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                {testingWoo ? "Verificando..." : "Verificar WooCommerce"}
+                              <button type="button" onClick={testWoo} disabled={testingWoo || !editForm.wordpress_url || !editForm.woo_consumer_key || !editForm.woo_consumer_secret}
+                                className={`w-full h-10 rounded-xl text-[12px] font-black flex items-center justify-center gap-2 transition-all disabled:opacity-40 ${statuses.shopify === "ok" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-zinc-900 dark:bg-white hover:bg-zinc-700 dark:hover:bg-zinc-100 text-white dark:text-zinc-900"}`}>
+                                {testingWoo ? <Loader2 className="w-4 h-4 animate-spin" /> : statuses.shopify === "ok" ? <Check className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                {testingWoo ? "Verificando..." : statuses.shopify === "ok" ? "Conexión WooCommerce verificada ✓" : "Verificar WooCommerce"}
                               </button>
                             </div>
                           )}

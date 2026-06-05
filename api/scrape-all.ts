@@ -300,7 +300,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const creds = Buffer.from(`${woo_consumer_key}:${woo_consumer_secret}`).toString('base64');
         for (let page = 1; page <= 5; page++) {
           const r = await fetch(`${base}/wp-json/wc/v3/products?per_page=100&page=${page}&status=publish`, { headers: { 'Authorization': `Basic ${creds}` } });
-          if (!r.ok) break;
+          if (!r.ok) {
+            if (page === 1) {
+              const text = await r.text();
+              throw new Error(`WooCommerce error ${r.status}: ${text.slice(0, 150)}`);
+            }
+            break;
+          }
           const data: any[] = await r.json();
           if (!data.length) break;
           products = products.concat(data.map((p: any) => ({ id: p.id, title: p.name, description: p.short_description?.replace(/<[^>]+>/g, ' ').trim().slice(0, 300) || '', type: p.categories?.[0]?.name || '', tags: p.tags?.map((t: any) => t.name).join(', ') || '', image: p.images?.[0]?.src || null, url: p.permalink || '', variants: p.attributes?.length > 0 ? [{ title: p.attributes.map((a: any) => a.options?.join('/')).join(' · '), price: p.price, sku: p.sku, available: p.stock_status === 'instock' }] : [{ title: '', price: p.price, sku: p.sku, available: p.stock_status === 'instock' }] })));
