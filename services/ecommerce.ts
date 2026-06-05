@@ -457,13 +457,14 @@ export const ecommerce = {
     let page = 1;
     let totalPages = 1;
 
-    const cleanBase = baseUrl.replace(/\/$/, '');
-    const creds = btoa(`${ck}:${cs}`);
-
     while (page <= totalPages) {
       const params = new URLSearchParams({ after, before, per_page: '100', page: String(page), orderby: 'date', order: 'desc' });
-      const res = await fetch(`${cleanBase}/wp-json/wc/v3/orders?${params.toString()}`, {
-        headers: { Authorization: `Basic ${creds}`, 'Content-Type': 'application/json' },
+      const res = await fetch(`/api/shopify/wc/orders?${params.toString()}`, {
+        headers: {
+          'x-wc-base-url': baseUrl,
+          'x-wc-consumer-key': ck,
+          'x-wc-consumer-secret': cs,
+        },
       });
       if (!res.ok) throw new Error(`WooCommerce API Error: ${res.status}`);
       if (page === 1) totalPages = parseInt(res.headers.get('X-WP-TotalPages') || '1', 10);

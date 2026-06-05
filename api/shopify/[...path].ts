@@ -12,10 +12,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers early
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'x-shopify-domain, x-shop-domain, x-shopify-access-token, Content-Type, Accept');
+  res.setHeader('Access-Control-Allow-Headers', 'x-shopify-domain, x-shop-domain, x-shopify-access-token, x-wc-base-url, x-wc-consumer-key, x-wc-consumer-secret, Content-Type, Accept');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
+  }
+
+  // ── WooCommerce proxy (reuses this function to stay within Vercel function limit) ──
+  const wcBaseUrl = req.headers['x-wc-base-url'] as string;
+  const wcKey     = req.headers['x-wc-consumer-key'] as string;
+  const wcSecret  = req.headers['x-wc-consumer-secret'] as string;
+
+  if (wcBaseUrl && wcKey && wcSecret) {
+    const cleanBase = wcBaseUrl.replace(/\/$/, '');
+    const creds = Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
+    const wcMatch = req.url?.match(/^\/api\/shopify\/wc\/(.*)/);
+    const wcPathAndQuery = wcMatch ? wcMatch[1] : 'orders';
+    const targetUrl = `${cleanBase}/wp-json/wc/v3/${wcPathAndQuery}`;
+    try {
+      const wcRes = await fetch(targetUrl, {
+        headers: { Authorization: `Basic ${creds}`, 'Content-Type': 'application/json' },
+      });
+      const totalPages = wcRes.headers.get('X-WP-TotalPages') || '1';
+      const totalCount = wcRes.headers.get('X-WP-Total') || '0';
+      res.setHeader('X-WP-TotalPages', totalPages);
+      res.setHeader('X-WP-Total', totalCount);
+      const data = await wcRes.json();
+      return res.status(wcRes.status).json(data);
+    } catch (err: any) {
+      return res.status(502).json({ error: 'WooCommerce proxy error', detail: err.message });
+    }
   }
 
   if (!domain || !token) {
