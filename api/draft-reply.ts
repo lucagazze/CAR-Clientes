@@ -462,7 +462,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `3. Si te preguntan por características adicionales (ancho, peso, colores) que no están en el catálogo, pero están en el CEREBRO DEL NEGOCIO (descripción, web scrape, etc.), usá esa información del Cerebro para responder.\n` +
           `4. Usá únicamente el precio especificado en el catálogo (no inventes ni supongas otros precios).`;
       } else {
-        verifiedFacts = `\n⚠️ BÚSQUEDA EN CATÁLOGO: El producto que pregunta NO existe en el catálogo disponible.\nRespuesta obligatoria para comentarios: "Te respondemos por privado 📩"\nRespuesta obligatoria para DMs: "Ahora mismo verifico y te confirmo en seguida 🙌"`;
+        verifiedFacts = `\n⚠️ BÚSQUEDA EN CATÁLOGO: El producto consultado NO existe en el catálogo disponible.\n` +
+          `- Para comentarios: Respondé de forma natural explicando amablemente que esa opción no la tenemos en catálogo actualmente. Sugeriles que revisen todas las opciones en nuestra web (${canonicalSite}) o invitalos a enviarnos un mensaje privado (DM) para asesorarlos y ver si les podemos conseguir stock.\n` +
+          `- Para DMs: Explicá con calidez que vas a validar con el equipo de stock la disponibilidad de ese artículo y que les confirmás en seguida por este chat privado.`;
       }
     }
 
@@ -493,8 +495,8 @@ ${verifiedFacts || ''}
 - Si el precio no figura para la tela consultada, o si la tela consultada no está en el catálogo, no digas ningún precio bajo ninguna circunstancia.
 
 ⛔ REGLAS GENERALES DE RESPUESTA:
-- Si la tela o producto consultado NO está en el catálogo o en los DATOS VERIFICADOS (como en este caso, que consultan por una tela que no figura en tu catálogo, ej: "lanilla" o "percal"), es OBLIGATORIO que uses exactamente la frase de derivación/fallback: "${isDM ? 'Ahora mismo verifico y te confirmo en seguida 🙌' : 'Te respondemos por privado 📩'}". No agregues precios ficticios ni des explicaciones inventadas.
-- Si el cliente pregunta por una tela específica que NO está en el catálogo (por ejemplo, pregunta por "percal" y en los datos solo tenés "microfibra" o "tussor", que son telas totalmente distintas), NO asumas que son lo mismo. Debés indicar que no lo tenés y usar obligatoriamente la frase de derivación/fallback.
+- Si la tela o producto consultado NO está en el catálogo o en los DATOS VERIFICADOS (como por ejemplo, si consultan por "lanilla" o "percal" y no figura en tu catálogo), tenés terminantemente PROHIBIDO inventar un precio o stock. En su lugar, respondé de forma natural, variada y atenta. Podés invitarlos a revisar todas las opciones vigentes en nuestra web (${canonicalSite}) o derivarlos para hablar por privado (por ejemplo: "Escribinos al privado y te confirmamos", "Si querés consultanos por privado y nos fijamos", "Te mandamos un mensajito privado para pasarte detalles", etc.). Nunca uses siempre el mismo texto genérico; variá la respuesta para que suene humana y conversacional.
+- Si el cliente pregunta por una tela específica que NO está en el catálogo (por ejemplo, pregunta por "percal" y en los datos solo tenés "microfibra" o "tussor", que son telas totalmente distintas), NO asumas que son lo mismo. Debés indicar que no lo tenés y derivar al privado de forma variada e informal.
 - Si el producto SÍ está en el catálogo, NO uses la frase de derivación/fallback. Respondé directamente con el precio del catálogo y respondé a sus preguntas. Si el cliente pregunta por características adicionales (ancho, composición, etc.) de ese producto, podés buscar y responder usando la información del CEREBRO DEL NEGOCIO.
 - Para precios, stock y disponibilidad, la única fuente válida es el catálogo. Nunca supongas precios que no estén en el catálogo.
 
