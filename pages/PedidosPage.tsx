@@ -169,16 +169,20 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
                 }
               </div>
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[180px] leading-snug">
-                  {firstItem.title}
-                </p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="shrink-0 text-[10px] font-black px-1.5 py-[2px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
+                    ×{firstItem.quantity}
+                  </span>
+                  <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[160px] leading-snug">
+                    {firstItem.title}
+                  </p>
+                </div>
                 <p className="text-[10px] text-zinc-400 mt-0.5">
-                  ×{firstItem.quantity}
                   {firstItem.variant_title && firstItem.variant_title !== 'Default Title' && (
-                    <span> · {firstItem.variant_title}</span>
+                    <span>{firstItem.variant_title}</span>
                   )}
                   {extraCount > 0 && (
-                    <span className="ml-1 text-pink-500 dark:text-pink-400 font-bold">+{extraCount} más</span>
+                    <span className={`${firstItem.variant_title && firstItem.variant_title !== 'Default Title' ? 'ml-1' : ''} text-pink-500 dark:text-pink-400 font-bold`}>+{extraCount} más</span>
                   )}
                 </p>
               </div>
@@ -222,15 +226,19 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
                 <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-1.5">
                   <Package className="w-3 h-3" /> Productos
                 </p>
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {lineItems.map((item: any, i: number) => {
                     const img = item._wc_image || productImages[String(item.product_id)];
                     return (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06]">
+                      <div key={i} className="flex items-center gap-3 p-2 rounded-xl bg-white dark:bg-white/[0.03] border border-zinc-100 dark:border-white/[0.05]">
+                        {/* Quantity badge — big and prominent */}
+                        <div className="shrink-0 min-w-[32px] h-8 px-2 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center">
+                          <span className="text-[13px] font-black">×{item.quantity}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06]">
                           {img
                             ? <img src={img} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                            : <Package className="w-4 h-4 text-zinc-400" />
+                            : <Package className="w-3.5 h-3.5 text-zinc-400" />
                           }
                         </div>
                         <div className="flex-1 min-w-0">
@@ -241,7 +249,7 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-[12px] font-black text-zinc-800 dark:text-zinc-200">{fmtCurr(parseFloat(item.price || 0))}</p>
-                          <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">×{item.quantity}</p>
+                          <p className="text-[10px] text-zinc-400 font-medium mt-0.5">c/u</p>
                         </div>
                       </div>
                     );
