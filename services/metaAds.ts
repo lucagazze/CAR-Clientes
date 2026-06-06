@@ -421,6 +421,17 @@ export const metaAds = {
     return res?.data || [];
   },
 
+  // ── LIFETIME INSIGHTS FOR A SINGLE AD ───────────────────
+  getAdLifetimeInsights: async (adId: string): Promise<any | null> => {
+    const fields = 'spend,impressions,reach,inline_link_clicks,inline_link_click_ctr,actions,purchase_roas,video_30_sec_watched_actions,video_p100_watched_actions,cost_per_action_type,action_values';
+    const res = await apiGet(`${adId}/insights`, {
+      fields,
+      date_preset: 'lifetime',
+      limit: '1',
+    });
+    return res?.data?.[0] || null;
+  },
+
   // ── INSIGHTS ──────────────────────────────────────────────
   getInsights: async (accountId: string, fields: string[] | string, preset?: DatePreset, range?: { since: string, until: string }, timeIncrement?: number, signal?: AbortSignal) => {
     const fieldsStr = Array.isArray(fields) ? fields.join(',') : fields;

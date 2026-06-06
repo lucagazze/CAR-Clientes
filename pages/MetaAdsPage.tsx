@@ -104,6 +104,8 @@ export default function MetaAdsPage() {
   const [mobileTab, setMobileTab] = useState<'post' | 'comments'>('comments');
   const [panelCarouselIndex, setPanelCarouselIndex] = useState(0);
   const [panelPlayingVideo, setPanelPlayingVideo] = useState(false);
+  const [lifetimeInsights, setLifetimeInsights] = useState<any | null>(null);
+  const [loadingLifetime, setLoadingLifetime] = useState(false);
 
   const LANGS: { code: 'en' | 'es'; flag: string; label: string }[] = [
     { code: 'en', flag: '🇬🇧', label: 'English' },
@@ -337,6 +339,11 @@ export default function MetaAdsPage() {
     setOpenReplies({}); setReplyTexts({}); setReplyErrors({}); setLikedIds({});
     setCommentFilter('pending'); setMobileTab('comments');
     setPanelCarouselIndex(0); setPanelPlayingVideo(false);
+    setLifetimeInsights(null); setLoadingLifetime(true);
+    metaAds.getAdLifetimeInsights(ad.id)
+      .then(data => setLifetimeInsights(data))
+      .catch(() => {})
+      .finally(() => setLoadingLifetime(false));
 
     const resolveName = (c: any, fallback: string) =>
       c.username || c.from?.username || c.from?.name || c.name ||
@@ -725,14 +732,17 @@ export default function MetaAdsPage() {
           const adCpa = adResults > 0 ? adSpend / adResults : 0;
           const adRoas = parseFloat(insights?.purchase_roas?.[0]?.value || 0);
           const adCtr = parseFloat(insights?.inline_link_click_ctr || 0);
-          const adReactions = getR('post_reaction');
-          const adComments = getR('comment');
-          const adShares = getR('post');
-          const adClicks = parseInt(insights?.inline_link_clicks || 0);
-          const adVideoViews = parseInt(insights?.video_30_sec_watched_actions?.[0]?.value || 0) || getR('video_view');
-          const adVideoCompletions = parseInt(insights?.video_p100_watched_actions?.[0]?.value || 0);
           const adReach = parseInt(insights?.reach || 0);
           const adImpr = parseInt(insights?.impressions || 0);
+
+          // Lifetime engagement totals (fetched separately when ad is opened)
+          const ltActions = lifetimeInsights?.actions || [];
+          const getLT = (type: string) => { const a = ltActions.find((x: any) => x.action_type === type || x.action_type === `offsite_conversion.fb_pixel_${type}`); return a ? parseInt(a.value) : 0; };
+          const ltReactions = getLT('post_reaction');
+          const ltShares = getLT('post');
+          const ltClicks = parseInt(lifetimeInsights?.inline_link_clicks || 0);
+          const ltVideoViews = parseInt(lifetimeInsights?.video_30_sec_watched_actions?.[0]?.value || 0) || getLT('video_view');
+          const ltVideoCompletions = parseInt(lifetimeInsights?.video_p100_watched_actions?.[0]?.value || 0);
           const thumbUrl = resolvedThumbnails[selectedAd.adId] || selectedAd.ad.creative?.image_url || selectedAd.ad.creative?.thumbnail_url;
 
           const pendingCount = comments.filter(c => isCommentPending(c, activeCommentPlatform)).length;
@@ -743,6 +753,7 @@ export default function MetaAdsPage() {
           const fbTotal = commentsByPlatform.facebook.length;
           const igPending = commentsByPlatform.instagram.filter(c => isCommentPending(c, 'instagram')).length;
           const fbPending = commentsByPlatform.facebook.filter(c => isCommentPending(c, 'facebook')).length;
+          const ltTotalComments = igTotal + fbTotal;
 
           return (
             <div className="fixed inset-0 z-[400] flex justify-end animate-in fade-in duration-200">
@@ -906,51 +917,48 @@ export default function MetaAdsPage() {
                             <span className={highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-white'}>{val}</span>
                           </div>
                         ))}
-                        {(adReactions > 0 || adComments > 0 || adShares > 0 || adClicks > 0 || adVideoViews > 0) && (
-                          <>
-                            <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2 mt-2">
-                              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Engagement</p>
-                              <div className="space-y-1">
-                                {adReactions > 0 && (
-                                  <div className="flex items-center justify-between text-[12px] font-bold">
-                                    <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Heart className="w-3 h-3 text-pink-500 fill-pink-500" /> Me gustas</span>
-                                    <span className="text-zinc-900 dark:text-white">{fmtN(adReactions)}</span>
-                                  </div>
-                                )}
-                                {adComments > 0 && (
-                                  <div className="flex items-center justify-between text-[12px] font-bold">
-                                    <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><MessageCircle className="w-3 h-3 text-blue-500" /> Comentarios</span>
-                                    <span className="text-zinc-900 dark:text-white">{fmtN(adComments)}</span>
-                                  </div>
-                                )}
-                                {adShares > 0 && (
-                                  <div className="flex items-center justify-between text-[12px] font-bold">
-                                    <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Share2 className="w-3 h-3 text-emerald-500" /> Compartidos</span>
-                                    <span className="text-zinc-900 dark:text-white">{fmtN(adShares)}</span>
-                                  </div>
-                                )}
-                                {adClicks > 0 && (
-                                  <div className="flex items-center justify-between text-[12px] font-bold">
-                                    <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><MousePointerClick className="w-3 h-3 text-violet-500" /> Clics</span>
-                                    <span className="text-zinc-900 dark:text-white">{fmtN(adClicks)}</span>
-                                  </div>
-                                )}
-                                {adVideoViews > 0 && (
-                                  <div className="flex items-center justify-between text-[12px] font-bold">
-                                    <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Eye className="w-3 h-3 text-amber-500" /> Vistas (30s)</span>
-                                    <span className="text-zinc-900 dark:text-white">{fmtN(adVideoViews)}</span>
-                                  </div>
-                                )}
-                                {adVideoCompletions > 0 && (
-                                  <div className="flex items-center justify-between text-[12px] font-bold">
-                                    <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Play className="w-3 h-3 text-amber-500" /> Vistas completas</span>
-                                    <span className="text-zinc-900 dark:text-white">{fmtN(adVideoCompletions)}</span>
-                                  </div>
-                                )}
-                              </div>
+                        <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2 mt-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Engagement total</p>
+                            {loadingLifetime && <Loader2 className="w-3 h-3 animate-spin text-zinc-400" />}
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[12px] font-bold">
+                              <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><MessageCircle className="w-3 h-3 text-blue-500" /> Comentarios</span>
+                              <span className="text-zinc-900 dark:text-white">{loadingComments && loadingByPlatform.instagram && loadingByPlatform.facebook ? '…' : fmtN(ltTotalComments)}</span>
                             </div>
-                          </>
-                        )}
+                            {(ltReactions > 0 || loadingLifetime) && (
+                              <div className="flex items-center justify-between text-[12px] font-bold">
+                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Heart className="w-3 h-3 text-pink-500 fill-pink-500" /> Me gustas</span>
+                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltReactions)}</span>
+                              </div>
+                            )}
+                            {(ltShares > 0 || loadingLifetime) && (
+                              <div className="flex items-center justify-between text-[12px] font-bold">
+                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Share2 className="w-3 h-3 text-emerald-500" /> Compartidos</span>
+                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltShares)}</span>
+                              </div>
+                            )}
+                            {(ltClicks > 0 || loadingLifetime) && (
+                              <div className="flex items-center justify-between text-[12px] font-bold">
+                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><MousePointerClick className="w-3 h-3 text-violet-500" /> Clics</span>
+                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltClicks)}</span>
+                              </div>
+                            )}
+                            {(ltVideoViews > 0 || loadingLifetime) && (
+                              <div className="flex items-center justify-between text-[12px] font-bold">
+                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Eye className="w-3 h-3 text-amber-500" /> Vistas (30s)</span>
+                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltVideoViews)}</span>
+                              </div>
+                            )}
+                            {ltVideoCompletions > 0 && (
+                              <div className="flex items-center justify-between text-[12px] font-bold">
+                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Play className="w-3 h-3 text-amber-500" /> Vistas completas</span>
+                                <span className="text-zinc-900 dark:text-white">{fmtN(ltVideoCompletions)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
 
