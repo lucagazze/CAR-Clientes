@@ -20,7 +20,7 @@ const isOggLike = (src: string, mimeType?: string) =>
   /\.(ogg|oga|opus)(\?|$)/i.test(src) ||
   !!(mimeType && (mimeType.includes('ogg') || mimeType.includes('opus')));
 
-const toProxyUrl = (src: string) => `/api/audio-proxy?url=${encodeURIComponent(src)}`;
+const toProxyUrl = (src: string) => `/api/scrape-website?url=${encodeURIComponent(src)}`;
 
 export const CustomAudioPlayer: React.FC<Props> = ({ src, mimeType }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
