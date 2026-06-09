@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
-import { ecommerce } from '../services/ecommerce';
+import { ecommerce, parseOrderAttribution } from '../services/ecommerce';
+import type { OrderAttribution } from '../services/ecommerce';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 import {
   ShoppingCart, Search, ChevronDown, ChevronUp, Package,
@@ -80,6 +81,44 @@ function FulfillmentBadge({ status }: { status: string | null }) {
   );
 }
 
+// ─── Attribution badge ────────────────────────────────────────────────────────
+
+const ATTR_STYLE: Record<string, { dot: string; bg: string; text: string; border: string }> = {
+  meta_ads:   { dot: 'bg-blue-500',    bg: 'bg-blue-50 dark:bg-blue-500/10',     text: 'text-blue-700 dark:text-blue-400',     border: 'border-blue-200 dark:border-blue-500/20' },
+  google_ads: { dot: 'bg-amber-500',   bg: 'bg-amber-50 dark:bg-amber-500/10',   text: 'text-amber-700 dark:text-amber-400',   border: 'border-amber-200 dark:border-amber-500/20' },
+  email:      { dot: 'bg-violet-500',  bg: 'bg-violet-50 dark:bg-violet-500/10', text: 'text-violet-700 dark:text-violet-400', border: 'border-violet-200 dark:border-violet-500/20' },
+  organic:    { dot: 'bg-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-500/20' },
+  direct:     { dot: 'bg-zinc-400',    bg: 'bg-zinc-100 dark:bg-zinc-800',       text: 'text-zinc-500 dark:text-zinc-400',     border: 'border-zinc-200 dark:border-zinc-700' },
+  other:      { dot: 'bg-zinc-400',    bg: 'bg-zinc-100 dark:bg-zinc-800',       text: 'text-zinc-500 dark:text-zinc-400',     border: 'border-zinc-200 dark:border-zinc-700' },
+};
+
+const AttributionBadge = ({ attribution }: { attribution: OrderAttribution | null }) => {
+  if (!attribution) return null;
+  const s = ATTR_STYLE[attribution.source] ?? ATTR_STYLE.other;
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-full border text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${s.bg} ${s.text} ${s.border}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
+      {attribution.label}
+    </span>
+  );
+};
+
+const AttributionFull = ({ attribution }: { attribution: OrderAttribution | null }) => {
+  if (!attribution) return null;
+  const s = ATTR_STYLE[attribution.source] ?? ATTR_STYLE.other;
+  return (
+    <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border ${s.bg} ${s.border}`}>
+      <span className={`w-2 h-2 rounded-full shrink-0 ${s.dot}`} />
+      <div>
+        <p className={`text-[11px] font-black ${s.text}`}>{attribution.label}</p>
+        {attribution.detail && (
+          <p className="text-[10px] text-zinc-400 truncate max-w-[200px] mt-0.5">{attribution.detail}</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── order row ────────────────────────────────────────────────────────────
 
 const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; productImages: Record<string, string> }) {
@@ -96,6 +135,7 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
     ? (firstItem._wc_image || productImages[String(firstItem.product_id)] || null)
     : null;
   const { label: dateLabel, tag: dateTag, time: dateTime } = fmtDate(order.created_at);
+  const attribution = parseOrderAttribution(order);
 
   const handleToggle = useCallback(() => setOpen(v => !v), []);
 
@@ -147,6 +187,11 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
           </div>
           {order.customer?.email && (
             <p className="text-[10px] text-zinc-400 truncate hidden sm:block mt-0.5">{order.customer.email}</p>
+          )}
+          {attribution && (
+            <div className="hidden sm:block mt-1">
+              <AttributionBadge attribution={attribution} />
+            </div>
           )}
           {/* On mobile: show date tag + time inline */}
           <div className="flex items-center gap-1.5 mt-1 sm:hidden">
@@ -290,6 +335,14 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
                   </div>
                 ) : (
                   <p className="text-[12px] text-zinc-400">Sin datos de cliente</p>
+                )}
+                {attribution && (
+                  <div className="mt-4">
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
+                      <ShoppingCart className="w-3 h-3" /> Origen del pedido
+                    </p>
+                    <AttributionFull attribution={attribution} />
+                  </div>
                 )}
                 {order.shipping_address && (
                   <div className="mt-4">

@@ -21,6 +21,65 @@ function ecSetCache(key: string, data: any) {
 
 const BASE = '/api/shopify';
 
+// ─── Order attribution ────────────────────────────────────────────────────────
+
+export type OrderAttribution = {
+  source: 'meta_ads' | 'google_ads' | 'email' | 'organic' | 'direct' | 'other';
+  label: string;
+  detail?: string;
+};
+
+function classifyAttrib(src: string, med: string, campaign: string, referrer: string): OrderAttribution {
+  const s = src.toLowerCase();
+  const m = med.toLowerCase();
+  if (['facebook', 'instagram', 'fb', 'meta', 'ig'].some(x => s.includes(x)) ||
+      (['paid', 'paidsocial', 'paid_social', 'cpc'].includes(m) && !s.includes('google'))) {
+    return { source: 'meta_ads', label: 'Meta Ads', detail: campaign || undefined };
+  }
+  if (s.includes('google') && ['cpc', 'paid', 'ppc', 'paidsearch', 'paid_search'].some(x => m.includes(x))) {
+    return { source: 'google_ads', label: 'Google Ads', detail: campaign || undefined };
+  }
+  if (m === 'email' || s === 'email' ||
+      ['klaviyo', 'mailchimp', 'brevo', 'sendgrid', 'omnisend'].some(x => s.includes(x))) {
+    return { source: 'email', label: 'Email Marketing', detail: campaign || undefined };
+  }
+  if (m === 'organic' || (s.includes('google') && m && !['cpc', 'paid', 'ppc'].includes(m))) {
+    return { source: 'organic', label: 'SEO Orgánico' };
+  }
+  if (s || m) {
+    return { source: 'other', label: (s || m).slice(0, 20), detail: campaign || undefined };
+  }
+  if (referrer) {
+    try {
+      const host = new URL(referrer.startsWith('http') ? referrer : `https://${referrer}`)
+        .hostname.replace(/^www\./, '');
+      if (['facebook.com', 'instagram.com', 'fb.com', 'l.facebook.com'].some(h => host.endsWith(h)))
+        return { source: 'meta_ads', label: 'Meta Ads' };
+      if (host.startsWith('google.') || host.includes('.google.'))
+        return { source: 'organic', label: 'Google' };
+      if (host) return { source: 'other', label: host };
+    } catch {}
+  }
+  return { source: 'direct', label: 'Sin publicidad' };
+}
+
+export function parseOrderAttribution(order: any): OrderAttribution | null {
+  if ('_attribution' in order) return order._attribution as OrderAttribution | null;
+  const landingSite: string = order.landing_site || '';
+  const referringSite: string = order.referring_site || '';
+  let utmSource = '', utmMedium = '', utmCampaign = '';
+  if (landingSite) {
+    try {
+      const u = new URL(landingSite.startsWith('http') ? landingSite : `https://x.com${landingSite}`);
+      utmSource = u.searchParams.get('utm_source') || '';
+      utmMedium = u.searchParams.get('utm_medium') || '';
+      utmCampaign = u.searchParams.get('utm_campaign') || '';
+    } catch {}
+  }
+  if (!utmSource && !utmMedium && !referringSite) return null;
+  return classifyAttrib(utmSource, utmMedium, utmCampaign, referringSite);
+}
+
 const getArgentinaDateStr = (date: Date): string => {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -535,6 +594,13 @@ export const ecommerce = {
           price: String(it.price || 0),
           _wc_image: it.image?.src || null,
         })),
+        _attribution: (() => {
+          const src: string = o.utm_source || '';
+          const med: string = o.utm_medium || '';
+          const campaign: string = o.utm_campaign || '';
+          if (!src && !med) return null;
+          return classifyAttrib(src, med, campaign, '');
+        })(),
       };
     });
 
@@ -627,6 +693,16 @@ export const ecommerce = {
         price: String(item.price || 0),
         _wc_image: item.image?.src || null,
       })),
+      _attribution: (() => {
+        const gm = (key: string): string => ((o.meta_data || []) as any[]).find((m: any) => m.key === key)?.value || '';
+        const src = gm('_wc_order_attribution_utm_source') || gm('_wc_order_attribution_referring_domain');
+        const med = gm('_wc_order_attribution_utm_medium');
+        const campaign = gm('_wc_order_attribution_utm_campaign');
+        const srcType = gm('_wc_order_attribution_source_type');
+        if (!src && !med && !srcType) return null;
+        if (srcType === 'typein') return { source: 'direct', label: 'Sin publicidad' } as OrderAttribution;
+        return classifyAttrib(src, med, campaign, '');
+      })(),
     }));
 
     ecSetCache(cacheKey, normalized);
