@@ -815,7 +815,7 @@ export default function CaptacionPage() {
         </div>
       ) : null}
 
-      <div className={`space-y-6 transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`mt-6 space-y-6 transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
       {/* Campañas Activas Section */}
       {activeCampaigns.length > 0 && (
         <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] p-6 sm:p-8 shadow-sm">
