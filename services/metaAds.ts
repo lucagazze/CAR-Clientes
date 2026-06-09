@@ -388,7 +388,7 @@ export const metaAds = {
   // ── ADS with creative thumbnails ──────────────────────────
   getAds: (adsetId: string) =>
     apiGet(`${adsetId}/ads`, {
-      fields: 'id,name,status,preview_shareable_link,creative{id,name,thumbnail_url,image_url,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_permalink_url}',
+      fields: 'id,name,status,preview_shareable_link,creative{id,name,thumbnail_url,image_url,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_story_id,instagram_permalink_url}',
       limit: '50',
     }),
 
@@ -775,6 +775,11 @@ export const metaAds = {
   },
 
   // Helper to fetch comments of an Ad's creative
+  getInstagramMediaFromFBPost: (fbPostId: string, pageId?: string) =>
+    pageId
+      ? apiGetPage(pageId, fbPostId, { fields: 'instagram_story{id}' })
+      : apiGetPageActive(fbPostId, { fields: 'instagram_story{id}' }),
+
   getAdCreativeComments: (storyId: string, platform: 'instagram' | 'facebook' = 'instagram', pageId?: string) => {
     const params = {
       fields: platform === 'instagram'

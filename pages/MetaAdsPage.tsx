@@ -315,7 +315,7 @@ export default function MetaAdsPage() {
 
   // ── Open ad slide-over ───────────────────────────────────────────────────────
   const openAd = useCallback(async (ad: any) => {
-    const igStoryId: string | null = ad.creative?.effective_instagram_story_id || null;
+    const igStoryId: string | null = ad.creative?.effective_instagram_story_id || ad.creative?.instagram_story_id || null;
     const fbStoryId: string | null = ad.creative?.effective_object_story_id || null;
 
     const igPermalink: string | null = ad.creative?.instagram_permalink_url || null;
@@ -387,7 +387,23 @@ export default function MetaAdsPage() {
     };
 
     const fetches: Promise<void>[] = [];
-    if (igStoryId) fetches.push(fetchForPlatform(igStoryId, 'instagram'));
+    if (igStoryId) {
+      fetches.push(fetchForPlatform(igStoryId, 'instagram'));
+    } else if (fbStoryId) {
+      // Try to find linked Instagram post via FB Graph API
+      const igFallback = async () => {
+        try {
+          const data = await metaAds.getInstagramMediaFromFBPost(fbStoryId, fbPageId || undefined);
+          const linkedIgId: string | undefined = data?.instagram_story?.id;
+          if (linkedIgId) {
+            setSelectedAd(prev => prev && prev.adId === ad.id ? { ...prev, igStoryId: linkedIgId } : prev);
+            setLoadingByPlatform(prev => ({ ...prev, instagram: true }));
+            await fetchForPlatform(linkedIgId, 'instagram');
+          }
+        } catch { /* silent — IG post not linked */ }
+      };
+      fetches.push(igFallback());
+    }
     if (fbStoryId) fetches.push(fetchForPlatform(fbStoryId, 'facebook'));
     if (fetches.length === 0) setLoadingByPlatform({ instagram: false, facebook: false });
 
@@ -582,7 +598,7 @@ export default function MetaAdsPage() {
 
         {/* Skeleton */}
         {accountId && loading && activeAds.length === 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 flex flex-col">
                 <div className="h-52 bg-zinc-100 dark:bg-zinc-800" />
@@ -628,7 +644,7 @@ export default function MetaAdsPage() {
                     <h4 className="text-[14px] font-black text-zinc-800 dark:text-zinc-100 tracking-tight truncate">{group.campaignName}</h4>
                     <span className="text-[11px] font-bold text-zinc-400 flex-shrink-0">{group.ads.length} creativos</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                     {group.ads.map(ad => {
                       const insights = adInsightsMap[ad.id];
                       const adSpend = parseFloat(insights?.spend || 0);
@@ -699,15 +715,6 @@ export default function MetaAdsPage() {
                                   </div>
                                 ))}
                               </div>
-                              {(adReactions > 0 || adComments > 0 || adShares > 0 || adClicks > 0 || adVideoViews > 0) && (
-                                <div className="flex flex-wrap gap-1.5">
-                                  {adReactions > 0 && <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 text-[10px] font-black"><Heart className="w-2.5 h-2.5 fill-pink-500" />{fmtN(adReactions)}</span>}
-                                  {adComments > 0 && <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] font-black"><MessageCircle className="w-2.5 h-2.5" />{fmtN(adComments)}</span>}
-                                  {adShares > 0 && <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black"><Share2 className="w-2.5 h-2.5" />{fmtN(adShares)}</span>}
-                                  {adClicks > 0 && <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 text-[10px] font-black"><MousePointerClick className="w-2.5 h-2.5" />{fmtN(adClicks)}</span>}
-                                  {adVideoViews > 0 && <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-black"><Eye className="w-2.5 h-2.5" />{fmtN(adVideoViews)}</span>}
-                                </div>
-                              )}
                             </>)}
                             <div className="flex items-center gap-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800 mt-auto" onClick={e => e.stopPropagation()}>
                               <a href={ad.creative?.effective_object_story_id ? (ad.creative.effective_object_story_id.includes('_') ? (() => { const [pId, ptId] = ad.creative.effective_object_story_id.split('_'); return `https://www.facebook.com/permalink.php?story_fbid=${ptId}&id=${pId}`; })() : `https://facebook.com/${ad.creative.effective_object_story_id}`) : `https://www.facebook.com/ads/library/?id=${ad.creative?.id || ad.id}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1 h-7 rounded-lg text-[10px] font-bold text-[#1877F2] bg-[#1877F2]/8 dark:bg-[#1877F2]/10 hover:bg-[#1877F2]/15">
@@ -815,10 +822,10 @@ export default function MetaAdsPage() {
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-5 h-full">
+                <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2 h-full">
 
-                  {/* Left: creative + info (col-span-2 = 40%) */}
-                  <div className={`${mobileTab === 'comments' ? 'hidden md:flex' : 'flex'} md:col-span-2 flex-col border-r border-zinc-100 dark:border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-50/15 dark:bg-zinc-950/10 h-full`}>
+                  {/* Left: creative + info (50%) */}
+                  <div className={`${mobileTab === 'comments' ? 'hidden md:flex' : 'flex'} flex-col border-r border-zinc-100 dark:border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-50/15 dark:bg-zinc-950/10 h-full`}>
 
                     {/* Creative — mismo patrón que RedesSociales */}
                     {(!mediaData || resolvingIds[selectedAd.adId]) ? (
@@ -923,48 +930,6 @@ export default function MetaAdsPage() {
                             <span className={highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-white'}>{val}</span>
                           </div>
                         ))}
-                        <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2 mt-2">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Engagement total</p>
-                            {loadingLifetime && <Loader2 className="w-3 h-3 animate-spin text-zinc-400" />}
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[12px] font-bold">
-                              <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><MessageCircle className="w-3 h-3 text-blue-500" /> Comentarios</span>
-                              <span className="text-zinc-900 dark:text-white">{loadingComments && loadingByPlatform.instagram && loadingByPlatform.facebook ? '…' : fmtN(ltTotalComments)}</span>
-                            </div>
-                            {(ltReactions > 0 || loadingLifetime) && (
-                              <div className="flex items-center justify-between text-[12px] font-bold">
-                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Heart className="w-3 h-3 text-pink-500 fill-pink-500" /> Me gustas</span>
-                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltReactions)}</span>
-                              </div>
-                            )}
-                            {(ltShares > 0 || loadingLifetime) && (
-                              <div className="flex items-center justify-between text-[12px] font-bold">
-                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Share2 className="w-3 h-3 text-emerald-500" /> Compartidos</span>
-                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltShares)}</span>
-                              </div>
-                            )}
-                            {(ltClicks > 0 || loadingLifetime) && (
-                              <div className="flex items-center justify-between text-[12px] font-bold">
-                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><MousePointerClick className="w-3 h-3 text-violet-500" /> Clics</span>
-                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltClicks)}</span>
-                              </div>
-                            )}
-                            {(ltVideoViews > 0 || loadingLifetime) && (
-                              <div className="flex items-center justify-between text-[12px] font-bold">
-                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Eye className="w-3 h-3 text-amber-500" /> Vistas (30s)</span>
-                                <span className="text-zinc-900 dark:text-white">{loadingLifetime ? '…' : fmtN(ltVideoViews)}</span>
-                              </div>
-                            )}
-                            {ltVideoCompletions > 0 && (
-                              <div className="flex items-center justify-between text-[12px] font-bold">
-                                <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"><Play className="w-3 h-3 text-amber-500" /> Vistas completas</span>
-                                <span className="text-zinc-900 dark:text-white">{fmtN(ltVideoCompletions)}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
                       </div>
                     )}
 
@@ -996,8 +961,8 @@ export default function MetaAdsPage() {
                     </div>
                   </div>
 
-                  {/* Right: Comments (col-span-3 = 60%) */}
-                  <div className={`${mobileTab === 'post' ? 'hidden md:flex' : 'flex'} md:col-span-3 overflow-y-auto flex-col`}>
+                  {/* Right: Comments (50%) */}
+                  <div className={`${mobileTab === 'post' ? 'hidden md:flex' : 'flex'} overflow-y-auto flex-col`}>
 
                     {/* Platform switcher (right panel header) — only when both platforms */}
                     {hasBothPlatforms && (
