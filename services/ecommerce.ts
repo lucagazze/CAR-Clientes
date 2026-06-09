@@ -493,15 +493,21 @@ export const ecommerce = {
   },
 
   getWooUnfulfilledCount: async (baseUrl: string, ck: string, cs: string): Promise<number> => {
-    try {
-      const res = await fetch(`/api/shopify/wc/orders?status=processing&per_page=100`, {
-        headers: { 'x-wc-base-url': baseUrl.replace(/\/$/, ''), 'x-wc-consumer-key': ck, 'x-wc-consumer-secret': cs },
-      });
+    const hdrs = { 'x-wc-base-url': baseUrl.replace(/\/$/, ''), 'x-wc-consumer-key': ck, 'x-wc-consumer-secret': cs };
+    const getCount = async (status: string): Promise<number> => {
+      const res = await fetch(`/api/shopify/wc/orders?status=${status}&per_page=100`, { headers: hdrs });
       if (!res.ok) return 0;
-      const data = await res.json();
-      if (!Array.isArray(data)) return 0;
       const headerTotal = parseInt(res.headers.get('X-WP-Total') || '0', 10);
-      return headerTotal > 0 ? headerTotal : data.length;
+      if (headerTotal > 0) return headerTotal;
+      const data = await res.json().catch(() => []);
+      return Array.isArray(data) ? data.length : 0;
+    };
+    try {
+      const [processing, onHold] = await Promise.all([
+        getCount('processing'),
+        getCount('on-hold'),
+      ]);
+      return processing + onHold;
     } catch { return 0; }
   },
 
