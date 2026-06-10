@@ -812,11 +812,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let rawOrders: any[] = [];
       let rawRecent: any[] = [];
+      let rawHistory: any[] = []; // all-time sample for nth-purchase counting (TN/WC only)
 
       if (active_platform === 'shopify') {
         const domain = (active_shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
         if (!domain || !active_shopify_access_token) return res.status(400).json({ error: 'Shopify no configurado' });
-        
+
         let nextUrl: string | null = `https://${domain}/admin/api/2024-01/orders.json?status=any&created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=250`;
         while (nextUrl) {
           const sRes: Response = await fetch(nextUrl, { headers: { 'X-Shopify-Access-Token': active_shopify_access_token } });
@@ -833,46 +834,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const rData = await rRes.json();
           rawRecent = rData.orders || [];
         }
-      } 
+      }
       else if (active_platform === 'tiendanube') {
         if (!active_tiendanube_store_id || !active_tiendanube_access_token) return res.status(400).json({ error: 'Tiendanube no configurado' });
-        
-        const tRes = await fetch(`https://api.tiendanube.com/v1/${active_tiendanube_store_id}/orders?created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=200`, {
-          headers: { Authentication: `bearer ${active_tiendanube_access_token}`, 'User-Agent': 'AlgorBot/1.0' }
-        });
-        if (tRes.ok) {
-          const tData = await tRes.json();
-          rawOrders = Array.isArray(tData) ? tData : [];
-        }
+        const tnHeaders = { Authentication: `bearer ${active_tiendanube_access_token}`, 'User-Agent': 'AlgorBot/1.0' };
+        const tnBase = `https://api.tiendanube.com/v1/${active_tiendanube_store_id}/orders`;
 
-        const rRes = await fetch(`https://api.tiendanube.com/v1/${active_tiendanube_store_id}/orders?limit=40`, {
-          headers: { Authentication: `bearer ${active_tiendanube_access_token}`, 'User-Agent': 'AlgorBot/1.0' }
-        });
-        if (rRes.ok) {
-          const rData = await rRes.json();
-          rawRecent = Array.isArray(rData) ? rData : [];
-        }
-      } 
+        const [tRangeRes, tRecentRes, tHistRes] = await Promise.all([
+          fetch(`${tnBase}?created_at_min=${sinceIso}&created_at_max=${untilIso}&per_page=200`, { headers: tnHeaders }),
+          fetch(`${tnBase}?per_page=40`, { headers: tnHeaders }),
+          fetch(`${tnBase}?per_page=200&page=1`, { headers: tnHeaders }),
+        ]);
+        const [tRangeData, tRecentData, tHistData] = await Promise.all([
+          tRangeRes.ok ? tRangeRes.json() : [],
+          tRecentRes.ok ? tRecentRes.json() : [],
+          tHistRes.ok ? tHistRes.json() : [],
+        ]);
+        rawOrders = Array.isArray(tRangeData) ? tRangeData : [];
+        rawRecent = Array.isArray(tRecentData) ? tRecentData : [];
+        rawHistory = Array.isArray(tHistData) ? tHistData : [];
+      }
       else if (active_platform === 'wordpress') {
         const base = (active_wordpress_url || '').replace(/\/$/, '');
         if (!base || !active_woo_consumer_key || !active_woo_consumer_secret) return res.status(400).json({ error: 'WooCommerce no configurado' });
         const creds = Buffer.from(`${active_woo_consumer_key}:${active_woo_consumer_secret}`).toString('base64');
-        
-        const wRes = await fetch(`${base}/wp-json/wc/v3/orders?after=${sinceIso}&before=${untilIso}&per_page=100`, {
-          headers: { Authorization: `Basic ${creds}` }
-        });
-        if (wRes.ok) {
-          const wData = await wRes.json();
-          rawOrders = Array.isArray(wData) ? wData : [];
-        }
+        const wcHeaders = { Authorization: `Basic ${creds}` };
 
-        const rRes = await fetch(`${base}/wp-json/wc/v3/orders?per_page=40`, {
-          headers: { Authorization: `Basic ${creds}` }
-        });
-        if (rRes.ok) {
-          const rData = await rRes.json();
-          rawRecent = Array.isArray(rData) ? rData : [];
-        }
+        const [wRangeRes, wRecentRes, wHistRes] = await Promise.all([
+          fetch(`${base}/wp-json/wc/v3/orders?after=${sinceIso}&before=${untilIso}&per_page=100`, { headers: wcHeaders }),
+          fetch(`${base}/wp-json/wc/v3/orders?per_page=40`, { headers: wcHeaders }),
+          fetch(`${base}/wp-json/wc/v3/orders?per_page=100`, { headers: wcHeaders }),
+        ]);
+        const [wRangeData, wRecentData, wHistData] = await Promise.all([
+          wRangeRes.ok ? wRangeRes.json() : [],
+          wRecentRes.ok ? wRecentRes.json() : [],
+          wHistRes.ok ? wHistRes.json() : [],
+        ]);
+        rawOrders = Array.isArray(wRangeData) ? wRangeData : [];
+        rawRecent = Array.isArray(wRecentData) ? wRecentData : [];
+        rawHistory = Array.isArray(wHistData) ? wHistData : [];
       }
 
       const orders = rawOrders.map(o => normalizeOrder(o, active_platform));
@@ -891,13 +891,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      // Build lifetime counts for TN/WC from the combined deduplicated set
+      // (date-range + recent + 200-order history page). For Shopify, we use the
+      // API's customer.orders_count which is already the accurate lifetime total.
+      const nonShopifyLifetime: Record<string, number> = {};
+      if (active_platform !== 'shopify') {
+        const historyNorm = rawHistory.map(o => normalizeOrder(o, active_platform));
+        const seenIds2 = new Set<any>();
+        for (const o of [...orders, ...recentOrders, ...historyNorm]) {
+          if (seenIds2.has(o.id)) continue;
+          seenIds2.add(o.id);
+          const email = (o.customer?.email || '').toLowerCase().trim();
+          if (email) nonShopifyLifetime[email] = (nonShopifyLifetime[email] || 0) + 1;
+        }
+      }
+
       // Assign sequential "Nth purchase" numbers to each order per customer.
       //
-      // Shopify: walk newest→oldest, anchoring each customer's most-recent order at
-      // max(API lifetime orders_count, appearances in loaded batch). This handles
-      // cases where the API returns 0/null by falling back to the batch count.
-      //
-      // WC/TN: no lifetime count available — walk oldest→newest and assign 1,2,3…
+      // Shopify: walk newest→oldest anchoring at max(API lifetime count, batch count).
+      // TN/WC: walk oldest→newest in the arr, starting at (lifetime - rangeCount + 1).
       const assignSequential = (arr: any[], platform: string) => {
         if (platform === 'shopify') {
           const sorted = [...arr].sort((a: any, b: any) =>
@@ -915,15 +927,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             seq[email] = Math.max(1, seq[email] - 1);
           }
         } else {
+          const rangeCount: Record<string, number> = {};
+          for (const o of arr) {
+            const email = (o.customer?.email || '').toLowerCase().trim();
+            if (email) rangeCount[email] = (rangeCount[email] || 0) + 1;
+          }
           const sorted = [...arr].sort((a: any, b: any) =>
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           );
-          const seq: Record<string, number> = {};
+          const startSeq: Record<string, number> = {};
           for (const o of sorted) {
             const email = (o.customer?.email || '').toLowerCase().trim();
             if (!email || !o.customer) continue;
-            seq[email] = (seq[email] || 0) + 1;
-            o.customer = { ...o.customer, orders_count: seq[email] };
+            if (!(email in startSeq)) {
+              const lifetime = Math.max(nonShopifyLifetime[email] || 0, rangeCount[email]);
+              startSeq[email] = Math.max(1, lifetime - rangeCount[email] + 1);
+            }
+            o.customer = { ...o.customer, orders_count: startSeq[email]++ };
           }
         }
       };

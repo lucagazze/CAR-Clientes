@@ -89,6 +89,97 @@ const getArgentinaDateStr = (date: Date): string => {
   }).format(date);
 };
 
+// Load lifetime order counts per email for TiendaNube. Cached in localStorage for 1 hour.
+// Fetches up to 10 pages (2000 orders) to cover typical store histories.
+async function loadTNLifetimeCounts(storeId: string, token: string): Promise<Record<string, number>> {
+  const lsKey = `tn_lifetime:${storeId}`;
+  try {
+    const raw = localStorage.getItem(lsKey);
+    if (raw) {
+      const { data, ts } = JSON.parse(raw) as { data: Record<string, number>; ts: number };
+      if (Date.now() - ts < 60 * 60 * 1000) return data;
+    }
+  } catch {}
+  const counts: Record<string, number> = {};
+  for (let page = 1; page <= 10; page++) {
+    try {
+      const params = new URLSearchParams({ per_page: '200', page: String(page) });
+      const res = await fetch(`/api/shopify/tn/orders?${params.toString()}`, {
+        headers: { 'x-tn-store-id': storeId, 'x-tn-token': token }
+      });
+      if (!res.ok) break;
+      const data: any[] = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      for (const o of data) {
+        const email = (o.customer?.email || '').toLowerCase().trim();
+        if (email) counts[email] = (counts[email] || 0) + 1;
+      }
+      if (data.length < 200) break;
+    } catch { break; }
+  }
+  try { localStorage.setItem(lsKey, JSON.stringify({ data: counts, ts: Date.now() })); } catch {}
+  return counts;
+}
+
+// Load lifetime order counts per email for WooCommerce. Cached in localStorage for 1 hour.
+async function loadWCLifetimeCounts(baseUrl: string, ck: string, cs: string): Promise<Record<string, number>> {
+  const cleanBase = baseUrl.replace(/\/$/, '');
+  const lsKey = `wc_lifetime:${cleanBase}`;
+  try {
+    const raw = localStorage.getItem(lsKey);
+    if (raw) {
+      const { data, ts } = JSON.parse(raw) as { data: Record<string, number>; ts: number };
+      if (Date.now() - ts < 60 * 60 * 1000) return data;
+    }
+  } catch {}
+  const counts: Record<string, number> = {};
+  for (let page = 1; page <= 10; page++) {
+    try {
+      const params = new URLSearchParams({ per_page: '100', page: String(page) });
+      const res = await fetch(`/api/shopify/wc/orders?${params.toString()}`, {
+        headers: { 'x-wc-base-url': cleanBase, 'x-wc-consumer-key': ck, 'x-wc-consumer-secret': cs }
+      });
+      if (!res.ok) break;
+      const data: any[] = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      for (const o of data) {
+        const email = (o.billing?.email || '').toLowerCase().trim();
+        if (email) counts[email] = (counts[email] || 0) + 1;
+      }
+      if (data.length < 100) break;
+    } catch { break; }
+  }
+  try { localStorage.setItem(lsKey, JSON.stringify({ data: counts, ts: Date.now() })); } catch {}
+  return counts;
+}
+
+// Assign sequential nth-purchase numbers to orders using lifetime counts as anchor.
+// Walk oldest→newest in the range; the oldest order starts at (lifetimeCount - rangeCount + 1).
+function applySequentialWithLifetime(
+  orders: any[],
+  lifetimeCounts: Record<string, number>,
+  getEmail: (o: any) => string,
+  getTime: (o: any) => number
+) {
+  const rangeCount: Record<string, number> = {};
+  for (const o of orders) {
+    const email = getEmail(o);
+    if (email) rangeCount[email] = (rangeCount[email] || 0) + 1;
+  }
+  const startSeq: Record<string, number> = {};
+  const orderSeq = new Map<any, number>();
+  for (const o of [...orders].sort((a, b) => getTime(a) - getTime(b))) {
+    const email = getEmail(o);
+    if (!email) continue;
+    if (!(email in startSeq)) {
+      const lifetime = Math.max(lifetimeCounts[email] || 0, rangeCount[email]);
+      startSeq[email] = Math.max(1, lifetime - rangeCount[email] + 1);
+    }
+    orderSeq.set(o.id ?? o, startSeq[email]++);
+  }
+  return orderSeq;
+}
+
 export const ecommerce = {
   getShopifyOrders: async (domain: string, token: string, since: string, until: string) => {
     const cacheKey = `orders_v2:${domain}:${since}:${until}`;
@@ -550,7 +641,7 @@ export const ecommerce = {
   },
 
   getTiendaNubeOrders: async (storeId: string, token: string, since: string, until: string): Promise<any[]> => {
-    const cacheKey = `tn_orders:${storeId}:${since}:${until}`;
+    const cacheKey = `tn_orders_v2:${storeId}:${since}:${until}`;
     const cached = ecGetCached(cacheKey);
     if (cached) return cached;
 
@@ -562,9 +653,11 @@ export const ecommerce = {
       return null;
     };
 
+    // Start lifetime counts fetch in parallel with date-range pagination
+    const lifetimeCountsPromise = loadTNLifetimeCounts(storeId, token);
+
     let allOrders: any[] = [];
     let page = 1;
-
     while (page <= 15) {
       const params = new URLSearchParams({ created_at_min: sinceIso, created_at_max: untilIso, per_page: '200', page: String(page) });
       const res = await fetch(`/api/shopify/tn/orders?${params.toString()}`, {
@@ -578,19 +671,13 @@ export const ecommerce = {
       page++;
     }
 
-    // Sequential "Nth purchase" assignment: sort by date ASC and assign
-    // incrementing counts per customer email (1st order = 1, 2nd = 2, etc.)
-    const tnEmailSeq: Record<string, number> = {};
-    const tnOrderSeq = new Map<any, number>();
-    for (const o of [...allOrders].sort((a: any, b: any) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )) {
-      const email = (o.customer?.email || '').toLowerCase().trim();
-      if (email) {
-        tnEmailSeq[email] = (tnEmailSeq[email] || 0) + 1;
-        tnOrderSeq.set(o.id, tnEmailSeq[email]);
-      }
-    }
+    const lifetimeCounts = await lifetimeCountsPromise;
+    const tnOrderSeq = applySequentialWithLifetime(
+      allOrders,
+      lifetimeCounts,
+      (o: any) => (o.customer?.email || '').toLowerCase().trim(),
+      (o: any) => new Date(o.created_at).getTime()
+    );
 
     const normalized = allOrders.map((o: any) => {
       const isCancelled = o.status === 'cancelled';
@@ -647,7 +734,7 @@ export const ecommerce = {
   },
 
   getWooCommerceOrders: async (baseUrl: string, ck: string, cs: string, since: string, until: string): Promise<any[]> => {
-    const cacheKey = `wc_orders:${baseUrl}:${since}:${until}`;
+    const cacheKey = `wc_orders_v2:${baseUrl}:${since}:${until}`;
     const cached = ecGetCached(cacheKey);
     if (cached) return cached;
 
@@ -666,10 +753,12 @@ export const ecommerce = {
       return null; // unfulfilled
     };
 
+    // Start lifetime counts fetch in parallel with date-range pagination
+    const wcLifetimePromise = loadWCLifetimeCounts(baseUrl, ck, cs);
+
     let allOrders: any[] = [];
     let page = 1;
     let totalPages = 1;
-
     while (page <= totalPages) {
       const params = new URLSearchParams({ after, before, per_page: '100', page: String(page), orderby: 'date', order: 'desc' });
       const res = await fetch(`/api/shopify/wc/orders?${params.toString()}`, {
@@ -687,21 +776,13 @@ export const ecommerce = {
       page++;
     }
 
-    // Sequential "Nth purchase" assignment: sort by date ASC and assign
-    // incrementing counts per customer email (1st order = 1, 2nd = 2, etc.)
-    const wcEmailSeq: Record<string, number> = {};
-    const wcOrderSeq = new Map<any, number>();
-    for (const o of [...allOrders].sort((a: any, b: any) => {
-      const tA = a.date_created_gmt ? new Date(`${a.date_created_gmt}Z`).getTime() : new Date(a.date_created).getTime();
-      const tB = b.date_created_gmt ? new Date(`${b.date_created_gmt}Z`).getTime() : new Date(b.date_created).getTime();
-      return tA - tB;
-    })) {
-      const email = (o.billing?.email || '').toLowerCase().trim();
-      if (email) {
-        wcEmailSeq[email] = (wcEmailSeq[email] || 0) + 1;
-        wcOrderSeq.set(o.id, wcEmailSeq[email]);
-      }
-    }
+    const wcLifetimeCounts = await wcLifetimePromise;
+    const wcOrderSeq = applySequentialWithLifetime(
+      allOrders,
+      wcLifetimeCounts,
+      (o: any) => (o.billing?.email || '').toLowerCase().trim(),
+      (o: any) => o.date_created_gmt ? new Date(`${o.date_created_gmt}Z`).getTime() : new Date(o.date_created).getTime()
+    );
 
     // Normalize to Shopify-like shape
     const normalized = allOrders.map((o: any) => ({
