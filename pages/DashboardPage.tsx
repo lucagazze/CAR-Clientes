@@ -50,7 +50,8 @@ import {
   Inbox,
   Send,
   Clock,
-  Loader2
+  Loader2,
+  User
 } from "lucide-react";
 import {
   AreaChart,
@@ -2823,6 +2824,15 @@ export default function DashboardPage() {
                           : '—'}
                       </strong></span>
                     </div>
+                  )}
+                  {(selectedOrder.email || selectedOrder.customer?.email) && (
+                    <a
+                      href={`#/cliente/${selectedOrder.email || selectedOrder.customer.email}`}
+                      className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 bg-pink-500/10 hover:bg-pink-500/20 text-pink-600 dark:text-pink-400 rounded-lg text-[11px] font-bold border border-pink-500/20 transition-all w-full justify-center"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      Ver Perfil y Pedidos
+                    </a>
                   )}
                 </div>
 

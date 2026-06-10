@@ -343,6 +343,15 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
                         {fmtCurr(parseFloat(order.customer.total_spent || 0))} gastado en total
                       </p>
                     )}
+                    {order.customer.email && (
+                      <a
+                        href={`#/cliente/${order.customer.email}`}
+                        className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-pink-500/10 hover:bg-pink-500/20 text-pink-600 dark:text-pink-400 rounded-lg text-[11px] font-bold border border-pink-500/20 transition-all"
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        Ver Perfil y Pedidos
+                      </a>
+                    )}
                   </div>
                 ) : (
                   <p className="text-[12px] text-zinc-400">Sin datos de cliente</p>
