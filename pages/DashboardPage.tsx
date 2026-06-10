@@ -2681,7 +2681,17 @@ export default function DashboardPage() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">
-                            {order.customer_name}
+                            {order.email || order.customer?.email ? (
+                              <a
+                                href={`#/cliente/${order.email || order.customer.email}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:underline hover:text-pink-500 transition-colors"
+                              >
+                                {order.customer_name}
+                              </a>
+                            ) : (
+                              order.customer_name
+                            )}
                           </span>
                           <div className="flex items-center gap-1 shrink-0 flex-wrap">
                             {(order.customer?.orders_count ?? 0) === 1 && (
@@ -2781,9 +2791,18 @@ export default function DashboardPage() {
                     Datos del Cliente
                   </span>
                   <div>
-                    <p className="text-[14px] font-bold text-zinc-900 dark:text-white">
-                      {selectedOrder.customer_name}
-                    </p>
+                    {selectedOrder.email || selectedOrder.customer?.email ? (
+                      <a
+                        href={`#/cliente/${selectedOrder.email || selectedOrder.customer.email}`}
+                        className="text-[14px] font-bold text-zinc-900 dark:text-white hover:underline hover:text-pink-500 transition-colors"
+                      >
+                        {selectedOrder.customer_name}
+                      </a>
+                    ) : (
+                      <p className="text-[14px] font-bold text-zinc-900 dark:text-white">
+                        {selectedOrder.customer_name}
+                      </p>
+                    )}
                     {selectedOrder.email && (
                       <p className="text-[12px] text-zinc-500 dark:text-zinc-400 font-medium truncate mt-0.5">
                         {selectedOrder.email}

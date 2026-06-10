@@ -121,6 +121,7 @@ const CostosPage         = lazyWithRetry(() => import('../../pages/CostosPage'))
 const InventarioPage     = lazyWithRetry(() => import('../../pages/InventarioPage'));
 const PedidosPage        = lazyWithRetry(() => import('../../pages/PedidosPage'));
 const PerfilPage         = lazyWithRetry(() => import('../../pages/PerfilPage'));
+const ClientePage        = lazyWithRetry(() => import('../../pages/ClientePage'));
 
 
 import { useViewAs } from '../../contexts/ViewAsContext';
@@ -429,6 +430,7 @@ export const MainLayout = () => {
                 element={profile?.is_admin && !isViewingAs ? <CostosPage /> : <Navigate to="/" replace />} 
               />
               <Route path="/perfil" element={<PerfilPage />} />
+              <Route path="/cliente/:email" element={<ClientePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
