@@ -1752,7 +1752,7 @@ export default function MensajeriaPage() {
           {/* Pendientes Filter (Desktop only) */}
           <button
             onClick={() => setShowPendingOnly(prev => !prev)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-black transition-all active:scale-[0.98] h-[32px] shrink-0 ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[10px] font-black transition-all active:scale-[0.98] h-[30px] shrink-0 ${
               showPendingOnly
                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 shadow-sm'
                 : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-650 dark:text-zinc-300 hover:border-zinc-350 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800'
@@ -1781,7 +1781,7 @@ export default function MensajeriaPage() {
               <button
                 key={ch.key}
                 onClick={() => setChannelFilter(ch.key as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all duration-200 whitespace-nowrap border ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black transition-all duration-200 whitespace-nowrap border ${
                   isActive
                     ? `${ch.activeClass} shadow-sm`
                     : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-650 dark:text-zinc-300 hover:border-zinc-350 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'

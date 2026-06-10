@@ -710,7 +710,7 @@ export default function PedidosPage() {
               <button
                 key={p.label}
                 onClick={() => setPresetRange(i)}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold ${
+                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold ${
                   preset === i
                     ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm'
                     : 'bg-zinc-100 dark:bg-zinc-800/70 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'

@@ -2097,7 +2097,7 @@ export default function RedesSocialesPage() {
                 <button
                   key={f}
                   onClick={() => setPendingNetworkFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all ${
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
                     pendingNetworkFilter === f
                       ? f === 'instagram' ? 'bg-pink-500 text-white' : f === 'facebook' ? 'bg-blue-600 text-white' : 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
                       : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'

@@ -770,7 +770,7 @@ export default function MensajesDMPage() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setShowPendingOnly(v => !v)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-black border shadow-sm transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black border shadow-sm transition-all ${
               showPendingOnly
                 ? 'bg-amber-500 text-white border-amber-500 shadow-amber-400/30'
                 : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 dark:hover:text-amber-400'

@@ -966,7 +966,7 @@ export default function ComentariosPage() {
               <button
                 key={p}
                 onClick={() => setPlatformFilter(p)}
-                className={`px-3.5 py-1.5 rounded-full text-[11px] font-black transition-all border flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
+                className={`px-3 py-1 rounded-full text-[10px] font-black transition-all border flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
                   isActive
                     ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-sm'
                     : 'bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -986,7 +986,7 @@ export default function ComentariosPage() {
         {/* Sort toggle */}
         <button
           onClick={() => setSortOrder(o => o === 'newest' ? 'oldest' : 'newest')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all"
         >
           {sortOrder === 'newest' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />}
           {sortOrder === 'newest' ? 'Más reciente' : 'Más antiguo'}
