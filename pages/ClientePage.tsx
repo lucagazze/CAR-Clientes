@@ -108,9 +108,9 @@ function OrderItemRow({ order }: { order: any }) {
         <td className="px-4 py-3.5 text-right font-black text-zinc-900 dark:text-white">
           {fmtCurr(parseFloat(order.total_price || 0))}
         </td>
-        <td className="px-4 py-3.5 text-right">
-          <div className="text-zinc-400">
-            {open ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+        <td className="px-4 py-3.5">
+          <div className="w-6 h-6 rounded-full flex items-center justify-center ml-auto bg-zinc-100 dark:bg-zinc-850 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white transition-colors">
+            {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </div>
         </td>
       </tr>
