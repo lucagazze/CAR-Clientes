@@ -345,7 +345,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color, em
               strokeDasharray="3 3"
               vertical={false}
               stroke="currentColor"
-              className="text-zinc-100 dark:text-zinc-800"
+              className="text-zinc-100/40 dark:text-zinc-800/30"
             />
             <XAxis
               dataKey="date"
@@ -375,22 +375,22 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color, em
                   const curr = payload.find((p: any) => p.dataKey === "val");
                   const prev = payload.find((p: any) => p.dataKey === "prevVal");
                   return (
-                    <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-3 rounded-xl shadow-xl min-w-[140px]">
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-2">
+                    <div className="glass-premium dark:bg-zinc-950/80 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-black/[0.06] dark:border-white/[0.06] min-w-[150px] animate-in fade-in duration-200">
+                      <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
                         {curr?.payload?.date?.split("-").reverse().join("/")}
                       </p>
                       {curr && (
-                        <div className="flex items-center justify-between gap-4 mb-1">
+                        <div className="flex items-center justify-between gap-4 mb-1.5">
                           <div className="flex items-center gap-2">
                             <div
                               className="w-2 h-2 rounded-full"
                               style={{ backgroundColor: chartColor }}
                             />
-                            <span className="text-[11px] font-medium text-zinc-500">
+                            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
                               Actual
                             </span>
                           </div>
-                          <span className="text-[12px] font-bold text-zinc-900 dark:text-zinc-100">
+                          <span className="text-[12px] font-black text-zinc-900 dark:text-white">
                             {fmtVal(curr.value)}
                           </span>
                         </div>
@@ -399,7 +399,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color, em
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
-                            <span className="text-[11px] font-medium text-zinc-500">
+                            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
                               Anterior
                             </span>
                           </div>
@@ -451,6 +451,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color, em
               fillOpacity={1}
               fill={`url(#${gradientId})`}
               opacity={hoveredLine === "prev" ? 0.2 : 1}
+              activeDot={{ r: 5, strokeWidth: 0 }}
             />
           </AreaChart>
         </ResponsiveContainer>

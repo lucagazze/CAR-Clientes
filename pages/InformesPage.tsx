@@ -57,7 +57,7 @@ const InteractionsChartComponent = ({ data, activeTab, darkMode }: InteractionsC
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-zinc-955/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 backdrop-blur-md p-3.5 rounded-2xl shadow-xl text-zinc-900 dark:text-white text-[12px] font-semibold space-y-1.5 animate-in fade-in duration-200">
+        <div className="glass-premium dark:bg-zinc-950/80 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-black/[0.06] dark:border-white/[0.06] text-zinc-900 dark:text-white text-[12px] font-semibold space-y-1.5 animate-in fade-in duration-200">
           <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
             {label ? label.split('-').reverse().join('/') : ''}
           </p>
@@ -154,9 +154,9 @@ const PostTypesChartComponent = ({ data }: PostTypesChartProps) => {
             <Tooltip
               content={({ active, payload }: any) =>
                 active && payload?.[0] ? (
-                  <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-2 rounded-xl shadow-lg text-[11px] font-bold">
-                    <span style={{ color: payload[0].payload.color }}>{payload[0].name}: </span>
-                    <span className="text-zinc-800 dark:text-white">{payload[0].value} posts</span>
+                  <div className="glass-premium dark:bg-zinc-950/80 backdrop-blur-md px-3.5 py-2.5 rounded-xl shadow-lg border border-black/[0.06] dark:border-white/[0.06] text-[11px] font-semibold animate-in fade-in duration-200">
+                    <span style={{ color: payload[0].payload.color }} className="font-bold">{payload[0].name}: </span>
+                    <span className="text-zinc-800 dark:text-white font-black">{payload[0].value} posts</span>
                   </div>
                 ) : null
               }

@@ -520,8 +520,8 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
                     });
                   };
                   return (
-                    <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-3 rounded-xl shadow-xl min-w-[140px]">
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-2">
+                    <div className="glass-premium dark:bg-zinc-950/80 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-black/[0.06] dark:border-white/[0.06] min-w-[150px] animate-in fade-in duration-200">
+                      <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
                         {curr?.payload?.date}
                       </p>
                       {curr && (
@@ -531,11 +531,11 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
                               className="w-2 h-2 rounded-full"
                               style={{ backgroundColor: chartColor }}
                             />
-                            <span className="text-[11px] font-medium text-zinc-500">
+                            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
                               Valor
                             </span>
                           </div>
-                          <span className="text-[12px] font-bold text-zinc-900 dark:text-zinc-100">
+                          <span className="text-[12px] font-black text-zinc-900 dark:text-white">
                             {fmtTooltip(curr.value)}
                           </span>
                         </div>
@@ -675,10 +675,33 @@ const HistoricalRevenueChartComponent = ({ data, color }: any) => {
             width={35}
           />
           <Tooltip
-            contentStyle={{ backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px" }}
-            itemStyle={{ color: "#fff", fontSize: "12px" }}
-            labelStyle={{ color: "#a1a1aa", fontSize: "10px" }}
-            formatter={(v: any) => [`$ ${Number(v).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`, "Ingresos"]}
+            content={({ active, payload }: any) => {
+              if (active && payload && payload.length) {
+                const item = payload[0];
+                return (
+                  <div className="glass-premium dark:bg-zinc-950/80 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-black/[0.06] dark:border-white/[0.06] min-w-[150px] animate-in fade-in duration-200">
+                    <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
+                      {item.payload.date ? new Date(item.payload.date).toLocaleDateString("es-AR") : ""}
+                    </p>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                          Ingresos
+                        </span>
+                      </div>
+                      <span className="text-[12px] font-black text-zinc-900 dark:text-white">
+                        $ {Number(item.value).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            }}
           />
           <Area type="monotone" dataKey="revenue" stroke={color} strokeWidth={2} fillOpacity={1} fill="url(#colorRev90)" />
         </AreaChart>

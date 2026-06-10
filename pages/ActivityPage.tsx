@@ -218,10 +218,32 @@ export default function ActivityPage() {
                 }}
               />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#71717a' }} />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#18181b', border: 'none', borderRadius: '12px' }}
-                itemStyle={{ color: '#fff', fontSize: '12px' }}
-                labelStyle={{ color: '#a1a1aa', fontSize: '10px' }}
+              <Tooltip
+                content={({ active, payload, label }: any) => {
+                  if (active && payload && payload.length) {
+                    const d = new Date(label);
+                    const formattedDate = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+                    return (
+                      <div className="glass-premium dark:bg-zinc-950/80 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-black/[0.06] dark:border-white/[0.06] min-w-[150px] animate-in fade-in duration-200">
+                        <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
+                          {formattedDate}
+                        </p>
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                              Empresas únicas
+                            </span>
+                          </div>
+                          <span className="text-[12px] font-black text-zinc-900 dark:text-white">
+                            {payload[0].value}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
               />
               <Area 
                 type="monotone" 
