@@ -1716,7 +1716,7 @@ export default function DashboardPage() {
                         setPendingSince(r.since);
                         setPendingUntil(r.until);
                       }}
-                      className={`flex-shrink-0 text-center md:text-left px-3 md:px-4 py-1.5 rounded-[10px] text-[11px] md:text-[12px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? "bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none" : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
+                      className={`flex-shrink-0 text-center md:text-left px-2.5 py-1 rounded-[10px] text-[10px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? "bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none" : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
                     >
                       {p.label}
                     </button>
