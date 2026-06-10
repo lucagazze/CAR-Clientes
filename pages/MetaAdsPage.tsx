@@ -829,12 +829,12 @@ export default function MetaAdsPage() {
 
                     {/* Creative — mismo patrón que RedesSociales */}
                     {(!mediaData || resolvingIds[selectedAd.adId]) ? (
-                      <div className="rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 aspect-square w-full flex flex-col items-center justify-center gap-2">
+                      <div className="rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 aspect-[4/5] w-full flex flex-col items-center justify-center gap-2">
                         <Loader2 className="w-5 h-5 text-violet-500 animate-spin" />
                         <span className="text-[10px] text-zinc-400 font-bold">Cargando creativo...</span>
                       </div>
                     ) : mediaData.type === 'video_source' ? (
-                      <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm w-full aspect-square relative flex items-center justify-center">
+                      <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm w-full aspect-[4/5] relative flex items-center justify-center">
                         <video
                           src={mediaData.source || undefined}
                           poster={mediaData.picture || thumbUrl || undefined}
@@ -875,12 +875,12 @@ export default function MetaAdsPage() {
                         </div>
                       );
                     })() : mediaData.type === 'image' || thumbUrl ? (
-                      <div className="rounded-2xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm w-full aspect-square relative flex items-center justify-center">
+                      <div className="rounded-2xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm w-full aspect-[4/5] relative flex items-center justify-center">
                         <SmoothImage
                           src={(mediaData.type === 'image' ? mediaData.url : thumbUrl) || ''}
                           alt={selectedAd.name}
                           containerClassName="w-full h-full"
-                          className="object-cover"
+                          className="object-contain"
                         />
                       </div>
                     ) : mediaData.type === 'ad_preview' && mediaData.embed_html ? (() => {
@@ -893,7 +893,7 @@ export default function MetaAdsPage() {
                       });
                       return <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 w-full" style={{ height: 400 }} dangerouslySetInnerHTML={{ __html: cleanHtml }} />;
                     })() : (
-                      <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 aspect-square w-full flex flex-col items-center justify-center text-zinc-400 gap-2">
+                      <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 aspect-[4/5] w-full flex flex-col items-center justify-center text-zinc-400 gap-2">
                         <ImageIcon className="w-8 h-8" />
                         <span className="text-[11px] font-bold">Sin preview disponible</span>
                       </div>
