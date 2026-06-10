@@ -6,7 +6,8 @@ import { chatwoot } from '../services/chatwoot';
 import {
   Search, User, Mail, Phone, MapPin, 
   Loader2, ArrowLeft, ArrowRight, MessageSquare, 
-  ShoppingBag, CreditCard, ShoppingCart, AlertCircle
+  ShoppingBag, CreditCard, ShoppingCart, AlertCircle,
+  Package, Truck, RefreshCw, ChevronDown, ChevronUp, Tag, AlertTriangle
 } from 'lucide-react';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
@@ -33,6 +34,168 @@ const getNextPageUrl = (linkHeader: string | null) => {
     return null;
   }
 };
+
+const TZ = 'America/Argentina/Buenos_Aires';
+const fmtDateTime = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleString('es-AR', {
+    timeZone: TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }) + ' hs';
+};
+
+// Badges
+function PaymentBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    paid:               { label: 'Pagado',         cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' },
+    pending:            { label: 'Pendiente',      cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
+    refunded:           { label: 'Reembolsado',    cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
+    partially_refunded: { label: 'Reemb. parcial', cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
+    voided:             { label: 'Anulado',        cls: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400' },
+    authorized:         { label: 'Autorizado',     cls: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400' },
+  };
+  const { label, cls } = map[status] ?? { label: status, cls: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500' };
+  return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap ${cls}`}>{label}</span>;
+}
+
+function FulfillmentBadge({ status }: { status: string | null }) {
+  const s = status || 'unfulfilled';
+  const map: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+    fulfilled:   { label: 'Enviado',    cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400', icon: <Truck className="w-2.5 h-2.5" /> },
+    unfulfilled: { label: 'Sin enviar', cls: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',   icon: <Package className="w-2.5 h-2.5" /> },
+    partial:     { label: 'Parcial',    cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',        icon: <Package className="w-2.5 h-2.5" /> },
+    restocked:   { label: 'Devuelto',   cls: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500',                                   icon: <RefreshCw className="w-2.5 h-2.5" /> },
+  };
+  const { label, cls, icon } = map[s] ?? { label: s, cls: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500', icon: null };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black whitespace-nowrap ${cls}`}>
+      {icon}{label}
+    </span>
+  );
+}
+
+// Order Row
+function OrderItemRow({ order }: { order: any }) {
+  const [open, setOpen] = useState(false);
+  const lineItems = order.line_items || [];
+  const firstItem = lineItems[0];
+  const extraCount = lineItems.length - 1;
+
+  return (
+    <>
+      <tr
+        onClick={() => setOpen(!open)}
+        className={`border-b border-zinc-100/80 dark:border-white/[0.04] cursor-pointer transition-colors ${
+          open ? 'bg-zinc-50 dark:bg-white/[0.025]' : 'hover:bg-zinc-50/70 dark:hover:bg-white/[0.015]'
+        }`}
+      >
+        <td className="px-4 py-3.5">
+          <span className="text-[12px] font-black text-zinc-800 dark:text-zinc-100">
+            #{order.order_number || order.name || order.id}
+          </span>
+        </td>
+        <td className="px-4 py-3.5">
+          <span className="text-[11px] text-zinc-600 dark:text-zinc-350 font-semibold">
+            {fmtDateTime(order.created_at)}
+          </span>
+        </td>
+        <td className="px-4 py-3.5">
+          {firstItem ? (
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-[10px] font-black px-1.5 py-[2px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
+                ×{firstItem.quantity}
+              </span>
+              <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[180px]">
+                {firstItem.title}
+              </p>
+              {extraCount > 0 && (
+                <span className="text-pink-500 dark:text-pink-400 font-bold text-[10px]">+{extraCount} más</span>
+              )}
+            </div>
+          ) : (
+            <span className="text-zinc-400">—</span>
+          )}
+        </td>
+        <td className="px-4 py-3.5"><PaymentBadge status={order.financial_status} /></td>
+        <td className="px-4 py-3.5"><FulfillmentBadge status={order.fulfillment_status} /></td>
+        <td className="px-4 py-3.5 text-right font-black text-zinc-900 dark:text-white">
+          {fmtCurr(parseFloat(order.total_price || 0))}
+        </td>
+        <td className="px-4 py-3.5 text-right">
+          <div className="text-zinc-400">
+            {open ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+          </div>
+        </td>
+      </tr>
+
+      {open && (
+        <tr className="bg-zinc-50/50 dark:bg-white/[0.01] border-b border-zinc-100/80 dark:border-white/[0.04]">
+          <td colSpan={7} className="px-6 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Products List */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-2">Productos</p>
+                {lineItems.map((item: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-150/65 dark:border-white/[0.04]">
+                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                      <span className="text-[11px] font-black px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-350">
+                        ×{item.quantity}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 truncate">{item.title}</p>
+                        {item.variant_title && (
+                          <p className="text-[10px] text-zinc-400 mt-0.5">{item.variant_title}</p>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[12px] font-bold shrink-0 text-zinc-800 dark:text-zinc-200">
+                      {fmtCurr(parseFloat(item.price || 0) * item.quantity)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Order breakdown */}
+              <div className="bg-white dark:bg-zinc-900/40 border border-zinc-150/65 dark:border-white/[0.04] rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-zinc-450 uppercase tracking-wider mb-3">Resumen de Pago</p>
+                  <div className="space-y-2 text-[11px] font-medium text-zinc-500">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-bold">{fmtCurr(parseFloat(order.subtotal_price || 0))}</span>
+                    </div>
+                    {parseFloat(order.total_discounts || 0) > 0 && (
+                      <div className="flex justify-between text-emerald-500 font-bold">
+                        <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> Descuento</span>
+                        <span>- {fmtCurr(parseFloat(order.total_discounts))}</span>
+                      </div>
+                    )}
+                    {parseFloat(order.total_tax || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span>Impuestos</span>
+                        <span className="text-zinc-700 dark:text-zinc-300 font-bold">{fmtCurr(parseFloat(order.total_tax))}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-3 mt-3 flex justify-between items-baseline">
+                  <span className="text-[12px] font-black text-zinc-800 dark:text-zinc-150">Total Facturado</span>
+                  <span className="text-[16px] font-black text-pink-500 dark:text-pink-400">{fmtCurr(parseFloat(order.total_price || 0))}</span>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
 
 export default function ContactosPage() {
   const navigate = useNavigate();
@@ -65,6 +228,9 @@ export default function ContactosPage() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [chatwootContactId, setChatwootContactId] = useState<number | null>(null);
   const [checkingChatwoot, setCheckingChatwoot] = useState(false);
+  const [selectedCustOrders, setSelectedCustOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
 
   // Common list states
   const [loading, setLoading] = useState(true);
@@ -447,6 +613,8 @@ export default function ContactosPage() {
     setSelectedStoreCust(c);
     setStoreCustStats(null);
     setChatwootContactId(null);
+    setSelectedCustOrders([]);
+    setOrdersError(null);
     
     if (!c) return;
 
@@ -466,33 +634,157 @@ export default function ContactosPage() {
       }
     }
 
-    // Load stats if they are not present
-    if (c.platform === 'tiendanube') {
-      setLoadingStats(true);
-      try {
-        const storeId = (profile as any)?.tiendanube_store_id || '';
-        const token = (profile as any)?.tiendanube_access_token || '';
-        const oUrl = `/api/shopify/tn/orders?email=${encodeURIComponent(c.email)}&per_page=200`;
-        const oRes = await fetch(oUrl, { headers: { 'x-tn-store-id': storeId, 'x-tn-token': token } });
-        if (oRes.ok) {
-          const oData = await oRes.json();
-          const ordersList = Array.isArray(oData) ? oData : [];
-          const totalSpent = ordersList.reduce((sum, o) => sum + parseFloat(o.total || 0), 0);
-          setStoreCustStats({
-            ordersCount: ordersList.length,
-            totalSpent
+    // Load stats and orders list
+    setLoadingStats(true);
+    setLoadingOrders(true);
+    try {
+      let ordersList: any[] = [];
+      const email = c.email;
+
+      const domain = ((profile as any).shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const token = (profile as any).shopify_access_token || '';
+      const wordpressUrl = ((profile as any).wordpress_url || '').replace(/\/$/, '');
+      const wooConsumerKey = (profile as any).woo_consumer_key || '';
+      const wooConsumerSecret = (profile as any).woo_consumer_secret || '';
+      const tiendanubeStoreId = (profile as any).tiendanube_store_id || '';
+      const tiendanubeToken = (profile as any).tiendanube_access_token || '';
+
+      if (email) {
+        if (platform === 'shopify') {
+          const oUrl = `/api/shopify/orders.json?status=any&email=${encodeURIComponent(email)}&limit=250`;
+          const oRes = await fetch(oUrl, {
+            headers: {
+              'X-Shopify-Access-Token': token,
+              'X-Shop-Domain': domain,
+            }
           });
+          if (oRes.ok) {
+            const oData = await oRes.json();
+            ordersList = oData.orders || [];
+          }
+        } 
+        else if (platform === 'wordpress') {
+          const wcHeaders = {
+            'x-wc-base-url': wordpressUrl,
+            'x-wc-consumer-key': wooConsumerKey,
+            'x-wc-consumer-secret': wooConsumerSecret
+          };
+
+          const oUrl = `/api/shopify/wc/orders?search=${encodeURIComponent(email)}&per_page=100`;
+          const oRes = await fetch(oUrl, { headers: wcHeaders });
+          if (oRes.ok) {
+            const oData = await oRes.json();
+            const rawOrders = Array.isArray(oData) ? oData : [];
+            const filteredOrders = rawOrders.filter((o: any) =>
+              (o.billing?.email || '').toLowerCase().trim() === email.toLowerCase().trim()
+            );
+            ordersList = filteredOrders.map((o: any) => {
+              const financial_status = o.status === 'completed' || o.status === 'processing' ? 'paid' : o.status === 'refunded' ? 'refunded' : 'pending';
+              const fulfillment_status = o.status === 'completed' ? 'fulfilled' : 'unfulfilled';
+              
+              const customerName = (() => {
+                const billName = o.billing ? `${o.billing.first_name || ''} ${o.billing.last_name || ''}`.trim() : '';
+                if (billName) return billName;
+                const shipName = o.shipping ? `${o.shipping.first_name || ''} ${o.shipping.last_name || ''}`.trim() : '';
+                if (shipName) return shipName;
+                return 'Cliente WooCommerce';
+              })();
+
+              return {
+                id: o.id,
+                order_number: o.number,
+                name: `#${o.number}`,
+                created_at: o.date_created,
+                financial_status,
+                fulfillment_status,
+                total_price: o.total,
+                subtotal_price: o.subtotal || String(parseFloat(o.total || '0') - parseFloat(o.total_tax || '0') - parseFloat(o.shipping_total || '0')),
+                total_tax: o.total_tax,
+                total_discounts: o.discount_total,
+                customer_name: customerName,
+                phone: o.billing?.phone || o.shipping?.phone || null,
+                shipping_address: o.shipping?.address_1 ? {
+                  address1: o.shipping.address_1,
+                  city: o.shipping.city,
+                  province: o.shipping.state,
+                  country: o.shipping.country,
+                } : null,
+                line_items: (o.line_items || []).map((it: any) => ({
+                  title: it.name,
+                  quantity: it.quantity,
+                  price: it.price,
+                  variant_title: it.meta_data?.filter((m: any) => m.display_key && !m.display_key.startsWith('_')).map((m: any) => m.display_value).join(' / ') || null
+                }))
+              };
+            });
+          }
         }
-      } catch (err) {
-        console.error('Error fetching Tiendanube customer stats:', err);
-      } finally {
-        setLoadingStats(false);
+        else if (platform === 'tiendanube') {
+          const tnHeaders = {
+            'x-tn-store-id': tiendanubeStoreId,
+            'x-tn-token': tiendanubeToken
+          };
+
+          const oUrl = `/api/shopify/tn/orders?email=${encodeURIComponent(email)}&per_page=200`;
+          const oRes = await fetch(oUrl, { headers: tnHeaders });
+          if (oRes.ok) {
+            const oData = await oRes.json();
+            const rawOrders = Array.isArray(oData) ? oData : [];
+            const filteredOrders = rawOrders.filter((o: any) =>
+              (o.customer?.email || '').toLowerCase().trim() === email.toLowerCase().trim()
+            );
+            ordersList = filteredOrders.map((o: any) => {
+              const payStatus = o.payment_status;
+              const financial_status = payStatus === 'paid' ? 'paid' : payStatus === 'refunded' ? 'refunded' : payStatus === 'voided' ? 'voided' : 'pending';
+              const fulfillment_status = (o.shipping_status === 'shipped' || o.shipping_status === 'delivered') ? 'fulfilled' : 'unfulfilled';
+              
+              const customerName = o.customer?.name || o.shipping_address?.name || 'Cliente Tiendanube';
+
+              return {
+                id: o.id,
+                order_number: o.number,
+                name: `#${o.number}`,
+                created_at: o.created_at,
+                financial_status,
+                fulfillment_status,
+                total_price: o.total,
+                subtotal_price: o.subtotal,
+                total_tax: o.tax,
+                total_discounts: o.discount,
+                customer_name: customerName,
+                phone: o.customer?.phone || o.shipping_address?.phone || null,
+                shipping_address: o.shipping_address ? {
+                  address1: o.shipping_address.address,
+                  city: o.shipping_address.city,
+                  province: o.shipping_address.province,
+                  country: o.shipping_address.country,
+                } : null,
+                line_items: (o.products || []).map((it: any) => ({
+                  title: it.name,
+                  quantity: it.quantity,
+                  price: it.price,
+                  variant_title: it.variant_values ? it.variant_values.map((vv: any) => vv.es || vv.en || Object.values(vv || {})[0] || '').filter(Boolean).join(' / ') : null
+                }))
+              };
+            });
+          }
+        }
       }
-    } else {
+
+      const sorted = ordersList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setSelectedCustOrders(sorted);
+
+      const totalSpent = sorted.reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
       setStoreCustStats({
-        ordersCount: c.orders_count,
-        totalSpent: c.total_spent
+        ordersCount: sorted.length,
+        totalSpent
       });
+    } catch (err: any) {
+      console.error('Error fetching customer orders:', err);
+      setOrdersError('No se pudieron obtener los pedidos.');
+    } finally {
+      setLoadingStats(false);
+      setLoadingOrders(false);
     }
   };
 
@@ -750,16 +1042,6 @@ export default function ContactosPage() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    {/* Ver Pedidos Button */}
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/cliente/${selectedStoreCust.email}`)}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-[12px] font-black shadow-sm shadow-pink-500/10 transition-all active:scale-[0.98]"
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      Ver Pedidos
-                    </button>
-
                     {/* Start Chat Button (via Chatwoot linkage) */}
                     {hasChatwoot && (
                       <button
@@ -892,6 +1174,52 @@ export default function ContactosPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Orders History List */}
+                <div className="space-y-3 pt-2">
+                  <h3 className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-wider px-1">
+                    Historial de Pedidos ({selectedCustOrders.length})
+                  </h3>
+                  
+                  {loadingOrders ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-2 bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl">
+                      <Loader2 className="w-5 h-5 animate-spin text-pink-500" />
+                      <p className="text-[11px] text-zinc-400">Cargando historial de pedidos...</p>
+                    </div>
+                  ) : ordersError ? (
+                    <div className="p-4 text-[11px] text-red-500 font-semibold bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl">
+                      {ordersError}
+                    </div>
+                  ) : selectedCustOrders.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl text-zinc-400 gap-2">
+                      <ShoppingBag className="w-7 h-7 opacity-40" />
+                      <p className="text-[12px] font-bold">Sin pedidos registrados</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl shadow-sm dark:shadow-none overflow-hidden">
+                      <div className="overflow-x-auto animate-in fade-in duration-300">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="border-b border-zinc-100 dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.015]">
+                              <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Pedido</th>
+                              <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Fecha</th>
+                              <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Productos</th>
+                              <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Pago</th>
+                              <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Envío</th>
+                              <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-right">Total</th>
+                              <th className="px-4 py-3"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedCustOrders.map(order => (
+                              <OrderItemRow key={order.id} order={order} />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
               </div>
             )}
