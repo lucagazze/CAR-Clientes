@@ -191,7 +191,7 @@ function OrderMobileCard({ order }: { order: any }) {
             <FulfillmentBadge status={order.fulfillment_status} />
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 self-center">
           <span className="text-[14px] font-black text-zinc-900 dark:text-white whitespace-nowrap">
             {fmtCurr(parseFloat(order.total_price || 0))}
           </span>

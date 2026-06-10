@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { chatwoot } from '../services/chatwoot';
@@ -14,6 +15,10 @@ import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 const fmtCurr = (n: number) => {
   if (typeof n !== 'number' || isNaN(n)) return '—';
   return `$ ${n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+};
+
+const PortalWrapper: React.FC<{ active: boolean; children: React.ReactNode }> = ({ active, children }) => {
+  return active ? createPortal(children, document.body) : <>{children}</>;
 };
 
 const getNextPageUrl = (linkHeader: string | null) => {
@@ -209,7 +214,7 @@ function OrderMobileCard({ order }: { order: any }) {
             <FulfillmentBadge status={order.fulfillment_status} />
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 self-center">
           <span className="text-[14px] font-black text-zinc-900 dark:text-white whitespace-nowrap">
             {fmtCurr(parseFloat(order.total_price || 0))}
           </span>
@@ -265,6 +270,16 @@ export default function ContactosPage() {
   const [selectedCustOrders, setSelectedCustOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Common list states
   const [loading, setLoading] = useState(true);
@@ -1025,7 +1040,8 @@ export default function ContactosPage() {
             )}
           </div>
 
-          <div className={`flex-1 min-w-0 flex flex-col overflow-hidden relative ${selectedStoreCust ? 'fixed inset-0 z-[250] bg-[#f5f5f7] dark:bg-[#0a0a0a] md:relative md:inset-auto md:z-auto md:bg-zinc-50 md:dark:bg-zinc-900/30 md:flex' : 'hidden md:flex'}`}>
+          <PortalWrapper active={isMobile && !!selectedStoreCust}>
+            <div className={`flex-1 min-w-0 flex flex-col overflow-hidden relative ${selectedStoreCust ? 'fixed inset-0 z-[250] bg-[#f5f5f7] dark:bg-[#0a0a0a] md:relative md:inset-auto md:z-auto md:bg-zinc-50 md:dark:bg-zinc-900/30 md:flex' : 'hidden md:flex'}`}>
             {!selectedStoreCust ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
                 <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-3xl">🛍️</div>
@@ -1249,6 +1265,7 @@ export default function ContactosPage() {
             </>
           )}
           </div>
+        </PortalWrapper>
         </div>
       </div>
     </CenteredPageLoader>
