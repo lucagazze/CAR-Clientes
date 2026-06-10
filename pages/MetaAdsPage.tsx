@@ -598,7 +598,7 @@ export default function MetaAdsPage() {
 
         {/* Skeleton */}
         {accountId && loading && activeAds.length === 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 flex flex-col">
                 <div className="h-52 bg-zinc-100 dark:bg-zinc-800" />
@@ -644,7 +644,7 @@ export default function MetaAdsPage() {
                     <h4 className="text-[14px] font-black text-zinc-800 dark:text-zinc-100 tracking-tight truncate">{group.campaignName}</h4>
                     <span className="text-[11px] font-bold text-zinc-400 flex-shrink-0">{group.ads.length} creativos</span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
                     {group.ads.map(ad => {
                       const insights = adInsightsMap[ad.id];
                       const adSpend = parseFloat(insights?.spend || 0);
