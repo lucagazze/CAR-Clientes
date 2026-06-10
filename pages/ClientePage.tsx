@@ -143,21 +143,9 @@ function OrderItemRow({ order }: { order: any }) {
           </span>
         </td>
         <td className="px-4 py-3">
-          {firstItem ? (
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 text-[10px] font-black px-1.5 py-[2px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
-                ×{firstItem.quantity}
-              </span>
-              <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[200px]">
-                {firstItem.title}
-              </p>
-              {extraCount > 0 && (
-                <span className="text-pink-500 dark:text-pink-400 font-bold text-[10px]">+{extraCount} más</span>
-              )}
-            </div>
-          ) : (
-            <span className="text-zinc-400">—</span>
-          )}
+          <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+            {lineItems.length > 0 ? `${lineItems.length} ít${lineItems.length === 1 ? 'em' : 'ems'}` : '—'}
+          </span>
         </td>
         <td className="px-4 py-3"><PaymentBadge status={order.financial_status} /></td>
         <td className="px-4 py-3"><FulfillmentBadge status={order.fulfillment_status} /></td>
@@ -198,19 +186,7 @@ function OrderMobileCard({ order }: { order: any }) {
       >
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-1">{fmtDateTime(order.created_at)}</p>
-          {lineItems.length > 0 && (
-            <div className="space-y-1 mb-2">
-              {lineItems.map((item: any, idx: number) => (
-                <div key={idx} className="flex items-center gap-1.5">
-                  <span className="shrink-0 text-[10px] font-black px-1.5 py-[1px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
-                    ×{item.quantity}
-                  </span>
-                  <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 truncate">{item.title}</p>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
             <PaymentBadge status={order.financial_status} />
             <FulfillmentBadge status={order.fulfillment_status} />
           </div>

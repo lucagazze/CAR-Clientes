@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useTheme } from "../contexts/ThemeContext";
 import { useViewAs } from "../contexts/ViewAsContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -2752,7 +2753,7 @@ export default function DashboardPage() {
       </div>
       
       {/* Order Detail Modal */}
-      {selectedOrder && (
+      {selectedOrder && createPortal(
         <>
           {/* Backdrop - independent fixed element */}
           <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm" onClick={() => setSelectedOrder(null)} />
@@ -2992,7 +2993,8 @@ export default function DashboardPage() {
             </div>
 
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
     </CenteredPageLoader>
