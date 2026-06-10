@@ -390,7 +390,7 @@ export const MainLayout = () => {
         </div>
 
         <div ref={scrollContainerRef} className={`flex-1 w-full print:overflow-visible print:h-auto print:p-6 ${
-          location.pathname === '/mensajeria' || location.pathname === '/contactos'
+          location.pathname === '/mensajeria' || location.pathname === '/clientes'
             ? 'overflow-hidden p-0 h-[calc(100dvh-56px)] md:h-screen flex flex-col'
             : isFixedPage 
               ? 'overflow-hidden p-4 md:p-6 h-[calc(100dvh-56px)] md:h-screen flex flex-col' 
@@ -423,7 +423,7 @@ export const MainLayout = () => {
               <Route path="/pedidos" element={<PedidosPage />} />
               <Route path="/inventario" element={<InventarioPage />} />
               <Route path="/analisis-productos" element={<Navigate to="/tienda" replace />} />
-              <Route path="/contactos" element={<ContactosPage />} />
+              <Route path="/clientes" element={<ContactosPage />} />
               <Route path="/informes" element={<InformesPage />} />
               <Route 
                 path="/costos" 
@@ -436,7 +436,7 @@ export const MainLayout = () => {
           </Suspense>
           </RouteErrorBoundary>
         </div>
-        {location.pathname !== '/mensajeria' && location.pathname !== '/contactos' && <AIChatFloat />}
+        {location.pathname !== '/mensajeria' && location.pathname !== '/clientes' && <AIChatFloat />}
       </main>
     </div>
   );

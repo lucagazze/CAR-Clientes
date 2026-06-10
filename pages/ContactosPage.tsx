@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { chatwoot } from '../services/chatwoot';
 import {
-  Search, User, Mail, Phone, MapPin, Building, Instagram, 
-  Loader2, ArrowLeft, ArrowRight, Bot, MessageSquare, 
-  ExternalLink, Save, Check, FileText, AlertCircle, ShoppingBag, CreditCard, ShoppingCart
+  Search, User, Mail, Phone, MapPin, 
+  Loader2, ArrowLeft, ArrowRight, MessageSquare, 
+  ShoppingBag, CreditCard, ShoppingCart, AlertCircle
 } from 'lucide-react';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
@@ -14,6 +14,7 @@ const fmtCurr = (n: number) => {
   if (typeof n !== 'number' || isNaN(n)) return '—';
   return `$ ${n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 };
+
 export default function ContactosPage() {
   const navigate = useNavigate();
   const { profile: authProfile } = useAuth();
@@ -22,24 +23,21 @@ export default function ContactosPage() {
 
   const cwUrl = (profile as any)?.chatwoot_url;
   const cwToken = (profile as any)?.chatwoot_token;
-
   const hasChatwoot = !!(cwUrl && cwToken);
-  const hasStore = !!(
-    (profile as any)?.shopify_domain ||
-    (profile as any)?.tiendanube_store_id ||
-    (profile as any)?.wordpress_url ||
-    (profile as any)?.ecommerce_platform
-  );
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'messaging' | 'store'>(() => {
-    if (hasChatwoot) return 'messaging';
-    if (hasStore) return 'store';
-    return 'messaging';
-  });
+  // Auto-detect platform just like PedidosPage
+  let platform = (profile as any)?.ecommerce_platform;
+  if (profile && !platform) {
+    if ((profile as any).shopify_domain && (profile as any).shopify_access_token) {
+      platform = 'shopify';
+    } else if ((profile as any).wordpress_url && (profile as any).woo_consumer_key && (profile as any).woo_consumer_secret) {
+      platform = 'wordpress';
+    } else if ((profile as any).tiendanube_store_id && (profile as any).tiendanube_access_token) {
+      platform = 'tiendanube';
+    }
+  }
 
-  // Contacts list states (Chatwoot)
-  const [contacts, setContacts] = useState<any[]>([]);
+  const hasStore = !!platform;
 
   // Store customers states
   const [storeCustomers, setStoreCustomers] = useState<any[]>([]);
@@ -55,255 +53,187 @@ export default function ContactosPage() {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [sortBy, setSortBy] = useState<'name' | 'id'>('name');
 
-  // Contact details states (Chatwoot specific)
-  const [selected, setSelected] = useState<any>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  // Filters and Sorting
+  const [filterType, setFilterType] = useState<'all' | 'new' | 'frequent'>('all');
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'spent' | 'orders'>('recent');
 
-  // Detail Form states (Chatwoot specific)
-  const [formName, setFormName] = useState('');
-  const [formEmail, setFormEmail] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formInstagram, setFormInstagram] = useState('');
-  const [formLocation, setFormLocation] = useState('');
-  const [formCompany, setFormCompany] = useState('');
-  const [formNotes, setFormNotes] = useState('');
-
-  // AI complete states (Chatwoot specific)
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<any>({});
-  const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, boolean>>({
-    name: true,
-    email: true,
-    phone_number: true,
-    instagram: true,
-    location: true,
-    company: true,
-    notes: true
-  });
-
-  // Load Contacts or Store Customers
+  // Load Store Customers
   const loadData = useCallback(async () => {
-    if (activeTab === 'messaging') {
-      if (!cwUrl || !cwToken) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        let data;
-        if (search.trim()) {
-          data = await chatwoot.searchContacts(cwUrl, cwToken, search, currentPage);
-        } else {
-          data = await chatwoot.getContacts(cwUrl, cwToken, currentPage);
+    if (!profile || !platform) {
+      setStoreCustomers([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (platform === 'shopify') {
+        const domain = ((profile as any).shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const token = (profile as any).shopify_access_token || '';
+        if (!domain || !token) {
+          throw new Error('Shopify no está configurado.');
         }
-        const list = data?.payload || data?.data || [];
-        setContacts(list);
-        setTotalCount(data?.meta?.count || list.length);
-      } catch (e: any) {
-        setError(e.message || 'Error al obtener los contactos.');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // E-commerce store customers loading
-      if (!profile) {
-        setLoading(false);
-        return;
-      }
-      const platform = (profile as any).ecommerce_platform;
-      if (!platform) {
-        setStoreCustomers([]);
-        setTotalCount(0);
-        setLoading(false);
-        return;
-      }
 
-      setLoading(true);
-      setError(null);
+        let url = `/api/shopify/customers.json?limit=50`;
+        if (search.trim()) {
+          url = `/api/shopify/customers/search.json?query=${encodeURIComponent(search)}&limit=50`;
+        }
 
-      try {
-        if (platform === 'shopify') {
-          const domain = ((profile as any).shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-          const token = (profile as any).shopify_access_token || '';
-          if (!domain || !token) {
-            throw new Error('Shopify no está configurado.');
+        const res = await fetch(url, {
+          headers: {
+            'X-Shopify-Access-Token': token,
+            'X-Shop-Domain': domain,
           }
+        });
 
-          let url = `/api/shopify/customers.json?limit=50`;
-          if (search.trim()) {
-            url = `/api/shopify/customers/search.json?query=${encodeURIComponent(search)}&limit=50`;
+        if (!res.ok) throw new Error(`Error de Shopify: ${res.status}`);
+        const data = await res.json();
+        const rawList = data.customers || [];
+        
+        const normalized = rawList.map((c: any) => {
+          return {
+            id: c.id,
+            first_name: c.first_name || '',
+            last_name: c.last_name || '',
+            name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Cliente sin nombre',
+            email: c.email || '',
+            phone: c.phone || '',
+            orders_count: c.orders_count || 0,
+            total_spent: parseFloat(c.total_spent || 0),
+            address: c.default_address
+              ? `${c.default_address.address1 || ''}, ${c.default_address.city || ''}, ${c.default_address.province || ''}, ${c.default_address.country || ''}`.replace(/^,\s*/, '')
+              : null,
+            platform: 'shopify'
+          };
+        });
+
+        setStoreCustomers(normalized);
+        setTotalCount(normalized.length);
+      }
+      else if (platform === 'wordpress') {
+        const url = ((profile as any).wordpress_url || '').replace(/\/$/, '');
+        const ck = (profile as any).woo_consumer_key || '';
+        const cs = (profile as any).woo_consumer_secret || '';
+        if (!url || !ck || !cs) {
+          throw new Error('WooCommerce no está configurado.');
+        }
+
+        const params = new URLSearchParams({
+          per_page: '100',
+          page: String(currentPage),
+        });
+        if (search.trim()) {
+          params.set('search', search.trim());
+        }
+
+        const res = await fetch(`/api/shopify/wc/customers?${params.toString()}`, {
+          headers: {
+            'x-wc-base-url': url,
+            'x-wc-consumer-key': ck,
+            'x-wc-consumer-secret': cs
           }
+        });
 
-          const res = await fetch(url, {
-            headers: {
-              'X-Shopify-Access-Token': token,
-              'X-Shop-Domain': domain,
-            }
-          });
+        if (!res.ok) throw new Error(`Error de WooCommerce: ${res.status}`);
+        
+        const totalCountHeader = res.headers.get('X-WP-Total');
+        if (totalCountHeader) {
+          setTotalCount(parseInt(totalCountHeader, 10));
+        }
 
-          if (!res.ok) throw new Error(`Error de Shopify: ${res.status}`);
-          const data = await res.json();
-          const rawList = data.customers || [];
-          
-          const normalized = rawList.map((c: any) => {
-            return {
-              id: c.id,
-              first_name: c.first_name || '',
-              last_name: c.last_name || '',
-              name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Cliente sin nombre',
-              email: c.email || '',
-              phone: c.phone || '',
-              orders_count: c.orders_count || 0,
-              total_spent: parseFloat(c.total_spent || 0),
-              address: c.default_address
-                ? `${c.default_address.address1 || ''}, ${c.default_address.city || ''}, ${c.default_address.province || ''}, ${c.default_address.country || ''}`.replace(/^,\s*/, '')
-                : null,
-              platform: 'shopify'
-            };
-          });
+        const rawList = await res.json();
+        const normalized = (Array.isArray(rawList) ? rawList : []).map((c: any) => {
+          return {
+            id: c.id,
+            first_name: c.first_name || '',
+            last_name: c.last_name || '',
+            name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Cliente sin nombre',
+            email: c.email || '',
+            phone: c.billing?.phone || c.shipping?.phone || '',
+            orders_count: c.orders_count || 0,
+            total_spent: parseFloat(c.total_spent || 0),
+            address: c.billing?.address_1
+              ? `${c.billing.address_1 || ''}, ${c.billing.city || ''}, ${c.billing.state || ''}, ${c.billing.country || ''}`.replace(/^,\s*/, '')
+              : null,
+            platform: 'wordpress'
+          };
+        });
 
-          setStoreCustomers(normalized);
+        setStoreCustomers(normalized);
+        if (!totalCountHeader) {
           setTotalCount(normalized.length);
         }
-        else if (platform === 'wordpress') {
-          const url = ((profile as any).wordpress_url || '').replace(/\/$/, '');
-          const ck = (profile as any).woo_consumer_key || '';
-          const cs = (profile as any).woo_consumer_secret || '';
-          if (!url || !ck || !cs) {
-            throw new Error('WooCommerce no está configurado.');
-          }
-
-          const params = new URLSearchParams({
-            per_page: '15',
-            page: String(currentPage),
-          });
-          if (search.trim()) {
-            params.set('search', search.trim());
-          }
-
-          const res = await fetch(`/api/shopify/wc/customers?${params.toString()}`, {
-            headers: {
-              'x-wc-base-url': url,
-              'x-wc-consumer-key': ck,
-              'x-wc-consumer-secret': cs
-            }
-          });
-
-          if (!res.ok) throw new Error(`Error de WooCommerce: ${res.status}`);
-          
-          const totalCountHeader = res.headers.get('X-WP-Total');
-          if (totalCountHeader) {
-            setTotalCount(parseInt(totalCountHeader, 10));
-          }
-
-          const rawList = await res.json();
-          const normalized = (Array.isArray(rawList) ? rawList : []).map((c: any) => {
-            return {
-              id: c.id,
-              first_name: c.first_name || '',
-              last_name: c.last_name || '',
-              name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Cliente sin nombre',
-              email: c.email || '',
-              phone: c.billing?.phone || c.shipping?.phone || '',
-              orders_count: c.orders_count || 0,
-              total_spent: parseFloat(c.total_spent || 0),
-              address: c.billing?.address_1
-                ? `${c.billing.address_1 || ''}, ${c.billing.city || ''}, ${c.billing.state || ''}, ${c.billing.country || ''}`.replace(/^,\s*/, '')
-                : null,
-              platform: 'wordpress'
-            };
-          });
-
-          setStoreCustomers(normalized);
-          if (!totalCountHeader) {
-            setTotalCount(normalized.length);
-          }
-        }
-        else if (platform === 'tiendanube') {
-          const storeId = (profile as any).tiendanube_store_id || '';
-          const token = (profile as any).tiendanube_access_token || '';
-          if (!storeId || !token) {
-            throw new Error('Tiendanube no está configurada.');
-          }
-
-          const params = new URLSearchParams({
-            per_page: '15',
-            page: String(currentPage),
-          });
-          if (search.trim()) {
-            params.set('q', search.trim());
-          }
-
-          const res = await fetch(`/api/shopify/tn/customers?${params.toString()}`, {
-            headers: {
-              'x-tn-store-id': storeId,
-              'x-tn-token': token
-            }
-          });
-
-          if (!res.ok) throw new Error(`Error de Tiendanube: ${res.status}`);
-          
-          const rawList = await res.json();
-          const normalized = (Array.isArray(rawList) ? rawList : []).map((c: any) => {
-            const defaultAddr = c.addresses?.find((a: any) => a.default) || c.addresses?.[0] || null;
-            const addressStr = defaultAddr
-              ? `${defaultAddr.address || ''}, ${defaultAddr.city || ''}, ${defaultAddr.province || ''}, ${defaultAddr.country || ''}`.replace(/^,\s*/, '')
-              : null;
-
-            return {
-              id: c.id,
-              first_name: (c.name || '').split(' ')[0] || '',
-              last_name: (c.name || '').split(' ').slice(1).join(' ') || '',
-              name: c.name || 'Cliente sin nombre',
-              email: c.email || '',
-              phone: c.phone || '',
-              orders_count: null,
-              total_spent: null,
-              address: addressStr,
-              platform: 'tiendanube'
-            };
-          });
-
-          setStoreCustomers(normalized);
-          setTotalCount(150); // Pagination helper
-        }
-      } catch (e: any) {
-        setError(e.message || 'Error al obtener clientes de la tienda.');
-      } finally {
-        setLoading(false);
       }
+      else if (platform === 'tiendanube') {
+        const storeId = (profile as any).tiendanube_store_id || '';
+        const token = (profile as any).tiendanube_access_token || '';
+        if (!storeId || !token) {
+          throw new Error('Tiendanube no está configurada.');
+        }
+
+        const params = new URLSearchParams({
+          per_page: '100',
+          page: String(currentPage),
+        });
+        if (search.trim()) {
+          params.set('q', search.trim());
+        }
+
+        const res = await fetch(`/api/shopify/tn/customers?${params.toString()}`, {
+          headers: {
+            'x-tn-store-id': storeId,
+            'x-tn-token': token
+          }
+        });
+
+        if (!res.ok) throw new Error(`Error de Tiendanube: ${res.status}`);
+        
+        const rawList = await res.json();
+        const normalized = (Array.isArray(rawList) ? rawList : []).map((c: any) => {
+          const defaultAddr = c.addresses?.find((a: any) => a.default) || c.addresses?.[0] || null;
+          const addressStr = defaultAddr
+            ? `${defaultAddr.address || ''}, ${defaultAddr.city || ''}, ${defaultAddr.province || ''}, ${defaultAddr.country || ''}`.replace(/^,\s*/, '')
+            : null;
+
+          return {
+            id: c.id,
+            first_name: (c.name || '').split(' ')[0] || '',
+            last_name: (c.name || '').split(' ').slice(1).join(' ') || '',
+            name: c.name || 'Cliente sin nombre',
+            email: c.email || '',
+            phone: c.phone || '',
+            orders_count: null,
+            total_spent: null,
+            address: addressStr,
+            platform: 'tiendanube'
+          };
+        });
+
+        setStoreCustomers(normalized);
+        setTotalCount(150); // Pagination helper
+      }
+    } catch (e: any) {
+      setError(e.message || 'Error al obtener clientes de la tienda.');
+    } finally {
+      setLoading(false);
     }
-  }, [activeTab, cwUrl, cwToken, search, currentPage, profile]);
+  }, [search, currentPage, profile, platform]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Handle Search Input Change (reset page to 1)
+  // Handle Search Input Change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
     setCurrentPage(1);
   };
 
-  // Select Contact & fill Form
-  const handleSelectContact = (contact: any) => {
-    setSelected(contact);
-    setSaveSuccess(false);
-    setFormName(contact.name || '');
-    setFormEmail(contact.email || '');
-    setFormPhone(contact.phone_number || '');
-    setFormInstagram(contact.custom_attributes?.instagram || '');
-    setFormLocation(contact.custom_attributes?.location || '');
-    setFormCompany(contact.custom_attributes?.company || '');
-    setFormNotes(contact.custom_attributes?.notes || '');
-  };
-
+  // Select Store Customer
   const handleSelectStoreCustomer = async (c: any) => {
     setSelectedStoreCust(c);
     setStoreCustStats(null);
@@ -311,7 +241,7 @@ export default function ContactosPage() {
     
     if (!c) return;
 
-    // Search Chatwoot contact by email in the background
+    // Search Chatwoot contact by email in the background if configured
     if (cwUrl && cwToken && c.email) {
       setCheckingChatwoot(true);
       try {
@@ -327,7 +257,7 @@ export default function ContactosPage() {
       }
     }
 
-    // Load stats if they are not present (Tiendanube or in general)
+    // Load stats if they are not present
     if (c.platform === 'tiendanube') {
       setLoadingStats(true);
       try {
@@ -357,162 +287,6 @@ export default function ContactosPage() {
     }
   };
 
-  const handleTabChange = (tab: 'messaging' | 'store') => {
-    setActiveTab(tab);
-    setSearch('');
-    setCurrentPage(1);
-    setSelected(null);
-    setSelectedStoreCust(null);
-    setStoreCustStats(null);
-    setChatwootContactId(null);
-  };
-
-  // Update Contact (Save manual edits)
-  const handleSaveContact = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selected || !cwUrl || !cwToken) return;
-    setSaving(true);
-    setSaveSuccess(false);
-    try {
-      const payload = {
-        name: formName.trim(),
-        email: formEmail.trim() || null,
-        phone_number: formPhone.trim() || null,
-        custom_attributes: {
-          ...(selected.custom_attributes || {}),
-          instagram: formInstagram.trim() || null,
-          location: formLocation.trim() || null,
-          company: formCompany.trim() || null,
-          notes: formNotes.trim() || null,
-        }
-      };
-
-      const updated = await chatwoot.updateContact(cwUrl, cwToken, selected.id, payload);
-      const updatedContact = updated?.payload || updated || selected;
-      setSelected(updatedContact);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-      
-      // Update list item
-      setContacts(prev => prev.map(c => c.id === selected.id ? updatedContact : c));
-    } catch (e: any) {
-      alert(`Error al guardar: ${e.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Run AI Contact Completion
-  const handleAiComplete = async () => {
-    if (!selected || !cwUrl || !cwToken) return;
-    setAiLoading(true);
-    setAiError(null);
-    try {
-      const res = await fetch('/api/complete-contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contactId: selected.id,
-          cwUrl,
-          cwToken
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al completar con IA');
-      
-      if (!data.success) {
-        setAiError(data.message || 'No se pudo extraer información del chat.');
-        return;
-      }
-
-      setAiSuggestions(data.suggestions || {});
-      // Reset checkboxes
-      setSelectedSuggestions({
-        name: !!data.suggestions.name && data.suggestions.name !== formName,
-        email: !!data.suggestions.email && data.suggestions.email !== formEmail,
-        phone_number: !!data.suggestions.phone_number && data.suggestions.phone_number !== formPhone,
-        instagram: !!data.suggestions.instagram && data.suggestions.instagram !== formInstagram,
-        location: !!data.suggestions.location && data.suggestions.location !== formLocation,
-        company: !!data.suggestions.company && data.suggestions.company !== formCompany,
-        notes: !!data.suggestions.notes && data.suggestions.notes !== formNotes
-      });
-      setShowAiModal(true);
-    } catch (e: any) {
-      setAiError(e.message || 'No se pudo procesar la conversación con IA.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  // Apply AI Suggestions & Save
-  const handleApplySuggestions = async () => {
-    if (!selected || !cwUrl || !cwToken) return;
-    setSaving(true);
-    try {
-      const finalName = selectedSuggestions.name ? aiSuggestions.name : formName;
-      const finalEmail = selectedSuggestions.email ? aiSuggestions.email : formEmail;
-      const finalPhone = selectedSuggestions.phone_number ? aiSuggestions.phone_number : formPhone;
-      const finalInstagram = selectedSuggestions.instagram ? aiSuggestions.instagram : formInstagram;
-      const finalLocation = selectedSuggestions.location ? aiSuggestions.location : formLocation;
-      const finalCompany = selectedSuggestions.company ? aiSuggestions.company : formCompany;
-      const finalNotes = selectedSuggestions.notes ? aiSuggestions.notes : formNotes;
-
-      const payload = {
-        name: finalName?.trim() || formName,
-        email: finalEmail?.trim() || null,
-        phone_number: finalPhone?.trim() || null,
-        custom_attributes: {
-          ...(selected.custom_attributes || {}),
-          instagram: finalInstagram?.trim() || null,
-          location: finalLocation?.trim() || null,
-          company: finalCompany?.trim() || null,
-          notes: finalNotes?.trim() || null,
-        }
-      };
-
-      const updated = await chatwoot.updateContact(cwUrl, cwToken, selected.id, payload);
-      const updatedContact = updated?.payload || updated || selected;
-      
-      setSelected(updatedContact);
-      // Sync local form states
-      setFormName(updatedContact.name || '');
-      setFormEmail(updatedContact.email || '');
-      setFormPhone(updatedContact.phone_number || '');
-      setFormInstagram(updatedContact.custom_attributes?.instagram || '');
-      setFormLocation(updatedContact.custom_attributes?.location || '');
-      setFormCompany(updatedContact.custom_attributes?.company || '');
-      setFormNotes(updatedContact.custom_attributes?.notes || '');
-      
-      // Update list item
-      setContacts(prev => prev.map(c => c.id === selected.id ? updatedContact : c));
-      setShowAiModal(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (e: any) {
-      alert(`Error al guardar sugerencias: ${e.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Navigate to Chat page and select active chat
-  const handleStartChat = async () => {
-    if (!selected || !cwUrl || !cwToken) return;
-    try {
-      const conversationsList = await chatwoot.getContactConversations(cwUrl, cwToken, selected.id);
-      if (conversationsList && conversationsList.length > 0) {
-        const latestConvId = conversationsList[0].id;
-        // Direct transition using search parameter
-        navigate(`/atencion?convId=${latestConvId}`);
-      } else {
-        // Fallback: just go to Attention Page
-        navigate('/atencion');
-      }
-    } catch {
-      navigate('/atencion');
-    }
-  };
-
   // Avatar Initials + Gradient builder
   const getAvatarGradient = (name: string) => {
     const gradients = [
@@ -537,267 +311,190 @@ export default function ContactosPage() {
     return name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase();
   };
 
-  // Pagination bounds
-  const startItem = (currentPage - 1) * 15 + 1;
-  const endItem = Math.min(currentPage * 15, totalCount);
-  const totalPages = Math.ceil(totalCount / 15) || 1;
+  // Filters logic
+  const filteredCustomers = useMemo(() => {
+    return storeCustomers.filter(c => {
+      // If Tiendanube, metrics are loaded asynchronously, so we don't filter them out here
+      if (c.orders_count === null) return true;
+      
+      if (filterType === 'new') {
+        return c.orders_count === 1;
+      }
+      if (filterType === 'frequent') {
+        return c.orders_count > 1;
+      }
+      return true;
+    });
+  }, [storeCustomers, filterType]);
 
-  if (!hasChatwoot && !hasStore) {
+  // Sorting logic
+  const sortedCustomers = useMemo(() => {
+    return [...filteredCustomers].sort((a, b) => {
+      if (sortBy === 'name') {
+        return (a.name || '').localeCompare(b.name || '');
+      }
+      if (sortBy === 'spent') {
+        const spentA = a.total_spent || 0;
+        const spentB = b.total_spent || 0;
+        return spentB - spentA;
+      }
+      if (sortBy === 'orders') {
+        const countA = a.orders_count || 0;
+        const countB = b.orders_count || 0;
+        return countB - countA;
+      }
+      // Default: 'recent'
+      const idA = typeof a.id === 'number' ? a.id : parseInt(a.id) || 0;
+      const idB = typeof b.id === 'number' ? b.id : parseInt(b.id) || 0;
+      return idB - idA;
+    });
+  }, [filteredCustomers, sortBy]);
+
+  // Pagination bounds
+  const startItem = (currentPage - 1) * 100 + 1;
+  const endItem = Math.min(currentPage * 100, totalCount);
+  const totalPages = Math.ceil(totalCount / 100) || 1;
+
+  if (!hasStore) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 py-16 text-center bg-[#f5f5f7] dark:bg-[#0a0a0a]">
-        <div className="max-w-2xl w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80 rounded-[32px] p-8 md:p-12 shadow-xl animate-in fade-in zoom-in-95 duration-300">
-          {/* Top Icon Badge */}
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-6">
-            <User className="w-8 h-8" />
+        <div className="max-w-md w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80 rounded-[32px] p-8 md:p-10 shadow-xl animate-in fade-in zoom-in-95 duration-300">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400 flex items-center justify-center mb-6">
+            <ShoppingBag className="w-8 h-8" />
           </div>
 
-          <h2 className="text-[28px] font-black tracking-tight text-zinc-900 dark:text-white mb-3">
-            Gestioná tus Clientes y Contactos
+          <h2 className="text-[24px] font-black tracking-tight text-zinc-900 dark:text-white mb-2">
+            Conectá tu Tienda Online
           </h2>
-          <p className="text-[14px] text-zinc-500 dark:text-zinc-400 max-w-md mx-auto mb-10 leading-relaxed">
-            Para comenzar, vinculá tu tienda online o tu cuenta de mensajería. Esto te permitirá centralizar conversaciones y analizar el historial de compras.
+          <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto mb-8 leading-relaxed">
+            Vinculá Shopify, WooCommerce o Tiendanube en tu panel de accesos para poder visualizar, filtrar y analizar a todos tus clientes.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-            {/* Store Card */}
-            <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-250 dark:hover:border-zinc-700 transition-all duration-200">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-pink-50 dark:bg-pink-950/25 text-pink-600 dark:text-pink-400 flex items-center justify-center mb-4">
-                  <ShoppingBag className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-[15px] text-zinc-850 dark:text-white mb-2">Tienda Online</h3>
-                <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-6">
-                  Sincronizá clientes de Shopify, Tiendanube o WooCommerce para ver su historial de compras y estadísticas de gasto.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/links')}
-                className="w-full py-2.5 bg-pink-600 hover:bg-pink-700 text-white text-[12px] font-black rounded-xl transition-all shadow-sm shadow-pink-500/10 active:scale-[0.98]"
-              >
-                Conectar Tienda
-              </button>
-            </div>
-
-            {/* Messaging Card */}
-            <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-250 dark:hover:border-zinc-700 transition-all duration-200">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/25 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-4">
-                  <MessageSquare className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-[15px] text-zinc-850 dark:text-white mb-2">Canal de Mensajería</h3>
-                <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-6">
-                  Vinculá Chatwoot para ver tus hilos de chat, utilizar completado de perfiles por IA y gestionar notas de clientes.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/links')}
-                className="w-full py-2.5 bg-violet-600 hover:bg-violet-750 text-white text-[12px] font-black rounded-xl transition-all shadow-sm shadow-violet-600/10 active:scale-[0.98]"
-              >
-                Conectar Mensajería
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/links')}
+            className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white text-[13px] font-black rounded-2xl transition-all shadow-sm shadow-pink-500/10 active:scale-[0.98]"
+          >
+            Vincular Tienda en Mis Accesos
+          </button>
         </div>
       </div>
     );
   }
 
-  // Sort contact array locally if name sorting is selected
-  const sortedContacts = [...contacts].sort((a, b) => {
-    if (sortBy === 'id') return b.id - a.id;
-    return (a.name || '').localeCompare(b.name || '');
-  });
-
-  const sortedStoreCustomers = [...storeCustomers].sort((a, b) => {
-    if (sortBy === 'id') return b.id - a.id;
-    return (a.name || '').localeCompare(b.name || '');
-  });
-
   return (
-    <CenteredPageLoader isLoading={loading}>
+    <CenteredPageLoader isLoading={loading && storeCustomers.length === 0}>
       <div className="flex flex-col h-full w-full overflow-hidden bg-[#f5f5f7] dark:bg-[#0a0a0a]">
-      {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
-        
-        {/* LEFT COLUMN: Contacts/Store Customers list */}
-        <div className="w-full md:w-[320px] flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-300">
+        <div className="flex flex-1 overflow-hidden">
           
-          {/* Header & Search */}
-          <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 space-y-3">
-            <h1 className="text-[18px] font-black tracking-tight text-zinc-900 dark:text-white">Contactos</h1>
-
-            {/* Segmented Control Switcher */}
-            <div className="grid grid-cols-2 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl">
-              <button
-                type="button"
-                onClick={() => handleTabChange('messaging')}
-                className={`py-1.5 text-[11px] font-bold rounded-lg transition-all ${
-                  activeTab === 'messaging'
-                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                }`}
-              >
-                Mensajería
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTabChange('store')}
-                className={`py-1.5 text-[11px] font-bold rounded-lg transition-all ${
-                  activeTab === 'store'
-                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
-                }`}
-              >
-                Clientes Tienda
-              </button>
-            </div>
+          {/* LEFT COLUMN: Customers list */}
+          <div className="w-full md:w-[320px] flex-shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-300">
             
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
-                <input
-                  type="text"
-                  placeholder={activeTab === 'messaging' ? "Buscar contactos..." : "Buscar clientes..."}
-                  value={search}
-                  onChange={handleSearchChange}
-                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-400 text-zinc-700 dark:text-zinc-300"
-                />
-              </div>
+            {/* Header, Search & Filters */}
+            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 space-y-3">
+              <h1 className="text-[18px] font-black tracking-tight text-zinc-900 dark:text-white">Clientes</h1>
 
-              {/* Sorting Button */}
-              <button
-                type="button"
-                onClick={() => setSortBy(prev => prev === 'name' ? 'id' : 'name')}
-                title={sortBy === 'name' ? "Ordenar por Más Recientes" : "Ordenar por Nombre"}
-                className="p-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition-colors"
-              >
-                <svg className="w-4 h-4 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m3 16 4 4 4-4M7 20V4M21 8l-4-4-4 4M17 4v16" />
-                </svg>
-              </button>
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {[
+                  { id: 'all', label: 'Todos' },
+                  { id: 'new', label: 'Nuevos' },
+                  { id: 'frequent', label: 'Frecuentes' }
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setFilterType(f.id as any);
+                      setCurrentPage(1);
+                    }}
+                    className={`px-3 py-1 rounded-full text-[10px] font-black transition-all ${
+                      filterType === f.id
+                        ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm'
+                        : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar clientes..."
+                    value={search}
+                    onChange={handleSearchChange}
+                    className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-400 text-zinc-700 dark:text-zinc-300"
+                  />
+                </div>
+
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1.5 text-[11px] font-bold text-zinc-600 dark:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+                >
+                  <option value="recent">Recientes</option>
+                  <option value="name">Nombre</option>
+                  <option value="spent">Mayor Gasto</option>
+                  <option value="orders">Más Pedidos</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-          {/* List scroll container */}
-          <div className="flex-1 overflow-y-auto py-2 space-y-1">
-            {activeTab === 'messaging' && !hasChatwoot ? (
-              <div className="px-4 py-8 text-center flex flex-col items-center justify-center h-full">
-                <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/20 text-violet-500 flex items-center justify-center mb-3">
-                  <MessageSquare className="w-5 h-5" />
+            {/* List scroll container */}
+            <div className="flex-1 overflow-y-auto py-2 space-y-1">
+              {loading && storeCustomers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                  <p className="text-[11px] text-zinc-400">Obteniendo clientes...</p>
                 </div>
-                <h4 className="text-[12.5px] font-black text-zinc-800 dark:text-zinc-200">Mensajería Desconectada</h4>
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1 max-w-[200px] leading-relaxed mx-auto">
-                  Vinculá Chatwoot para ver contactos de tus chats de mensajería.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate('/links')}
-                  className="mt-4 px-3 py-1.5 bg-violet-600 hover:bg-violet-750 text-white text-[10.5px] font-bold rounded-lg transition-all"
-                >
-                  Configurar
-                </button>
-              </div>
-            ) : activeTab === 'store' && !hasStore ? (
-              <div className="px-4 py-8 text-center flex flex-col items-center justify-center h-full">
-                <div className="w-10 h-10 rounded-xl bg-pink-50 dark:bg-pink-950/20 text-pink-500 flex items-center justify-center mb-3">
-                  <ShoppingBag className="w-5 h-5" />
+              ) : error ? (
+                <div className="p-4 text-[11px] text-red-500 font-semibold">{error}</div>
+              ) : sortedCustomers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-zinc-400 gap-2">
+                  <User className="w-8 h-8 opacity-40" />
+                  <p className="text-[12px] font-bold">Sin clientes</p>
                 </div>
-                <h4 className="text-[12.5px] font-black text-zinc-800 dark:text-zinc-205">Tienda Desconectada</h4>
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1 max-w-[200px] leading-relaxed mx-auto">
-                  Vinculá Shopify, WooCommerce o Tiendanube para importar tus clientes.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => navigate('/links')}
-                  className="mt-4 px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white text-[10.5px] font-bold rounded-lg transition-all"
-                >
-                  Configurar
-                </button>
-              </div>
-            ) : loading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-2">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                <p className="text-[11px] text-zinc-400">
-                  {activeTab === 'messaging' ? 'Obteniendo contactos...' : 'Obteniendo clientes...'}
-                </p>
-              </div>
-            ) : error ? (
-              <div className="p-4 text-[11px] text-red-500 font-semibold">{error}</div>
-            ) : (activeTab === 'messaging' ? sortedContacts : sortedStoreCustomers).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-zinc-400 gap-2">
-                <User className="w-8 h-8 opacity-40" />
-                <p className="text-[12px] font-bold">Sin {activeTab === 'messaging' ? 'contactos' : 'clientes'}</p>
-              </div>
-            ) : activeTab === 'messaging' ? (
-              sortedContacts.map(c => {
-                const isSelected = selected?.id === c.id;
-                const gradient = getAvatarGradient(c.name || String(c.id));
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => handleSelectContact(c)}
-                    className={`mx-2.5 my-0.5 px-3 py-2.5 flex items-center gap-3 transition-all duration-200 cursor-pointer rounded-xl group ${
-                      isSelected
-                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/10'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/35 border border-transparent'
-                    }`}
-                  >
-                    {/* Initials Avatar */}
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-black bg-gradient-to-br shadow-inner flex-shrink-0 ${gradient}`}>
-                      {getInitials(c.name || '')}
-                    </div>
+              ) : (
+                sortedCustomers.map(c => {
+                  const isSelected = selectedStoreCust?.id === c.id;
+                  const gradient = getAvatarGradient(c.name || String(c.id));
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => handleSelectStoreCustomer(c)}
+                      className={`mx-2.5 my-0.5 px-3 py-2.5 flex items-center gap-3 transition-all duration-200 cursor-pointer rounded-xl group ${
+                        isSelected
+                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/10'
+                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/35 border border-transparent'
+                      }`}
+                    >
+                      {/* Initials Avatar */}
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-black bg-gradient-to-br shadow-inner flex-shrink-0 ${gradient}`}>
+                        {getInitials(c.name || '')}
+                      </div>
 
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[12.5px] truncate font-bold ${isSelected ? 'text-white' : 'text-zinc-800 dark:text-zinc-100'}`}>
-                        {c.name || `Contacto #${c.id}`}
-                      </p>
-                      <p className={`text-[10px] font-mono mt-0.5 truncate ${isSelected ? 'text-blue-200' : 'text-zinc-500 dark:text-zinc-400'}`}>
-                        {c.phone_number || c.email || 'Sin teléfono/email'}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[12.5px] truncate font-bold ${isSelected ? 'text-white' : 'text-zinc-800 dark:text-zinc-100'}`}>
+                          {c.name || 'Cliente sin nombre'}
+                        </p>
+                        <p className={`text-[10px] font-mono mt-0.5 truncate ${isSelected ? 'text-blue-200' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                          {c.phone || c.email || 'Sin teléfono/email'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              sortedStoreCustomers.map(c => {
-                const isSelected = selectedStoreCust?.id === c.id;
-                const gradient = getAvatarGradient(c.name || String(c.id));
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => handleSelectStoreCustomer(c)}
-                    className={`mx-2.5 my-0.5 px-3 py-2.5 flex items-center gap-3 transition-all duration-200 cursor-pointer rounded-xl group ${
-                      isSelected
-                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/10'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/35 border border-transparent'
-                    }`}
-                  >
-                    {/* Initials Avatar */}
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-black bg-gradient-to-br shadow-inner flex-shrink-0 ${gradient}`}>
-                      {getInitials(c.name || '')}
-                    </div>
+                  );
+                })
+              )}
+            </div>
 
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[12.5px] truncate font-bold ${isSelected ? 'text-white' : 'text-zinc-800 dark:text-zinc-100'}`}>
-                        {c.name || 'Cliente sin nombre'}
-                      </p>
-                      <p className={`text-[10px] font-mono mt-0.5 truncate ${isSelected ? 'text-blue-200' : 'text-zinc-550 dark:text-zinc-400'}`}>
-                        {c.phone || c.email || 'Sin teléfono/email'}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Pagination Footer */}
-          {totalCount > 0 && !(activeTab === 'messaging' && !hasChatwoot) && !(activeTab === 'store' && !hasStore) && (
-            <div className="p-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20 flex items-center justify-between text-[11px] text-zinc-400 dark:text-zinc-500 select-none">
-              <span>{startItem}-{endItem} de {totalCount}</span>
-              {!(activeTab === 'store' && profile?.ecommerce_platform === 'shopify') && (
+            {/* Pagination Footer */}
+            {totalCount > 0 && !(platform === 'shopify') && (
+              <div className="p-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/20 flex items-center justify-between text-[11px] text-zinc-400 dark:text-zinc-500 select-none">
+                <span>{startItem}-{endItem} de {totalCount}</span>
                 <div className="flex items-center gap-1">
                   <button
                     disabled={currentPage <= 1 || loading}
@@ -815,297 +512,13 @@ export default function ContactosPage() {
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT COLUMN: Details */}
-        <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-900/30 overflow-hidden relative">
-          {activeTab === 'messaging' && !hasChatwoot ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto h-full">
-              <div className="w-16 h-16 rounded-2xl bg-violet-50 dark:bg-violet-950/20 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-5 animate-pulse">
-                <MessageSquare className="w-8 h-8" />
               </div>
-              <h3 className="text-[20px] font-black tracking-tight text-zinc-900 dark:text-white mb-2">
-                Conectá tus Canales de Mensajería
-              </h3>
-              <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-6">
-                Al integrar Chatwoot, podrás centralizar los chats de WhatsApp, Instagram, Facebook y Webchat.
-              </p>
-              <div className="w-full space-y-3.5 text-left bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm text-[12.5px] mb-6">
-                <div className="flex items-start gap-3">
-                  <span className="text-[16px] mt-0.5">💬</span>
-                  <div>
-                    <h4 className="font-bold text-zinc-800 dark:text-zinc-205">Historial unificado de chats</h4>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Accedé a toda la comunicación de tus clientes desde una sola pantalla.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-[16px] mt-0.5">🧠</span>
-                  <div>
-                    <h4 className="font-bold text-zinc-800 dark:text-zinc-205">Completado de perfil con IA</h4>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Extraé automáticamente datos clave del cliente a partir de sus conversaciones.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-[16px] mt-0.5">🏷️</span>
-                  <div>
-                    <h4 className="font-bold text-zinc-800 dark:text-zinc-205">Notas y segmentación comercial</h4>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Agregá observaciones privadas, etiquetas y organiza tu flujo comercial.</p>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/links')}
-                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-750 text-white text-[12.5px] font-black rounded-xl transition-all shadow-sm shadow-violet-600/10 active:scale-[0.98]"
-              >
-                Vincular Mensajería en Mis Accesos
-              </button>
-            </div>
-          ) : activeTab === 'store' && !hasStore ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-xl mx-auto h-full">
-              <div className="w-16 h-16 rounded-2xl bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400 flex items-center justify-center mb-5 animate-pulse">
-                <ShoppingBag className="w-8 h-8" />
-              </div>
-              <h3 className="text-[20px] font-black tracking-tight text-zinc-900 dark:text-white mb-2">
-                Conectá tu Tienda Online
-              </h3>
-              <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-6">
-                Visualizá a los compradores de tu e-commerce y obtén una vista de 360 grados de su comportamiento comercial.
-              </p>
-              <div className="w-full space-y-3.5 text-left bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm text-[12.5px] mb-6">
-                <div className="flex items-start gap-3">
-                  <span className="text-[16px] mt-0.5">📊</span>
-                  <div>
-                    <h4 className="font-bold text-zinc-800 dark:text-zinc-205">Estadísticas de facturación</h4>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Visualizá el total gastado, cantidad de pedidos y ticket promedio por cliente.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-[16px] mt-0.5">🛒</span>
-                  <div>
-                    <h4 className="font-bold text-zinc-800 dark:text-zinc-205">Detalle de pedidos realizados</h4>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Accedé al historial completo de compras de cada cliente con un solo click.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="text-[16px] mt-0.5">🔗</span>
-                  <div>
-                    <h4 className="font-bold text-zinc-855 dark:text-zinc-205">Conexión directa a chats</h4>
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">Iniciá chats de soporte directamente vinculando el correo con hilos existentes.</p>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/links')}
-                className="px-6 py-2.5 bg-pink-600 hover:bg-pink-700 text-white text-[12.5px] font-black rounded-xl transition-all shadow-sm shadow-pink-500/10 active:scale-[0.98]"
-              >
-                Vincular Tienda en Mis Accesos
-              </button>
-            </div>
-          ) : activeTab === 'messaging' ? (
-            !selected ? (
-              <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
-                <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-3xl">👤</div>
-                <p className="text-[13.5px] font-medium">Seleccioná un contacto para ver detalles</p>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 max-w-3xl w-full">
-                
-                {/* Header profile block */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-[18px] font-black bg-gradient-to-br shadow-inner ${getAvatarGradient(selected.name || '')}`}>
-                      {getInitials(selected.name || '')}
-                    </div>
-                    <div>
-                      <h2 className="text-[20px] font-black tracking-tight text-zinc-900 dark:text-white">{selected.name || `Contacto #${selected.id}`}</h2>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5 flex items-center gap-1.5">
-                        <span>ID: {selected.id}</span>
-                        {selected.created_at && (
-                          <>
-                            <span>•</span>
-                            <span>Conectado: {new Date(selected.created_at * 1000).toLocaleDateString('es-AR')}</span>
-                          </>
-                        )}
-                      </p>
-                    </div>
-                  </div>
+            )}
+          </div>
 
-                  <div className="flex items-center gap-2">
-                    {/* Start Chat Button */}
-                    <button
-                      type="button"
-                      onClick={handleStartChat}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[12px] font-black shadow-sm shadow-blue-500/10 transition-all active:scale-[0.98]"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Iniciar Chat
-                    </button>
-
-                    {/* AI Complete Button */}
-                    <button
-                      type="button"
-                      onClick={handleAiComplete}
-                      disabled={aiLoading}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/20 dark:hover:bg-violet-900/35 text-violet-750 dark:text-violet-400 rounded-xl text-[12px] font-black border border-violet-200 dark:border-violet-800/40 transition-all active:scale-[0.98] siri-glow"
-                    >
-                      {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-                      Completar con IA
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form container */}
-                <form onSubmit={handleSaveContact} className="space-y-6">
-                  
-                  {/* Core Attributes */}
-                  <div className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm space-y-4">
-                    <h3 className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800/60 pb-2">Información Básica</h3>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10.5px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-wider">Nombre Completo</label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                          <input
-                            type="text"
-                            required
-                            value={formName}
-                            onChange={e => setFormName(e.target.value)}
-                            className="w-full pl-9 pr-3 h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 px-3 text-[12.5px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[10.5px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-wider">Teléfono</label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                          <input
-                            type="text"
-                            value={formPhone}
-                            onChange={e => setFormPhone(e.target.value)}
-                            placeholder="+54 9..."
-                            className="w-full pl-9 pr-3 h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 px-3 text-[12.5px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 sm:col-span-2">
-                        <label className="block text-[10.5px] font-bold text-zinc-400 dark:text-zinc-555 uppercase tracking-wider">Correo Electrónico</label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                          <input
-                            type="email"
-                            value={formEmail}
-                            onChange={e => setFormEmail(e.target.value)}
-                            placeholder="nombre@ejemplo.com"
-                            className="w-full pl-9 pr-3 h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 px-3 text-[12.5px]"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Custom Attributes */}
-                  <div className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl p-5 shadow-sm space-y-4">
-                    <h3 className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800/60 pb-2">Atributos Personalizados</h3>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10.5px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-wider">Instagram</label>
-                        <div className="relative">
-                          <Instagram className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                          <input
-                            type="text"
-                            value={formInstagram}
-                            onChange={e => setFormInstagram(e.target.value)}
-                            placeholder="@usuario"
-                            className="w-full pl-9 pr-3 h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 px-3 text-[12.5px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[10.5px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-wider">Ubicación / Ciudad</label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                          <input
-                            type="text"
-                            value={formLocation}
-                            onChange={e => setFormLocation(e.target.value)}
-                            placeholder="Ciudad, Provincia"
-                            className="w-full pl-9 pr-3 h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 px-3 text-[12.5px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 sm:col-span-2">
-                        <label className="block text-[10.5px] font-bold text-zinc-400 dark:text-zinc-555 uppercase tracking-wider">Empresa / Negocio</label>
-                        <div className="relative">
-                          <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                          <input
-                            type="text"
-                            value={formCompany}
-                            onChange={e => setFormCompany(e.target.value)}
-                            placeholder="Nombre de la empresa"
-                            className="w-full pl-9 pr-3 h-10 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 px-3 text-[12.5px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 sm:col-span-2">
-                        <label className="block text-[10.5px] font-bold text-zinc-400 dark:text-zinc-555 uppercase tracking-wider">Notas / Resumen del cliente</label>
-                        <div className="relative">
-                          <FileText className="absolute left-3 top-3.5 w-4 h-4 text-zinc-400" />
-                          <textarea
-                            rows={3}
-                            value={formNotes}
-                            onChange={e => setFormNotes(e.target.value)}
-                            placeholder="Ingresa notas comerciales sobre este cliente..."
-                            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-[12.5px] resize-none"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Error display */}
-                  {aiError && (
-                    <div className="p-3.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/35 rounded-xl flex items-start gap-2 text-[12px] text-red-700 dark:text-red-400 font-semibold select-none">
-                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                      <span>{aiError}</span>
-                    </div>
-                  )}
-
-                  {/* Footer Save Button */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="flex items-center justify-center gap-1.5 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-850 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 rounded-xl text-[12.5px] font-black shadow-sm disabled:opacity-50 transition-all active:scale-[0.98]"
-                    >
-                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Guardar Cambios
-                    </button>
-
-                    {saveSuccess && (
-                      <div className="flex items-center gap-1 text-[12px] text-emerald-500 font-bold animate-in fade-in duration-200">
-                        <Check className="w-4 h-4" />
-                        Guardado con éxito
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-            )
-          ) : (
-            // STORE CUSTOMERS DETAILS PANEL
-            !selectedStoreCust ? (
+          {/* RIGHT COLUMN: Details */}
+          <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-900/30 overflow-hidden relative">
+            {!selectedStoreCust ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
                 <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-3xl">🛍️</div>
                 <p className="text-[13.5px] font-medium">Seleccioná un cliente para ver estadísticas y pedidos</p>
@@ -1143,32 +556,34 @@ export default function ContactosPage() {
                       Ver Pedidos
                     </button>
 
-                    {/* Start Chat Button */}
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!chatwootContactId || !cwUrl || !cwToken) return;
-                        try {
-                          const conversationsList = await chatwoot.getContactConversations(cwUrl, cwToken, chatwootContactId);
-                          if (conversationsList && conversationsList.length > 0) {
-                            navigate(`/atencion?convId=${conversationsList[0].id}`);
-                          } else {
+                    {/* Start Chat Button (via Chatwoot linkage) */}
+                    {hasChatwoot && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!chatwootContactId || !cwUrl || !cwToken) return;
+                          try {
+                            const conversationsList = await chatwoot.getContactConversations(cwUrl, cwToken, chatwootContactId);
+                            if (conversationsList && conversationsList.length > 0) {
+                              navigate(`/atencion?convId=${conversationsList[0].id}`);
+                            } else {
+                              navigate('/atencion');
+                            }
+                          } catch {
                             navigate('/atencion');
                           }
-                        } catch {
-                          navigate('/atencion');
-                        }
-                      }}
-                      disabled={checkingChatwoot || !chatwootContactId}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[12px] font-black shadow-sm shadow-blue-500/10 transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none"
-                    >
-                      {checkingChatwoot ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <MessageSquare className="w-4 h-4" />
-                      )}
-                      {chatwootContactId ? 'Iniciar Chat' : 'Sin chat activo'}
-                    </button>
+                        }}
+                        disabled={checkingChatwoot || !chatwootContactId}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[12px] font-black shadow-sm shadow-blue-500/10 transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none"
+                      >
+                        {checkingChatwoot ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <MessageSquare className="w-4 h-4" />
+                        )}
+                        {chatwootContactId ? 'Iniciar Chat' : 'Sin chat activo'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1254,7 +669,7 @@ export default function ContactosPage() {
                       <div className="flex items-start gap-3 text-zinc-600 dark:text-zinc-300">
                         <MapPin className="w-4 h-4 text-zinc-400 mt-0.5 shrink-0" />
                         <div>
-                          <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-555 uppercase tracking-wider">Dirección de Envío</p>
+                          <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Dirección de Envío</p>
                           <p className="font-bold">{selectedStoreCust.address}</p>
                         </div>
                       </div>
@@ -1262,7 +677,7 @@ export default function ContactosPage() {
                   </div>
                 </div>
 
-                {!chatwootContactId && !checkingChatwoot && (
+                {hasChatwoot && !chatwootContactId && !checkingChatwoot && (
                   <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-250 dark:border-amber-900/30 rounded-xl flex items-start gap-3 text-[11.5px] text-amber-700 dark:text-amber-400">
                     <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <div>
@@ -1275,127 +690,9 @@ export default function ContactosPage() {
                 )}
 
               </div>
-            )
-          )}
-        </div>
-      </div>
-
-      {/* AI SUGGESTION DIFF COMPARISON MODAL */}
-      {showAiModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAiModal(false)} />
-          
-          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-[24px] shadow-2xl p-6 md:p-8 max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            
-            {/* Modal Header */}
-            <div className="flex items-start gap-3.5 border-b border-zinc-100 dark:border-zinc-800 pb-4 mb-4 flex-shrink-0">
-              <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-950/20 text-violet-600 dark:text-violet-400 flex items-center justify-center">
-                <Bot className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-[16px] font-black text-zinc-900 dark:text-white">Perfil Completado con IA</h3>
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-semibold mt-0.5">Revisá y seleccioná los campos extraídos del chat que querés aplicar.</p>
-              </div>
-            </div>
-
-            {/* Modal Content Scroll */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-              {[
-                { key: 'name', label: 'Nombre', current: formName, suggestion: aiSuggestions.name },
-                { key: 'email', label: 'Correo', current: formEmail, suggestion: aiSuggestions.email },
-                { key: 'phone_number', label: 'Teléfono', current: formPhone, suggestion: aiSuggestions.phone_number },
-                { key: 'instagram', label: 'Instagram', current: formInstagram, suggestion: aiSuggestions.instagram },
-                { key: 'location', label: 'Ubicación', current: formLocation, suggestion: aiSuggestions.location },
-                { key: 'company', label: 'Empresa', current: formCompany, suggestion: aiSuggestions.company },
-                { key: 'notes', label: 'Resumen / Nota', current: formNotes, suggestion: aiSuggestions.notes, isTextarea: true }
-              ].map(field => {
-                const hasSuggestion = field.suggestion && field.suggestion.trim();
-                const isDifferent = hasSuggestion && field.current !== field.suggestion;
-                
-                return (
-                  <div 
-                    key={field.key}
-                    className={`p-3.5 rounded-xl border transition-all ${
-                      selectedSuggestions[field.key]
-                        ? 'border-violet-300 dark:border-violet-900 bg-violet-50/10 dark:bg-violet-950/5'
-                        : 'border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-950/10'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3.5 mb-2.5">
-                      <input
-                        type="checkbox"
-                        disabled={!hasSuggestion}
-                        checked={selectedSuggestions[field.key]}
-                        onChange={e => setSelectedSuggestions(prev => ({ ...prev, [field.key]: e.target.checked }))}
-                        className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 text-violet-600 focus:ring-violet-500/20 disabled:opacity-30 cursor-pointer"
-                      />
-                      <span className="text-[11.5px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{field.label}</span>
-                      
-                      {isDifferent && (
-                        <span className="text-[9px] font-black bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded-full ml-auto">
-                          Sugerencia Nueva
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Values comparison */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[12px] font-medium leading-relaxed">
-                      <div>
-                        <span className="block text-[10px] text-zinc-400 dark:text-zinc-500 font-bold mb-0.5">Valor Actual:</span>
-                        {field.isTextarea ? (
-                          <p className="text-zinc-600 dark:text-zinc-400 bg-white dark:bg-zinc-900/50 p-2 rounded-lg border border-zinc-100 dark:border-zinc-800/60 max-h-[80px] overflow-y-auto text-[11.5px]">
-                            {field.current || <span className="italic opacity-40">Vacío</span>}
-                          </p>
-                        ) : (
-                          <span className="text-zinc-600 dark:text-zinc-400 truncate block">
-                            {field.current || <span className="italic opacity-40">Vacío</span>}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className={hasSuggestion ? '' : 'opacity-40'}>
-                        <span className="block text-[10px] text-violet-500 dark:text-violet-400 font-black mb-0.5">Sugerido por IA:</span>
-                        {hasSuggestion ? (
-                          field.isTextarea ? (
-                            <p className="text-zinc-900 dark:text-zinc-100 bg-violet-100/10 dark:bg-violet-900/10 p-2 rounded-lg border border-violet-200 dark:border-violet-900 max-h-[80px] overflow-y-auto text-[11.5px]">
-                              {field.suggestion}
-                            </p>
-                          ) : (
-                            <span className="text-zinc-900 dark:text-zinc-100 font-bold truncate block">
-                              {field.suggestion}
-                            </span>
-                          )
-                        ) : (
-                          <span className="italic text-zinc-400 block">No detectado en chat</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex gap-3 border-t border-zinc-100 dark:border-zinc-800 pt-4 mt-4 flex-shrink-0">
-              <button
-                onClick={() => setShowAiModal(false)}
-                className="flex-1 h-11 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[12.5px] font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
-                Cancelar
-              </button>
-              
-              <button
-                onClick={handleApplySuggestions}
-                disabled={saving || !Object.values(selectedSuggestions).some(Boolean)}
-                className="flex-1 h-11 bg-violet-600 hover:bg-violet-750 text-white rounded-xl text-[12.5px] font-black shadow-md shadow-violet-600/10 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 active:scale-[0.98]"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Confirmar y Aplicar
-              </button>
-            </div>
+            )}
           </div>
         </div>
-      )}
       </div>
     </CenteredPageLoader>
   );
