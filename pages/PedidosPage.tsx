@@ -119,7 +119,167 @@ const AttributionFull = ({ attribution }: { attribution: OrderAttribution | null
   );
 };
 
-// ─── order row ────────────────────────────────────────────────────────────
+// ─── Expanded Detail (shared between table row and mobile card) ───────────────
+
+function OrderDetail({ order, productImages }: { order: any; productImages: Record<string, string> }) {
+  const lineItems: any[] = order.line_items || [];
+  const customerName = order.customer
+    ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() || 'Sin nombre'
+    : 'Sin cliente';
+  const attribution = parseOrderAttribution(order);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      {/* Products */}
+      <div>
+        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-1.5">
+          <Package className="w-3 h-3" /> Productos
+        </p>
+        <div className="space-y-2">
+          {lineItems.map((item: any, i: number) => {
+            const img = item._wc_image || productImages[String(item.product_id)];
+            return (
+              <div key={i} className="flex items-center gap-3 p-2 rounded-xl bg-white dark:bg-white/[0.03] border border-zinc-100 dark:border-white/[0.05]">
+                <div className="shrink-0 min-w-[32px] h-8 px-2 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center">
+                  <span className="text-[13px] font-black">×{item.quantity}</span>
+                </div>
+                <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06]">
+                  {img
+                    ? <img src={img} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    : <Package className="w-3.5 h-3.5 text-zinc-400" />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 leading-snug">{item.title}</p>
+                  {item.variant_title && item.variant_title !== 'Default Title' && (
+                    <p className="text-[10px] text-zinc-400 mt-0.5">{item.variant_title}</p>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[12px] font-black text-zinc-800 dark:text-zinc-200">{fmtCurr(parseFloat(item.price || 0))}</p>
+                  <p className="text-[10px] text-zinc-400 font-medium mt-0.5">c/u</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Cliente */}
+      <div>
+        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-1.5">
+          <User className="w-3 h-3" /> Cliente
+        </p>
+        {order.customer ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              {order.customer.email ? (
+                <a
+                  href={`#/cliente/${order.customer.email}`}
+                  className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 hover:underline hover:text-pink-500 transition-colors"
+                >
+                  {customerName}
+                </a>
+              ) : (
+                <p className="text-[13px] font-black text-zinc-800 dark:text-zinc-100">{customerName}</p>
+              )}
+              {order.customer.orders_count === 1 && (
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-[3px] rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/25">
+                  ✦ Nuevo cliente
+                </span>
+              )}
+            </div>
+            {order.customer.email && <p className="text-[11px] text-zinc-500">{order.customer.email}</p>}
+            {order.customer.phone && <p className="text-[11px] text-zinc-500">{order.customer.phone}</p>}
+            {order.customer.orders_count > 0 && (
+              <p className="text-[10px] text-zinc-400 mt-0.5">
+                {fmtCurr(parseFloat(order.customer.total_spent || 0))} gastado en total
+              </p>
+            )}
+            {order.customer.email && (
+              <a
+                href={`#/cliente/${order.customer.email}`}
+                className="flex items-center justify-center gap-2 mt-3 w-full py-2.5 bg-pink-500 hover:bg-pink-600 active:bg-pink-700 text-white rounded-xl text-[12px] font-black shadow-lg shadow-pink-500/20 transition-all hover:scale-[1.02]"
+              >
+                <User className="w-4 h-4" />
+                Ver Perfil y Pedidos
+              </a>
+            )}
+          </div>
+        ) : (
+          <p className="text-[12px] text-zinc-400">Sin datos de cliente</p>
+        )}
+        {attribution && (
+          <div className="mt-4">
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
+              <ShoppingCart className="w-3 h-3" /> Origen del pedido
+            </p>
+            <AttributionFull attribution={attribution} />
+          </div>
+        )}
+        {order.shipping_address && (
+          <div className="mt-4">
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-1.5 flex items-center gap-1.5">
+              <MapPin className="w-3 h-3" /> Envío
+            </p>
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
+              {[order.shipping_address.address1, order.shipping_address.city, order.shipping_address.province, order.shipping_address.country].filter(Boolean).join(', ')}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Totales */}
+      <div>
+        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-1.5">
+          <CreditCard className="w-3 h-3" /> Resumen
+        </p>
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-zinc-500">Subtotal</span>
+            <span className="font-bold text-zinc-700 dark:text-zinc-300">{fmtCurr(parseFloat(order.subtotal_price || 0))}</span>
+          </div>
+          {parseFloat(order.total_discounts || 0) > 0 && (
+            <div className="flex justify-between text-[11px]">
+              <span className="text-zinc-500 flex items-center gap-1"><Tag className="w-2.5 h-2.5" /> Descuento</span>
+              <span className="font-bold text-emerald-500">- {fmtCurr(parseFloat(order.total_discounts))}</span>
+            </div>
+          )}
+          {(order.shipping_lines || []).map((sl: any, i: number) => (
+            <div key={i} className="flex justify-between text-[11px]">
+              <span className="text-zinc-500 flex items-center gap-1"><Truck className="w-2.5 h-2.5" /> {sl.title}</span>
+              <span className="font-bold text-zinc-700 dark:text-zinc-300">{fmtCurr(parseFloat(sl.price || 0))}</span>
+            </div>
+          ))}
+          {parseFloat(order.total_tax || 0) > 0 && (
+            <div className="flex justify-between text-[11px]">
+              <span className="text-zinc-500">Impuestos</span>
+              <span className="font-bold text-zinc-700 dark:text-zinc-300">{fmtCurr(parseFloat(order.total_tax))}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-[13px] font-black border-t border-zinc-200 dark:border-white/[0.06] pt-2 mt-1">
+            <span className="text-zinc-900 dark:text-white">Total</span>
+            <span className="text-zinc-900 dark:text-white">{fmtCurr(parseFloat(order.total_price || 0))}</span>
+          </div>
+        </div>
+        {order.discount_codes?.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1">
+            {order.discount_codes.map((dc: any, i: number) => (
+              <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                <Tag className="w-2 h-2" /> {dc.code}
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="text-[10px] text-zinc-400 mt-2.5">{fmtDateTime(order.created_at)}</p>
+      </div>
+
+    </div>
+  );
+}
+
+// ─── order row (desktop table) ────────────────────────────────────────────
 
 const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; productImages: Record<string, string> }) {
   const [open, setOpen] = useState(false);
@@ -128,12 +288,6 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
     ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() || 'Sin nombre'
     : 'Sin cliente';
 
-  const lineItems: any[] = order.line_items || [];
-  const firstItem = lineItems[0];
-  const extraCount = lineItems.length - 1;
-  const firstImage = firstItem
-    ? (firstItem._wc_image || productImages[String(firstItem.product_id)] || null)
-    : null;
   const { label: dateLabel, tag: dateTag, time: dateTime } = fmtDate(order.created_at);
   const attribution = parseOrderAttribution(order);
 
@@ -231,158 +385,88 @@ const OrderRow = memo(function OrderRow({ order, productImages }: { order: any; 
       {open && (
         <tr className="border-b border-zinc-100/80 dark:border-white/[0.04] bg-zinc-50/70 dark:bg-white/[0.02]">
           <td colSpan={7} className="px-5 py-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-              {/* Products */}
-              <div>
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-1.5">
-                  <Package className="w-3 h-3" /> Productos
-                </p>
-                <div className="space-y-2">
-                  {lineItems.map((item: any, i: number) => {
-                    const img = item._wc_image || productImages[String(item.product_id)];
-                    return (
-                      <div key={i} className="flex items-center gap-3 p-2 rounded-xl bg-white dark:bg-white/[0.03] border border-zinc-100 dark:border-white/[0.05]">
-                        {/* Quantity badge — big and prominent */}
-                        <div className="shrink-0 min-w-[32px] h-8 px-2 rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center">
-                          <span className="text-[13px] font-black">×{item.quantity}</span>
-                        </div>
-                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06]">
-                          {img
-                            ? <img src={img} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                            : <Package className="w-3.5 h-3.5 text-zinc-400" />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 leading-snug">{item.title}</p>
-                          {item.variant_title && item.variant_title !== 'Default Title' && (
-                            <p className="text-[10px] text-zinc-400 mt-0.5">{item.variant_title}</p>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[12px] font-black text-zinc-800 dark:text-zinc-200">{fmtCurr(parseFloat(item.price || 0))}</p>
-                          <p className="text-[10px] text-zinc-400 font-medium mt-0.5">c/u</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Cliente */}
-              <div>
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-1.5">
-                  <User className="w-3 h-3" /> Cliente
-                </p>
-                {order.customer ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {order.customer.email ? (
-                        <a
-                          href={`#/cliente/${order.customer.email}`}
-                          className="text-[13px] font-black text-zinc-800 dark:text-zinc-100 hover:underline hover:text-pink-500 transition-colors"
-                        >
-                          {customerName}
-                        </a>
-                      ) : (
-                        <p className="text-[13px] font-black text-zinc-800 dark:text-zinc-100">{customerName}</p>
-                      )}
-                      {order.customer.orders_count === 1 && (
-                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-[3px] rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/25">
-                          ✦ Nuevo cliente
-                        </span>
-                      )}
-                    </div>
-                    {order.customer.email && <p className="text-[11px] text-zinc-500">{order.customer.email}</p>}
-                    {order.customer.phone && <p className="text-[11px] text-zinc-500">{order.customer.phone}</p>}
-                    {order.customer.orders_count > 0 && (
-                      <p className="text-[10px] text-zinc-400 mt-0.5">
-                        {fmtCurr(parseFloat(order.customer.total_spent || 0))} gastado en total
-                      </p>
-                    )}
-                    {order.customer.email && (
-                      <a
-                        href={`#/cliente/${order.customer.email}`}
-                        className="flex items-center justify-center gap-2 mt-3 w-full py-2.5 bg-pink-500 hover:bg-pink-600 active:bg-pink-700 text-white rounded-xl text-[12px] font-black shadow-lg shadow-pink-500/20 transition-all hover:scale-[1.02]"
-                      >
-                        <User className="w-4 h-4" />
-                        Ver Perfil y Pedidos
-                      </a>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-[12px] text-zinc-400">Sin datos de cliente</p>
-                )}
-                {attribution && (
-                  <div className="mt-4">
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
-                      <ShoppingCart className="w-3 h-3" /> Origen del pedido
-                    </p>
-                    <AttributionFull attribution={attribution} />
-                  </div>
-                )}
-                {order.shipping_address && (
-                  <div className="mt-4">
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-1.5 flex items-center gap-1.5">
-                      <MapPin className="w-3 h-3" /> Envío
-                    </p>
-                    <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                      {[order.shipping_address.address1, order.shipping_address.city, order.shipping_address.province, order.shipping_address.country].filter(Boolean).join(', ')}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Totales */}
-              <div>
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-1.5">
-                  <CreditCard className="w-3 h-3" /> Resumen
-                </p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-zinc-500">Subtotal</span>
-                    <span className="font-bold text-zinc-700 dark:text-zinc-300">{fmtCurr(parseFloat(order.subtotal_price || 0))}</span>
-                  </div>
-                  {parseFloat(order.total_discounts || 0) > 0 && (
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-zinc-500 flex items-center gap-1"><Tag className="w-2.5 h-2.5" /> Descuento</span>
-                      <span className="font-bold text-emerald-500">- {fmtCurr(parseFloat(order.total_discounts))}</span>
-                    </div>
-                  )}
-                  {(order.shipping_lines || []).map((sl: any, i: number) => (
-                    <div key={i} className="flex justify-between text-[11px]">
-                      <span className="text-zinc-500 flex items-center gap-1"><Truck className="w-2.5 h-2.5" /> {sl.title}</span>
-                      <span className="font-bold text-zinc-700 dark:text-zinc-300">{fmtCurr(parseFloat(sl.price || 0))}</span>
-                    </div>
-                  ))}
-                  {parseFloat(order.total_tax || 0) > 0 && (
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-zinc-500">Impuestos</span>
-                      <span className="font-bold text-zinc-700 dark:text-zinc-300">{fmtCurr(parseFloat(order.total_tax))}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-[13px] font-black border-t border-zinc-200 dark:border-white/[0.06] pt-2 mt-1">
-                    <span className="text-zinc-900 dark:text-white">Total</span>
-                    <span className="text-zinc-900 dark:text-white">{fmtCurr(parseFloat(order.total_price || 0))}</span>
-                  </div>
-                </div>
-                {order.discount_codes?.length > 0 && (
-                  <div className="mt-2.5 flex flex-wrap gap-1">
-                    {order.discount_codes.map((dc: any, i: number) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
-                        <Tag className="w-2 h-2" /> {dc.code}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <p className="text-[10px] text-zinc-400 mt-2.5">{fmtDateTime(order.created_at)}</p>
-              </div>
-
-            </div>
+            <OrderDetail order={order} productImages={productImages} />
           </td>
         </tr>
       )}
     </>
+  );
+});
+
+// ─── order card (mobile) ──────────────────────────────────────────────────
+
+const OrderCard = memo(function OrderCard({ order, productImages }: { order: any; productImages: Record<string, string> }) {
+  const [open, setOpen] = useState(false);
+
+  const customerName = order.customer
+    ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() || 'Sin nombre'
+    : 'Sin cliente';
+
+  const { label: dateLabel, tag: dateTag, time: dateTime } = fmtDate(order.created_at);
+  const attribution = parseOrderAttribution(order);
+
+  const handleToggle = useCallback(() => setOpen(v => !v), []);
+
+  return (
+    <div className={`border-b border-zinc-100 dark:border-white/[0.04] last:border-b-0 ${open ? 'bg-zinc-50/80 dark:bg-white/[0.02]' : ''}`}>
+      {/* Card summary row */}
+      <button
+        onClick={handleToggle}
+        className="w-full px-4 py-3.5 flex items-start gap-3 text-left"
+      >
+        {/* Left: Date + customer */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+            {dateTag && (
+              <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-[1px] rounded shrink-0 ${
+                dateTag === 'Hoy'
+                  ? 'bg-pink-500/10 text-pink-500 dark:text-pink-400'
+                  : 'bg-violet-500/10 text-violet-600 dark:text-violet-400'
+              }`}>
+                {dateTag}
+              </span>
+            )}
+            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{dateLabel} · {dateTime}hs</span>
+          </div>
+          <p className="text-[13px] font-bold text-zinc-900 dark:text-white truncate">{customerName}</p>
+          {order.customer?.email && (
+            <p className="text-[10px] text-zinc-400 truncate mt-0.5">{order.customer.email}</p>
+          )}
+          {/* Badges row */}
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <PaymentBadge status={order.financial_status} />
+            <FulfillmentBadge status={order.fulfillment_status} />
+            {attribution && <AttributionBadge attribution={attribution} />}
+            {order.customer?.orders_count === 1 && (
+              <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-[2px] rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/25">
+                ✦ Nuevo
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: total + expander */}
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <span className="text-[15px] font-black text-zinc-900 dark:text-white whitespace-nowrap">
+            {fmtCurr(parseFloat(order.total_price || 0))}
+          </span>
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+            open
+              ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200'
+              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+          }`}>
+            {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </div>
+        </div>
+      </button>
+
+      {/* Expanded detail */}
+      {open && (
+        <div className="px-4 pb-5 pt-1">
+          <OrderDetail order={order} productImages={productImages} />
+        </div>
+      )}
+    </div>
   );
 });
 
@@ -544,10 +628,9 @@ export default function PedidosPage() {
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(o => {
-        const num   = String(o.order_number || o.name || '').toLowerCase();
         const name  = `${o.customer?.first_name || ''} ${o.customer?.last_name || ''}`.toLowerCase();
         const email = (o.customer?.email || '').toLowerCase();
-        return num.includes(q) || name.includes(q) || email.includes(q);
+        return name.includes(q) || email.includes(q);
       });
     }
     return sortAsc ? [...list].reverse() : list;
@@ -644,7 +727,7 @@ export default function PedidosPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
               <input
                 type="text"
-                placeholder="Buscar por # pedido, cliente o email..."
+                placeholder="Buscar por cliente o email..."
                 value={search}
                 onChange={e => handleFilterChange(() => setSearch(e.target.value))}
                 className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-white/[0.06] text-[12px] text-zinc-700 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
@@ -677,7 +760,7 @@ export default function PedidosPage() {
           </div>
         </div>
 
-        {/* ── Table ── */}
+        {/* ── List / Table ── */}
         <div className="bg-white dark:bg-[#111] rounded-[14px] border border-black/[0.06] dark:border-white/[0.05] shadow-[0_1px_8px_rgba(0,0,0,0.04)] dark:shadow-none overflow-hidden">
 
           {loading && !initialLoad ? (
@@ -726,8 +809,15 @@ export default function PedidosPage() {
                 </button>
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto">
+              {/* Mobile: card list */}
+              <div className="md:hidden divide-y divide-zinc-100 dark:divide-white/[0.04]">
+                {paginated.map(order => (
+                  <OrderCard key={order.id} order={order} productImages={productImages} />
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-zinc-100 dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.015]">

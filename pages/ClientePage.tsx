@@ -59,9 +59,70 @@ function FulfillmentBadge({ status }: { status: string | null }) {
       {icon}{label}
     </span>
   );
+}// ─── Shared expanded detail ────────────────────────────────────────────────
+
+function OrderExpandedDetail({ order }: { order: any }) {
+  const lineItems = order.line_items || [];
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Products List */}
+      <div className="space-y-2">
+        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-2">Productos</p>
+        {lineItems.map((item: any, idx: number) => (
+          <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-150/65 dark:border-white/[0.04]">
+            <div className="flex items-center gap-2 min-w-0 pr-2">
+              <span className="text-[11px] font-black px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-350">
+                ×{item.quantity}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 truncate">{item.title}</p>
+                {item.variant_title && (
+                  <p className="text-[10px] text-zinc-400 mt-0.5">{item.variant_title}</p>
+                )}
+              </div>
+            </div>
+            <span className="text-[12px] font-bold shrink-0 text-zinc-800 dark:text-zinc-200">
+              {fmtCurr(parseFloat(item.price || 0) * item.quantity)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Order breakdown */}
+      <div className="bg-white dark:bg-zinc-900/40 border border-zinc-150/65 dark:border-white/[0.04] rounded-2xl p-4 flex flex-col justify-between">
+        <div>
+          <p className="text-[10px] font-black text-zinc-450 uppercase tracking-wider mb-3">Resumen de Pago</p>
+          <div className="space-y-2 text-[11px] font-medium text-zinc-500">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span className="text-zinc-700 dark:text-zinc-300 font-bold">{fmtCurr(parseFloat(order.subtotal_price || 0))}</span>
+            </div>
+            {parseFloat(order.total_discounts || 0) > 0 && (
+              <div className="flex justify-between text-emerald-500 font-bold">
+                <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> Descuento</span>
+                <span>- {fmtCurr(parseFloat(order.total_discounts))}</span>
+              </div>
+            )}
+            {parseFloat(order.total_tax || 0) > 0 && (
+              <div className="flex justify-between">
+                <span>Impuestos</span>
+                <span className="text-zinc-700 dark:text-zinc-300 font-bold">{fmtCurr(parseFloat(order.total_tax))}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-3 mt-3 flex justify-between items-baseline">
+          <span className="text-[12px] font-black text-zinc-800 dark:text-zinc-150">Total Facturado</span>
+          <span className="text-[16px] font-black text-pink-500 dark:text-pink-400">{fmtCurr(parseFloat(order.total_price || 0))}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// Order Row
+// ─── Desktop table row ─────────────────────────────────────────────────────
+
 function OrderItemRow({ order }: { order: any }) {
   const [open, setOpen] = useState(false);
   const lineItems = order.line_items || [];
@@ -76,23 +137,18 @@ function OrderItemRow({ order }: { order: any }) {
           open ? 'bg-zinc-50 dark:bg-white/[0.025]' : 'hover:bg-zinc-50/70 dark:hover:bg-white/[0.015]'
         }`}
       >
-        <td className="px-4 py-3.5">
-          <span className="text-[12px] font-black text-zinc-800 dark:text-zinc-100">
-            #{order.order_number || order.name || order.id}
-          </span>
-        </td>
-        <td className="px-4 py-3.5">
+        <td className="px-4 py-3">
           <span className="text-[11px] text-zinc-600 dark:text-zinc-350 font-semibold">
             {fmtDateTime(order.created_at)}
           </span>
         </td>
-        <td className="px-4 py-3.5">
+        <td className="px-4 py-3">
           {firstItem ? (
             <div className="flex items-center gap-2">
               <span className="shrink-0 text-[10px] font-black px-1.5 py-[2px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
                 ×{firstItem.quantity}
               </span>
-              <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[180px]">
+              <p className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[200px]">
                 {firstItem.title}
               </p>
               {extraCount > 0 && (
@@ -103,13 +159,13 @@ function OrderItemRow({ order }: { order: any }) {
             <span className="text-zinc-400">—</span>
           )}
         </td>
-        <td className="px-4 py-3.5"><PaymentBadge status={order.financial_status} /></td>
-        <td className="px-4 py-3.5"><FulfillmentBadge status={order.fulfillment_status} /></td>
-        <td className="px-4 py-3.5 text-right font-black text-zinc-900 dark:text-white">
+        <td className="px-4 py-3"><PaymentBadge status={order.financial_status} /></td>
+        <td className="px-4 py-3"><FulfillmentBadge status={order.fulfillment_status} /></td>
+        <td className="px-4 py-3 text-right font-black text-zinc-900 dark:text-white">
           {fmtCurr(parseFloat(order.total_price || 0))}
         </td>
-        <td className="px-4 py-3.5">
-          <div className="w-6 h-6 rounded-full flex items-center justify-center ml-auto bg-zinc-100 dark:bg-zinc-850 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white transition-colors">
+        <td className="px-4 py-3">
+          <div className="w-6 h-6 rounded-full flex items-center justify-center ml-auto bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white transition-colors">
             {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </div>
         </td>
@@ -117,65 +173,66 @@ function OrderItemRow({ order }: { order: any }) {
 
       {open && (
         <tr className="bg-zinc-50/50 dark:bg-white/[0.01] border-b border-zinc-100/80 dark:border-white/[0.04]">
-          <td colSpan={7} className="px-6 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Products List */}
-              <div className="space-y-2">
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-2">Productos</p>
-                {lineItems.map((item: any, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-150/65 dark:border-white/[0.04]">
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
-                      <span className="text-[11px] font-black px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-350">
-                        ×{item.quantity}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 truncate">{item.title}</p>
-                        {item.variant_title && (
-                          <p className="text-[10px] text-zinc-400 mt-0.5">{item.variant_title}</p>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-[12px] font-bold shrink-0 text-zinc-800 dark:text-zinc-200">
-                      {fmtCurr(parseFloat(item.price || 0) * item.quantity)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Order breakdown */}
-              <div className="bg-white dark:bg-zinc-900/40 border border-zinc-150/65 dark:border-white/[0.04] rounded-2xl p-4 flex flex-col justify-between">
-                <div>
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-3">Resumen de Pago</p>
-                  <div className="space-y-2 text-[11px] font-medium text-zinc-500">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span className="text-zinc-700 dark:text-zinc-300 font-bold">{fmtCurr(parseFloat(order.subtotal_price || 0))}</span>
-                    </div>
-                    {parseFloat(order.total_discounts || 0) > 0 && (
-                      <div className="flex justify-between text-emerald-500 font-bold">
-                        <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> Descuento</span>
-                        <span>- {fmtCurr(parseFloat(order.total_discounts))}</span>
-                      </div>
-                    )}
-                    {parseFloat(order.total_tax || 0) > 0 && (
-                      <div className="flex justify-between">
-                        <span>Impuestos</span>
-                        <span className="text-zinc-700 dark:text-zinc-300 font-bold">{fmtCurr(parseFloat(order.total_tax))}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-3 mt-3 flex justify-between items-baseline">
-                  <span className="text-[12px] font-black text-zinc-800 dark:text-zinc-150">Total Facturado</span>
-                  <span className="text-[16px] font-black text-pink-500 dark:text-pink-400">{fmtCurr(parseFloat(order.total_price || 0))}</span>
-                </div>
-              </div>
-            </div>
+          <td colSpan={6} className="px-6 py-4">
+            <OrderExpandedDetail order={order} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+// ─── Mobile order card ─────────────────────────────────────────────────────
+
+function OrderMobileCard({ order }: { order: any }) {
+  const [open, setOpen] = useState(false);
+  const lineItems = order.line_items || [];
+  const firstItem = lineItems[0];
+  const extraCount = lineItems.length - 1;
+
+  return (
+    <div className={`border-b border-zinc-100 dark:border-white/[0.04] last:border-b-0 ${open ? 'bg-zinc-50/60 dark:bg-white/[0.015]' : ''}`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-4 py-3.5 flex items-start gap-3 text-left"
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-1">{fmtDateTime(order.created_at)}</p>
+          {firstItem ? (
+            <div className="flex items-center gap-2 mb-2">
+              <span className="shrink-0 text-[10px] font-black px-1.5 py-[1px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
+                ×{firstItem.quantity}
+              </span>
+              <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 truncate">{firstItem.title}</p>
+              {extraCount > 0 && (
+                <span className="text-pink-500 dark:text-pink-400 font-bold text-[10px] shrink-0">+{extraCount} más</span>
+              )}
+            </div>
+          ) : null}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <PaymentBadge status={order.financial_status} />
+            <FulfillmentBadge status={order.fulfillment_status} />
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <span className="text-[14px] font-black text-zinc-900 dark:text-white whitespace-nowrap">
+            {fmtCurr(parseFloat(order.total_price || 0))}
+          </span>
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+            open
+              ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200'
+              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+          }`}>
+            {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </div>
+        </div>
+      </button>
+      {open && (
+        <div className="px-4 pb-4">
+          <OrderExpandedDetail order={order} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -608,11 +665,17 @@ export default function ClientePage() {
       <div className="space-y-3">
         <h2 className="text-[14px] font-bold text-zinc-900 dark:text-zinc-55 tracking-tight px-1">Historial de Pedidos ({orders.length})</h2>
         <div className="bg-white dark:bg-[#111] rounded-2xl border border-black/[0.06] dark:border-white/[0.05] shadow-sm dark:shadow-none overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile: card list */}
+          <div className="md:hidden divide-y divide-zinc-100 dark:divide-white/[0.04]">
+            {orders.map(order => (
+              <OrderMobileCard key={order.id} order={order} />
+            ))}
+          </div>
+          {/* Desktop: table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-zinc-100 dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.015]">
-                  <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Pedido</th>
                   <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Fecha</th>
                   <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Productos</th>
                   <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Pago</th>
