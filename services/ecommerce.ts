@@ -253,8 +253,11 @@ export const ecommerce = {
         for (let i = 0; i < customerIds.length; i += 50) {
           const batch = customerIds.slice(i, i + 50);
           try {
-            const cRes = await fetch(`https://${cleanDomain}/admin/api/2024-01/customers.json?ids=${batch.join(',')}`, {
-              headers: { 'X-Shopify-Access-Token': token }
+            const cRes = await fetch(`${BASE}/customers.json?ids=${batch.join(',')}`, {
+              headers: {
+                'X-Shopify-Access-Token': token,
+                'X-Shop-Domain': cleanDomain,
+              }
             });
             if (cRes.ok) {
               const cData = await cRes.json();
@@ -347,8 +350,11 @@ export const ecommerce = {
         for (let i = 0; i < customerIds.length; i += 50) {
           const batch = customerIds.slice(i, i + 50);
           try {
-            const cRes = await fetch(`https://${cleanDomain}/admin/api/2024-01/customers.json?ids=${batch.join(',')}`, {
-              headers: { 'X-Shopify-Access-Token': token }
+            const cRes = await fetch(`${BASE}/customers.json?ids=${batch.join(',')}`, {
+              headers: {
+                'X-Shopify-Access-Token': token,
+                'X-Shop-Domain': cleanDomain,
+              }
             });
             if (cRes.ok) {
               const cData = await cRes.json();
