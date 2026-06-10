@@ -2753,9 +2753,9 @@ export default function DashboardPage() {
       
       {/* Order Detail Modal */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
+        <div className="fixed inset-0 z-[100] sm:flex sm:items-center sm:justify-center sm:p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedOrder(null)} />
-          <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl rounded-none sm:rounded-3xl max-w-[650px] w-full flex flex-col h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+          <div className="absolute inset-0 sm:relative sm:inset-auto bg-white dark:bg-zinc-900 sm:border sm:border-zinc-200 sm:dark:border-zinc-800 shadow-2xl sm:rounded-3xl max-w-full sm:max-w-[650px] w-full flex flex-col sm:max-h-[90vh] overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
             
             {/* Header */}
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">

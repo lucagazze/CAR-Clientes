@@ -114,7 +114,7 @@ function OrderExpandedDetail({ order }: { order: any }) {
 
         <div className="border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-3 mt-3 flex justify-between items-baseline">
           <span className="text-[12px] font-black text-zinc-800 dark:text-zinc-150">Total Facturado</span>
-          <span className="text-[16px] font-black text-pink-500 dark:text-pink-400">{fmtCurr(parseFloat(order.total_price || 0))}</span>
+          <span className="text-[16px] font-black text-zinc-900 dark:text-white">{fmtCurr(parseFloat(order.total_price || 0))}</span>
         </div>
       </div>
     </div>
@@ -198,17 +198,18 @@ function OrderMobileCard({ order }: { order: any }) {
       >
         <div className="flex-1 min-w-0">
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-1">{fmtDateTime(order.created_at)}</p>
-          {firstItem ? (
-            <div className="flex items-center gap-2 mb-2">
-              <span className="shrink-0 text-[10px] font-black px-1.5 py-[1px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
-                ×{firstItem.quantity}
-              </span>
-              <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 truncate">{firstItem.title}</p>
-              {extraCount > 0 && (
-                <span className="text-pink-500 dark:text-pink-400 font-bold text-[10px] shrink-0">+{extraCount} más</span>
-              )}
+          {lineItems.length > 0 && (
+            <div className="space-y-1 mb-2">
+              {lineItems.map((item: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-1.5">
+                  <span className="shrink-0 text-[10px] font-black px-1.5 py-[1px] rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900">
+                    ×{item.quantity}
+                  </span>
+                  <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-100 truncate">{item.title}</p>
+                </div>
+              ))}
             </div>
-          ) : null}
+          )}
           <div className="flex items-center gap-1.5 flex-wrap">
             <PaymentBadge status={order.financial_status} />
             <FulfillmentBadge status={order.fulfillment_status} />
