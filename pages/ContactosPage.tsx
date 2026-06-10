@@ -1013,14 +1013,14 @@ export default function ContactosPage() {
           </div>
 
           {/* RIGHT COLUMN: Details */}
-          <div className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-900/30 overflow-hidden relative">
+          <div className="flex-1 min-w-0 flex flex-col bg-zinc-50 dark:bg-zinc-900/30 overflow-hidden relative">
             {!selectedStoreCust ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-400">
                 <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-3xl">🛍️</div>
                 <p className="text-[13.5px] font-medium">Seleccioná un cliente para ver estadísticas y pedidos</p>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 max-w-3xl w-full">
+              <div className="flex-1 min-w-0 overflow-y-auto p-6 md:p-8 space-y-6 max-w-3xl w-full">
                 
                 {/* Header block */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
@@ -1196,9 +1196,9 @@ export default function ContactosPage() {
                       <p className="text-[12px] font-bold">Sin pedidos registrados</p>
                     </div>
                   ) : (
-                    <div className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl shadow-sm dark:shadow-none overflow-hidden">
-                      <div className="overflow-x-auto animate-in fade-in duration-300">
-                        <table className="w-full text-left">
+                    <div className="bg-white dark:bg-[#161618] border border-zinc-150 dark:border-zinc-800/60 rounded-2xl shadow-sm dark:shadow-none overflow-hidden w-full">
+                      <div className="w-full overflow-x-auto animate-in fade-in duration-300">
+                        <table className="w-full text-left min-w-[650px]">
                           <thead>
                             <tr className="border-b border-zinc-100 dark:border-white/[0.04] bg-zinc-50/50 dark:bg-white/[0.015]">
                               <th className="px-4 py-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">Pedido</th>
