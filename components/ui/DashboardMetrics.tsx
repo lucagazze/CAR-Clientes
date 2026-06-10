@@ -219,7 +219,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color, em
 
   if (!hasData) {
     return (
-      <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-8 shadow-sm mt-4 flex flex-col items-center justify-center gap-3 h-[160px]">
+      <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-4 sm:p-8 shadow-sm mt-4 flex flex-col items-center justify-center gap-3 h-[160px]">
         <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
         </div>
@@ -279,8 +279,8 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color, em
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-8 shadow-sm mt-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-4 sm:p-8 shadow-sm mt-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 sm:mb-8">
         <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">
           Evolución de {label}
         </h3>

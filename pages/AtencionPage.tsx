@@ -931,7 +931,7 @@ export default function AtencionPage() {
           })()}
 
           {/* Rendimiento por Canal */}
-          <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-6 shadow-sm flex flex-col">
+          <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-8 h-8 rounded-xl bg-violet-500/10 flex items-center justify-center">
                 <Activity className="w-4 h-4 text-violet-500" />

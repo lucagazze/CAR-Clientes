@@ -385,7 +385,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-8 shadow-sm mt-4">
+    <div className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-[20px] p-4 sm:p-8 shadow-sm mt-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">
           Evolución de {label}
@@ -1797,9 +1797,9 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="w-[1px] h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
+          <div className="hidden sm:block w-[1px] h-4 bg-zinc-200 dark:bg-zinc-800 mx-1" />
 
-          <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50/80 dark:bg-blue-500/10 rounded-full transition-all">
+          <div className="hidden sm:flex items-center gap-2 px-4 py-1.5 bg-blue-50/80 dark:bg-blue-500/10 rounded-full transition-all">
             <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
             <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
               vs {fmtDateRange(activePrevRange.since)} -{" "}
@@ -2556,9 +2556,9 @@ export default function DashboardPage() {
           )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-12">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 mt-8 sm:mt-12">
         {isEcommerce && (
-          <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-8 shadow-sm">
+          <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-4 sm:p-8 shadow-sm">
             <h2 className="text-[13px] font-bold text-zinc-900 dark:text-zinc-50 mb-8 tracking-tight">
               Evolución de Ingresos (Últimos 90 días)
             </h2>
@@ -2574,7 +2574,7 @@ export default function DashboardPage() {
             )}
           </div>
         )}
-        <div className={`${isEcommerce ? '' : 'lg:col-span-3'} bg-white dark:bg-[#111113] rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-6 shadow-sm flex flex-col`}>
+        <div className={`${isEcommerce ? '' : 'lg:col-span-3'} bg-white dark:bg-[#111113] rounded-[20px] border border-black/[0.06] dark:border-white/[0.06] p-4 sm:p-6 shadow-sm flex flex-col`}>
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-pink-500/10 flex items-center justify-center shrink-0">
