@@ -339,19 +339,19 @@ export default function CerebroPage() {
     <CenteredPageLoader isLoading={loading || authLoading}>
     <div className="w-full pt-4 pb-20 md:pt-6 px-4 md:px-0 animate-fade-in">
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="page-header">
         <div className="flex items-center gap-4 min-w-0">
           {/* Title */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
               <Brain className="w-5 h-5 text-violet-500" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-[22px] font-black text-zinc-900 dark:text-white tracking-tight">Cerebro de IA</h1>
+                <h1 className="page-title">Cerebro de IA</h1>
                 {isViewingAs && <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400 text-[9px] font-black uppercase"><ShieldAlert className="w-2.5 h-2.5" />Admin</span>}
               </div>
-              <p className="text-[12px] text-zinc-400 font-medium">Todo lo que sabe la IA sobre tu negocio — alimenta comentarios, mensajería y más.</p>
+              <p className="page-subtitle">Todo lo que sabe la IA sobre tu negocio — alimenta comentarios, mensajería y más.</p>
             </div>
           </div>
         </div>
@@ -424,7 +424,7 @@ export default function CerebroPage() {
             <div className="flex gap-2">
               <input type="text" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)}
                 placeholder="https://www.mitienda.com"
-                className="flex-1 px-3 py-2.5 text-[13px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none focus:border-violet-500 transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 font-medium" />
+                className="apple-input flex-1" />
               {websiteUrl && (
                 <a href={websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`} target="_blank" rel="noreferrer"
                   className="px-3 flex items-center justify-center bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-900 transition-all">
@@ -470,7 +470,7 @@ export default function CerebroPage() {
                   {f.val && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </div>
                 <textarea value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph} rows={5}
-                  className={`w-full p-3 text-[12.5px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-none ${f.accentCls} transition-all text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 resize-y leading-relaxed`} />
+                  className="apple-textarea" />
               </div>
             ))}
           </div>
@@ -564,7 +564,7 @@ export default function CerebroPage() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
                     <input type="text" placeholder="Buscar producto..." value={productSearch} onChange={e => setProductSearch(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[12px] text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 outline-none focus:border-emerald-500 transition-colors" />
+                      className="apple-input pl-9 h-9" />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {products.filter(p => !productSearch || p.title.toLowerCase().includes(productSearch.toLowerCase()) || (p.type || '').toLowerCase().includes(productSearch.toLowerCase())).map(p => {

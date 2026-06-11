@@ -101,11 +101,9 @@ const DashboardMetricComponent = ({
       onClick={onClick}
       style={activeBgStyle}
       className={`flex flex-col flex-1 min-w-0 px-4 py-4 sm:px-6 sm:py-5
-        border-b border-r border-zinc-100 dark:border-zinc-800
-        [&:nth-child(odd)]:border-r [&:nth-child(even)]:border-r-0
-        sm:[&:nth-child(odd)]:border-r sm:[&:nth-child(even)]:border-r
-        sm:[&:nth-child(3n)]:border-r-0
-        xl:border-b-0 xl:border-r xl:last:border-r-0
+        border-b border-zinc-100 dark:border-zinc-800 border-r-0
+        sm:border-r sm:[&:nth-child(odd)]:border-r-zinc-100 sm:[&:nth-child(odd)]:border-r sm:dark:[&:nth-child(odd)]:border-r-zinc-800 sm:[&:nth-child(even)]:border-r-0
+        lg:border-b-0 lg:border-r lg:border-r-zinc-100 lg:dark:border-r-zinc-800 lg:last:border-r-0
         transition-all text-left group relative overflow-visible
         ${!active ? "hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50" : ""}`}
     >

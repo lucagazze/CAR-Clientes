@@ -139,16 +139,15 @@ export default function PerfilPage() {
     }
   };
 
-  const inputClass = `w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-zinc-900 dark:text-zinc-100 px-3 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all`;
+  const inputClass = 'apple-input';
 
   return (
     <div className="max-w-xl mx-auto space-y-5 animate-in fade-in duration-300 pb-20">
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* Header */}
-      <div>
-        <h1 className="text-[22px] font-black text-zinc-900 dark:text-white tracking-tight">Mi Perfil</h1>
-        <p className="text-[13px] text-zinc-400 mt-0.5">Configurá tu cuenta, foto e información personal</p>
+      <div className="page-header flex flex-col md:flex-col md:items-start gap-1 mb-6">
+        <h1 className="page-title">Mi Perfil</h1>
+        <p className="page-subtitle">Configurá tu cuenta, foto e información personal</p>
       </div>
 
       {/* Avatar + name card */}
@@ -191,7 +190,7 @@ export default function PerfilPage() {
                   onChange={e => setDisplayName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditingName(false); }}
                   autoFocus
-                  className="flex-1 h-9 rounded-xl border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/30 text-[14px] font-bold text-zinc-900 dark:text-white px-3 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
+                  className="apple-input flex-1 h-9 font-bold"
                 />
                 <button
                   onClick={handleSaveName}

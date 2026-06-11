@@ -265,15 +265,15 @@ export default function TiendaPage() {
 
     <div className="w-full animate-fade-in pb-20 pt-4 md:pt-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
+      <div className="page-header print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center">
               <ShoppingBag className="w-5 h-5 text-pink-500" />
             </div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Rendimiento de Tienda</h1>
+            <h1 className="page-title">Rendimiento de Tienda</h1>
           </div>
-          <p className="text-zinc-500 dark:text-zinc-400 text-[13px] font-medium">Métricas principales de tu e-commerce ({detectedPlatform}).</p>
+          <p className="page-subtitle">Métricas principales de tu e-commerce ({detectedPlatform}).</p>
         </div>
 
         <div className="flex items-center gap-3 print:hidden">
@@ -350,7 +350,7 @@ export default function TiendaPage() {
             {/* Top Stats */}
             <EmailLoader loading={loading} color={PINK} labels={['Pedidos', 'Ingresos', 'Ticket Promedio']} duration={500}>
               {data ? (
-                <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+                <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
               <DashboardMetric 
                 icon={Package}
                 label="Pedidos" 

@@ -769,13 +769,12 @@ export default function CostosPage() {
   return (
     <div className="w-full px-4 md:px-6 animate-fade-in pb-20 text-zinc-900 dark:text-zinc-100">
       
-      {/* Title Header */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="page-header mb-8">
         <div>
-          <h1 className="text-[22px] font-black tracking-tight text-zinc-900 dark:text-white uppercase mb-1">
+          <h1 className="page-title uppercase">
             Gestión de costos
           </h1>
-          <p className="text-[13px] text-zinc-400 font-bold uppercase tracking-wider">
+          <p className="page-subtitle uppercase tracking-wider">
             Costos
           </p>
         </div>
@@ -825,7 +824,7 @@ export default function CostosPage() {
                     placeholder="Filtrar productos por nombre..."
                     value={catalogSearch}
                     onChange={e => setCatalogSearch(e.target.value)}
-                    className="w-full h-11 pl-10 pr-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[13px] focus:outline-none focus:border-violet-500 transition-colors"
+                    className="apple-input pl-10"
                   />
                 </div>
 
@@ -839,7 +838,7 @@ export default function CostosPage() {
                       placeholder="30"
                       value={massPercentage}
                       onChange={e => setMassPercentage(e.target.value)}
-                      className="w-16 h-8 px-2 pr-5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.08] text-[12px] font-black text-center text-zinc-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      className="w-16 h-8 px-2 pr-5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[12px] font-black text-center text-zinc-900 dark:text-white outline-none focus:border-zinc-400 dark:focus:border-zinc-650 transition-colors"
                     />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">%</span>
                   </div>
@@ -933,7 +932,7 @@ export default function CostosPage() {
                                           type="number"
                                           value={variantCosts[v.id]?.cost ?? ''}
                                           onChange={e => handleUpdateCost(v.id, parseFloat(e.target.value) || 0, packaging)}
-                                          className="w-full h-8 pl-6 pr-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] focus:border-violet-500/70 text-[11.5px] font-black text-zinc-900 dark:text-white focus:outline-none transition-colors"
+                                          className="w-full h-8 pl-6 pr-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-650 text-[11.5px] font-black text-zinc-900 dark:text-white focus:outline-none transition-colors"
                                           placeholder="0"
                                         />
                                       </div>
@@ -945,7 +944,7 @@ export default function CostosPage() {
                                           type="number"
                                           value={variantCosts[v.id]?.packagingCost ?? ''}
                                           onChange={e => handleUpdateCost(v.id, cost, parseFloat(e.target.value) || 0)}
-                                          className="w-full h-8 pl-6 pr-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] focus:border-violet-500/70 text-[11.5px] font-black text-zinc-900 dark:text-white focus:outline-none transition-colors"
+                                          className="w-full h-8 pl-6 pr-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-650 text-[11.5px] font-black text-zinc-900 dark:text-white focus:outline-none transition-colors"
                                           placeholder="350"
                                         />
                                       </div>
@@ -1004,7 +1003,7 @@ export default function CostosPage() {
                         type="number"
                         value={platformCommissions.shopify}
                         onChange={e => setPlatformCommissions(prev => ({ ...prev, shopify: parseFloat(e.target.value) || 0 }))}
-                        className="w-full h-10 px-3 pr-8 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-black text-zinc-900 dark:text-white"
+                        className="apple-input pr-8 font-black text-zinc-900 dark:text-zinc-100"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[12px]">%</span>
                     </div>
@@ -1023,7 +1022,7 @@ export default function CostosPage() {
                         type="number"
                         value={platformCommissions.tiendanube}
                         onChange={e => setPlatformCommissions(prev => ({ ...prev, tiendanube: parseFloat(e.target.value) || 0 }))}
-                        className="w-full h-10 px-3 pr-8 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-black text-zinc-900 dark:text-white"
+                        className="apple-input pr-8 font-black text-zinc-900 dark:text-zinc-100"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[12px]">%</span>
                     </div>
@@ -1042,7 +1041,7 @@ export default function CostosPage() {
                         type="number"
                         value={platformCommissions.mercadolibre}
                         onChange={e => setPlatformCommissions(prev => ({ ...prev, mercadolibre: parseFloat(e.target.value) || 0 }))}
-                        className="w-full h-10 px-3 pr-8 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-black text-zinc-900 dark:text-white"
+                        className="apple-input pr-8 font-black text-zinc-900 dark:text-zinc-100"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[12px]">%</span>
                     </div>
@@ -1061,7 +1060,7 @@ export default function CostosPage() {
                         type="number"
                         value={platformCommissions.custom}
                         onChange={e => setPlatformCommissions(prev => ({ ...prev, custom: parseFloat(e.target.value) || 0 }))}
-                        className="w-full h-10 px-3 pr-8 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-black text-zinc-900 dark:text-white"
+                        className="apple-input pr-8 font-black text-zinc-900 dark:text-zinc-100"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[12px]">%</span>
                     </div>
@@ -1124,7 +1123,7 @@ export default function CostosPage() {
                       type="number"
                       value={paymentFees.tiendanubeCPT}
                       onChange={e => setPaymentFees(prev => ({ ...prev, tiendanubeCPT: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 h-9 px-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold text-right"
+                      className="w-20 h-9 px-3 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 text-[12px] font-bold text-right outline-none focus:border-zinc-400 dark:focus:border-zinc-650 focus:bg-white dark:focus:bg-zinc-900 transition-all"
                     />
                     <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90">Guardar</button>
                   </div>
@@ -1149,7 +1148,7 @@ export default function CostosPage() {
                       type="number"
                       value={paymentFees.shopifyFees}
                       onChange={e => setPaymentFees(prev => ({ ...prev, shopifyFees: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 h-9 px-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold text-right"
+                      className="w-20 h-9 px-3 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 text-[12px] font-bold text-right outline-none focus:border-zinc-400 dark:focus:border-zinc-650 focus:bg-white dark:focus:bg-zinc-900 transition-all"
                     />
                     <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90">Guardar</button>
                   </div>
@@ -1174,7 +1173,7 @@ export default function CostosPage() {
                       type="number"
                       value={paymentFees.iibb}
                       onChange={e => setPaymentFees(prev => ({ ...prev, iibb: parseFloat(e.target.value) || 0 }))}
-                      className="w-20 h-9 px-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold text-right"
+                      className="w-20 h-9 px-3 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 text-[12px] font-bold text-right outline-none focus:border-zinc-400 dark:focus:border-zinc-650 focus:bg-white dark:focus:bg-zinc-900 transition-all"
                     />
                     <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90">Guardar</button>
                   </div>
@@ -1372,7 +1371,7 @@ export default function CostosPage() {
                         placeholder="1500"
                         value={shipping.customShippingCost}
                         onChange={e => setShipping(prev => ({ ...prev, customShippingCost: parseFloat(e.target.value) || 0 }))}
-                        className="w-full h-10 pl-7 pr-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-bold"
+                        className="apple-input pl-7 font-bold text-zinc-900 dark:text-zinc-100"
                       />
                     </div>
                   </div>
@@ -1454,7 +1453,7 @@ export default function CostosPage() {
                       placeholder="Filtrar por Nombre..."
                       value={searchEquipo}
                       onChange={e => { setSearchEquipo(e.target.value); setPageEquipo(1); }}
-                      className="w-full h-9 pl-9 pr-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[11px] focus:outline-none"
+                      className="apple-input pl-9 h-9 text-[11px]"
                     />
                   </div>
                 </div>
@@ -1520,7 +1519,7 @@ export default function CostosPage() {
                       <select 
                         value={rowsPerPage} 
                         onChange={e => setRowsPerPage(parseInt(e.target.value))}
-                        className="h-7 rounded border border-zinc-200 dark:border-white/[0.05] bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-1 font-bold focus:outline-none"
+                        className="h-7 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-zinc-800 dark:text-zinc-200 px-1.5 font-bold outline-none focus:border-zinc-400 dark:focus:border-zinc-650 transition-colors cursor-pointer"
                       >
                         <option value={10}>10</option>
                         <option value={20}>20</option>
@@ -1568,7 +1567,7 @@ export default function CostosPage() {
                       placeholder="Filtrar por Nombre..."
                       value={searchOtros}
                       onChange={e => { setSearchOtros(e.target.value); setPageOtros(1); }}
-                      className="w-full h-9 pl-9 pr-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[11px] focus:outline-none"
+                      className="apple-input pl-9 h-9 text-[11px]"
                     />
                   </div>
                 </div>
@@ -1676,7 +1675,7 @@ export default function CostosPage() {
                       placeholder="Filtrar por Nombre..."
                       value={searchCampanas}
                       onChange={e => { setSearchCampanas(e.target.value); setPageCampanas(1); }}
-                      className="w-full h-9 pl-9 pr-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[11px] focus:outline-none"
+                      className="apple-input pl-9 h-9 text-[11px]"
                     />
                   </div>
                 </div>
@@ -1849,7 +1848,7 @@ export default function CostosPage() {
                   placeholder="Ej: Servidor Web, Diseñador, etc."
                   value={modalName}
                   onChange={e => setModalName(e.target.value)}
-                  className="w-full h-11 px-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-bold text-zinc-900 dark:text-white"
+                  className="apple-input font-bold"
                 />
               </div>
 
@@ -1863,7 +1862,7 @@ export default function CostosPage() {
                     placeholder="0"
                     value={modalCost}
                     onChange={e => setModalCost(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-bold text-zinc-900 dark:text-white"
+                    className="apple-input font-bold"
                   />
                 </div>
                 <div>
@@ -1871,7 +1870,7 @@ export default function CostosPage() {
                   <select 
                     value={modalCurrency}
                     onChange={e => setModalCurrency(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[13px] font-bold text-zinc-900 dark:text-white"
+                    className="apple-select w-full"
                   >
                     <option value="LOCAL">LOCAL (ARS/etc)</option>
                     <option value="USD">USD</option>
@@ -1889,7 +1888,7 @@ export default function CostosPage() {
                     required
                     value={modalStartDate}
                     onChange={e => setModalStartDate(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold"
+                    className="apple-input text-[12px] font-bold"
                   />
                 </div>
                 <div>
@@ -1899,7 +1898,7 @@ export default function CostosPage() {
                     required
                     value={modalEndDate}
                     onChange={e => setModalEndDate(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold"
+                    className="apple-input text-[12px] font-bold"
                   />
                 </div>
               </div>
@@ -1920,7 +1919,7 @@ export default function CostosPage() {
                   <select 
                     value={modalPlatform}
                     onChange={e => setModalPlatform(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold"
+                    className="apple-select w-full text-[12px]"
                   >
                     <option value="-">- (Ninguna)</option>
                     <option value="Meta">Meta</option>

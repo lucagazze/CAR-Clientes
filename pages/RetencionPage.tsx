@@ -224,15 +224,15 @@ export default function RetencionPage() {
 
     <div className="w-full space-y-8 pt-4 md:pt-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 print:hidden">
+      <div className="page-header print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
               <Mail className="w-5 h-5 text-emerald-500" />
             </div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Retención (Email Marketing)</h1>
+            <h1 className="page-title">Retención (Email Marketing)</h1>
           </div>
-          <p className="text-zinc-500 dark:text-zinc-400 text-[13px] font-medium">Análisis de campañas, flujos de automatización y fidelización de clientes.</p>
+          <p className="page-subtitle">Análisis de campañas, flujos de automatización y fidelización de clientes.</p>
         </div>
         
         <div className="flex items-center gap-3 print:hidden">

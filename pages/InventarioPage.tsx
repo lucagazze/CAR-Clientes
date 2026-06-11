@@ -205,14 +205,14 @@ export default function InventarioPage() {
     <CenteredPageLoader isLoading={loading}>
     <div className="w-full pt-4 pb-20 md:pt-6 animate-fade-in space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="page-header">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
             <Package className="w-5 h-5 text-emerald-600" />
           </div>
           <div>
-            <h1 className="text-[20px] font-black text-zinc-900 dark:text-white tracking-tight">Inventario</h1>
-            <p className="text-[11px] text-zinc-400 font-medium">Stock en tiempo real</p>
+            <h1 className="page-title">Inventario</h1>
+            <p className="page-subtitle">Stock en tiempo real</p>
           </div>
         </div>
         {/* Compact button in header */}

@@ -541,15 +541,15 @@ export default function AtencionPage() {
 
     <div className="w-full animate-fade-in pb-20 pt-4 md:pt-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+      <div className="page-header">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-violet-500" />
             </div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Informes de Atención</h1>
+            <h1 className="page-title">Informes de Atención</h1>
           </div>
-          <p className="text-zinc-500 dark:text-zinc-400 text-[13px] font-medium">Estadísticas detalladas del rendimiento y volumen de conversaciones en Chatwoot.</p>
+          <p className="page-subtitle">Estadísticas detalladas del rendimiento y volumen de conversaciones en Chatwoot.</p>
         </div>
 
         {/* Date Selector */}
@@ -786,7 +786,7 @@ export default function AtencionPage() {
             duration={900}
           >
             {summaryData ? (
-              <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+              <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-black/[0.06] dark:border-white/[0.06] shadow-sm overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
                 {METRICS_CONFIG.map((metric) => {
               const val = Number(summaryData[metric.key] || 0);
               const prevVal = Number(prevSummaryData[metric.key] || 0);

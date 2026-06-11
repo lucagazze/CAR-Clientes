@@ -194,11 +194,9 @@ const ShopifyMetricComponent = ({
     <button
       onClick={onClick}
       className={`flex flex-col flex-1 min-w-0 px-4 py-4 sm:px-6 sm:py-5
-        border-b border-r border-zinc-100 dark:border-zinc-800
-        [&:nth-child(odd)]:border-r [&:nth-child(even)]:border-r-0
-        sm:[&:nth-child(odd)]:border-r sm:[&:nth-child(even)]:border-r
-        sm:[&:nth-child(3n)]:border-r-0
-        xl:border-b-0 xl:border-r xl:last:border-r-0
+        border-b border-zinc-100 dark:border-zinc-800 border-r-0
+        sm:border-r sm:[&:nth-child(odd)]:border-r-zinc-100 sm:[&:nth-child(odd)]:border-r sm:dark:[&:nth-child(odd)]:border-r-zinc-800 sm:[&:nth-child(even)]:border-r-0
+        lg:border-b-0 lg:border-r lg:border-r-zinc-100 lg:dark:border-r-zinc-800 lg:last:border-r-0
         transition-all text-left group relative overflow-visible
         ${active ? activeBgClass : "hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 hover:shadow-[inset_0_0_20px_rgba(0,0,0,0.02)] dark:hover:shadow-none"}`}
     >
@@ -1646,9 +1644,9 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        </div>
+      </div>
       )}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
+      <div className="page-header relative">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <img
@@ -1664,12 +1662,12 @@ export default function DashboardPage() {
               Algoritmia • Gestión
             </span>
           </div>
-          <h1 className="text-[20px] sm:text-[24px] font-bold text-zinc-900 dark:text-white tracking-tight leading-tight flex items-center gap-3">
+          <h1 className="page-title">
             Resumen General
             <span className="text-zinc-400 dark:text-zinc-500 font-medium text-[16px] sm:text-[18px]">
               •
             </span>
-            <span className="text-zinc-500 dark:text-zinc-400 font-medium text-[16px] sm:text-[18px] truncate">
+            <span className="text-zinc-550 dark:text-zinc-400 font-medium text-[16px] sm:text-[18px] truncate">
               {(profile as any)?.business_name ||
                 (profile as any)?.full_name ||
                 "The Skirting Factory"}
@@ -1872,7 +1870,7 @@ export default function DashboardPage() {
             >
               {currentStore ? (
                 <>
-                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
                     icon={Receipt}
                     label="Ticket Promedio"
@@ -2085,7 +2083,7 @@ export default function DashboardPage() {
             >
               {currentMeta ? (
                 <>
-                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:overflow-x-auto scrollbar-hide">
+                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
                     icon={DollarSign}
                     label="Inversión"
@@ -2309,7 +2307,7 @@ export default function DashboardPage() {
             >
               {currentKlaviyo ? (
                 <>
-                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
                     icon={Package}
                     label="Entregas"
@@ -2523,7 +2521,7 @@ export default function DashboardPage() {
               duration={900}
             >
             {chatwootSummary ? (
-              <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+              <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
                 {[
                   { key: 'conversations_count',      label: 'Conversaciones', icon: MessageCircle, isTime: false, info: 'Total de conversaciones iniciadas en el período. Incluye todos los canales conectados (WhatsApp, Instagram, Facebook, Web).' },
                   { key: 'incoming_messages_count',  label: 'Msj. Entrantes', icon: Inbox,         isTime: false, info: 'Mensajes recibidos de clientes. Refleja el volumen de consultas y la demanda de atención en el período.' },

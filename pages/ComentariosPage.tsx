@@ -927,13 +927,13 @@ export default function ComentariosPage() {
     <CenteredPageLoader isLoading={loading}>
     <div className="space-y-6 w-full pt-6 px-4 md:px-6 lg:px-8 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-4">
+      <div className="page-header pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60">
         <div>
-          <h1 className="text-[24px] font-black tracking-tight text-zinc-900 dark:text-white flex items-center gap-2">
-            <MessageSquare className="w-6 h-6 text-violet-500" />
+          <h1 className="page-title">
+            <MessageSquare className="w-6 h-6 text-violet-500 shrink-0" />
             Comentarios
           </h1>
-          <p className="text-[12px] text-zinc-400 font-bold mt-1">
+          <p className="page-subtitle mt-1">
             {totalPending > 0
               ? `${totalPending} comentarios pendientes de respuesta en ${posts.filter(p => p.pendingComments > 0).length} publicaciones`
               : 'Todos los comentarios están respondidos'}

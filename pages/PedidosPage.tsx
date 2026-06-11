@@ -609,14 +609,15 @@ export default function PedidosPage() {
     <CenteredPageLoader isLoading={initialLoad && loading}>
       <div className="w-full pt-4 pb-20 md:pt-6 space-y-4">
 
-        {/* ── Header ── */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(236,72,153,0.12)' }}>
-            <ShoppingCart className="w-[18px] h-[18px]" style={{ color: PINK }} />
-          </div>
-          <div>
-            <h1 className="text-[20px] font-black text-zinc-900 dark:text-white tracking-tight">Pedidos</h1>
-            <p className="text-[11px] text-zinc-400 font-medium">Todos los pedidos de tu tienda</p>
+        <div className="page-header">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(236,72,153,0.12)' }}>
+              <ShoppingCart className="w-[18px] h-[18px]" style={{ color: PINK }} />
+            </div>
+            <div>
+              <h1 className="page-title">Pedidos</h1>
+              <p className="page-subtitle">Todos los pedidos de tu tienda</p>
+            </div>
           </div>
         </div>
 

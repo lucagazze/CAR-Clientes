@@ -945,7 +945,7 @@ export default function ContactosPage() {
             {/* Header, Search & Filters */}
             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 space-y-3">
               <div className="flex items-center justify-between">
-                <h1 className="text-[18px] font-black tracking-tight text-zinc-900 dark:text-white">Clientes</h1>
+                <h1 className="page-title text-[18px] sm:text-[20px]">Clientes</h1>
                 {loadingBackground && (
                   <span className="flex items-center gap-1 text-[10.5px] text-zinc-400 dark:text-zinc-500 font-black">
                     <Loader2 className="w-3 h-3 animate-spin text-pink-500" />
