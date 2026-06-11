@@ -1133,10 +1133,10 @@ export default function EmailMarketingPage() {
     return (
       <div className="w-full space-y-6 flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="page-header">
           <div>
-            <h1 className="text-[22px] font-black text-zinc-900 dark:text-white tracking-tight">Email Marketing</h1>
-            <p className="text-[13px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <h1 className="page-title">Campañas y Flujos</h1>
+            <p className="page-subtitle">
               Monitoreo de envíos en tiempo real
               {lastSync && ` · sync ${lastSync.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
             </p>
@@ -1291,10 +1291,10 @@ export default function EmailMarketingPage() {
     <CenteredPageLoader isLoading={loading}>
     <div className="w-full flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
       {/* Header */}
-      <div className="mb-6 flex items-end justify-between">
+      <div className="page-header">
         <div>
-          <h1 className="text-[22px] font-black text-zinc-900 dark:text-white tracking-tight">Email Marketing</h1>
-          <p className="text-[13px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+          <h1 className="page-title">Campañas y Flujos</h1>
+          <p className="page-subtitle">
             {visible.length} email{visible.length !== 1 ? 's' : ''} preparado{visible.length !== 1 ? 's' : ''} para tu cuenta
           </p>
         </div>

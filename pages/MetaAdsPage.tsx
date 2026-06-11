@@ -67,13 +67,13 @@ export default function MetaAdsPage() {
   const isDateReloading = loading && activeAds.length > 0;
 
   // ── Date picker state ────────────────────────────────────────────────────────
-  const [activePreset, setActivePreset] = useState<DatePreset | 'custom'>('today');
-  const [activeSince, setActiveSince] = useState(presetToRange('today').since);
-  const [activeUntil, setActiveUntil] = useState(presetToRange('today').until);
+  const [activePreset, setActivePreset] = useState<DatePreset | 'custom'>('last_7d');
+  const [activeSince, setActiveSince] = useState(presetToRange('last_7d').since);
+  const [activeUntil, setActiveUntil] = useState(presetToRange('last_7d').until);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [pendingPreset, setPendingPreset] = useState<DatePreset | 'custom'>('today');
-  const [pendingSince, setPendingSince] = useState(presetToRange('today').since);
-  const [pendingUntil, setPendingUntil] = useState(presetToRange('today').until);
+  const [pendingPreset, setPendingPreset] = useState<DatePreset | 'custom'>('last_7d');
+  const [pendingSince, setPendingSince] = useState(presetToRange('last_7d').since);
+  const [pendingUntil, setPendingUntil] = useState(presetToRange('last_7d').until);
   const [hovering, setHovering] = useState<string | null>(null);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());

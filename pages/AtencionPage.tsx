@@ -556,10 +556,10 @@ export default function AtencionPage() {
         <div className="flex flex-wrap items-center gap-3">
 
           {/* Datepicker trigger */}
-          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 shadow-sm h-9 relative" ref={datePickerRef}>
+          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-sm h-9 md:h-10 relative" ref={datePickerRef}>
             <button
               onClick={() => setShowDatePicker(!showDatePicker)}
-              className="flex items-center gap-1.5 px-3 h-7 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group text-[11px]"
+              className="flex items-center gap-1.5 px-3 h-7 md:h-8 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group text-[11px] md:text-[12.5px]"
             >
               {loading && summaryData ? (
                 <Loader2 className="w-4 h-4 text-violet-500 animate-spin" />

@@ -230,14 +230,14 @@ export default function RetencionPage() {
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
               <Mail className="w-5 h-5 text-emerald-500" />
             </div>
-            <h1 className="page-title">Retención (Email Marketing)</h1>
+            <h1 className="page-title">Email Marketing</h1>
           </div>
           <p className="page-subtitle">Análisis de campañas, flujos de automatización y fidelización de clientes.</p>
         </div>
         
         <div className="flex items-center gap-3 print:hidden">
-          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] h-9 relative" ref={datePickerRef}>
-            <button onClick={() => setShowDatePicker(!showDatePicker)} className="flex items-center gap-1.5 px-3 h-7 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group text-[11px]">
+          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] h-9 md:h-10 relative" ref={datePickerRef}>
+            <button onClick={() => setShowDatePicker(!showDatePicker)} className="flex items-center gap-1.5 px-3 h-7 md:h-8 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group text-[11px] md:text-[12.5px]">
               {fetchingKlaviyo && currentKlaviyo ? (
                 <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
               ) : (

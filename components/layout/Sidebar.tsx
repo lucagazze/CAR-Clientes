@@ -58,14 +58,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const metricasItems = [
     { path: '/tienda',    icon: ShoppingBag,   label: 'Tienda Online', configured: hasEcommerce },
-    { path: '/captacion', icon: BarChart2,     label: 'Captación',     configured: hasMeta },
+    { path: '/captacion', icon: BarChart2,     label: 'Meta Ads',     configured: hasMeta },
     { path: '/atencion',  icon: MessageCircle, label: 'Atención',      configured: hasChatwoot },
-    { path: '/retencion', icon: Mail,          label: 'Retención',     configured: hasKlaviyo },
+    { path: '/retencion', icon: Mail,          label: 'Email Marketing',     configured: hasKlaviyo },
   ].filter(i => isAdmin || i.configured);
 
   const activosItems = [
     { path: '/admin/meta',      icon: Target, label: 'Creativos Ads',    configured: hasMeta },
-    { path: '/email-marketing', icon: Send,   label: 'Email Marketing',  configured: hasKlaviyo },
+    { path: '/email-marketing', icon: Send,   label: 'Campañas y Flujos',  configured: hasKlaviyo },
   ].filter(i => isAdmin || i.configured);
 
   const configuracionItems = [

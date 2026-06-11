@@ -117,21 +117,10 @@ export default function App() {
       }
     };
 
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (!isLocalhost) {
-      document.addEventListener('contextmenu', handleContextMenu);
-      document.addEventListener('dragstart', handleDragStart);
-      document.addEventListener('keydown', handleKeyDown);
-    }
-
+    // DevTools allowed as requested by user
     return () => {
       window.removeEventListener('error', handleChunkError);
       window.removeEventListener('unhandledrejection', handleChunkError);
-      if (!isLocalhost) {
-        document.removeEventListener('contextmenu', handleContextMenu);
-        document.removeEventListener('dragstart', handleDragStart);
-        document.removeEventListener('keydown', handleKeyDown);
-      }
     };
   }, []);
 
