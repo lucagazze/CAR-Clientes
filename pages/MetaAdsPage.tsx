@@ -713,7 +713,7 @@ export default function MetaAdsPage() {
                                   { label: 'Alcance', val: fmtN(adReach), highlight: false },
                                   { label: 'Impr.', val: fmtN(adImpr), highlight: false },
                                 ].map(({ label, val, highlight }) => (
-                                  <div key={label} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2.5 border border-zinc-100 dark:border-white/[0.04]">
+                                  <div key={label} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2.5 border border-zinc-100 dark:border-white/[0.04] text-center">
                                     <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide mb-1">{label}</p>
                                     <p className={`text-[12px] font-bold leading-none ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-zinc-100'}`}>{val}</p>
                                   </div>
