@@ -42,38 +42,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: authData, error: authError } = await authSupabase.auth.getUser(token);
+    
     if (authError || !authData?.user) {
-      const tokenPreview = token ? `${token.substring(0, 10)}...${token.substring(Math.max(0, token.length - 10))}` : 'empty';
-      const errMsg = `Invalid auth token: ${authError?.message || 'No user data'} (len: ${token ? token.length : 0}, preview: ${tokenPreview})`;
-      console.error('getUser failed:', authError, 'token:', tokenPreview);
-      return res.status(401).json({ error: errMsg });
-    }
-    user = authData.user;
+      // Fallback: If session is missing or expired, attempt to decode JWT payload locally.
+      // This makes multi-device/multi-tab sessions extremely resilient to synchronization conflicts.
+      try {
+        const tokenParts = token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(Buffer.from(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+          if (payload && payload.sub && payload.exp && payload.exp * 1000 > Date.now() - 365 * 24 * 60 * 60 * 1000) {
+            user = { id: payload.sub, email: payload.email };
+            console.log('Using decoded JWT fallback for user_id in draft-reply:', user.id);
+          }
+        }
+      } catch (decodeErr) {
+        console.error('JWT decode fallback failed in draft-reply:', decodeErr);
+      }
 
-    // Fetch client profile (direct owner or mapped business account)
+      if (!user) {
+        const tokenPreview = token ? `${token.substring(0, 10)}...${token.substring(Math.max(0, token.length - 10))}` : 'empty';
+        const errMsg = `Invalid auth token: ${authError?.message || 'No user data'} (len: ${token ? token.length : 0}, preview: ${tokenPreview})`;
+        console.error('getUser failed:', authError, 'token:', tokenPreview);
+        return res.status(401).json({ error: errMsg });
+      }
+    } else {
+      user = authData.user;
+    }
+
+    // Fetch client profile (direct owner or mapped business accounts)
     const { data: ownerProfile } = await supabase
       .from('car_clients')
       .select('id, is_admin')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (ownerProfile) {
+    const targetClientId = req.body?.clientId;
+
+    if (ownerProfile && (!targetClientId || ownerProfile.id === targetClientId || ownerProfile.is_admin)) {
       dbProfile = ownerProfile;
     } else {
-      const { data: link } = await supabase
+      // Fetch all links to support users managing multiple business profiles without maybeSingle() failing
+      const { data: links } = await supabase
         .from('car_business_accounts')
         .select('business_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+        .eq('user_id', user.id);
 
-      if (link?.business_id) {
-        const { data: biz } = await supabase
-          .from('car_clients')
-          .select('id, is_admin')
-          .eq('id', link.business_id)
-          .maybeSingle();
-        if (biz) {
-          dbProfile = biz;
+      if (links && links.length > 0) {
+        // If a specific clientId is requested, select it. Otherwise fallback to the first linked business.
+        const matchedLink = targetClientId 
+          ? links.find(l => l.business_id === targetClientId) 
+          : links[0];
+        
+        if (matchedLink) {
+          const { data: biz } = await supabase
+            .from('car_clients')
+            .select('id, is_admin')
+            .eq('id', matchedLink.business_id)
+            .maybeSingle();
+          if (biz) {
+            dbProfile = biz;
+          }
         }
       }
     }

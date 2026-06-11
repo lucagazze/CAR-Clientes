@@ -153,18 +153,17 @@ export const db = {
       }
       if (data) return data;
 
-      // 2. Cuenta asociada: buscar el business_id en car_business_accounts (usando el cliente standard con RLS)
-      const { data: link, error: errLink } = await supabase
+      // 2. Cuenta asociada: buscar el business_id en car_business_accounts
+      const { data: links, error: errLink } = await supabase
         .from('car_business_accounts')
         .select('id, business_id')
-        .eq('user_id', userId)
-        .maybeSingle();
+        .eq('user_id', userId);
 
       if (errLink) {
-        console.error("db.profile.getByUserId - Error fetching business link by user_id:", errLink);
+        console.error("db.profile.getByUserId - Error fetching business links by user_id:", errLink);
       }
 
-      let activeLink = link;
+      let activeLink: any = links && links.length > 0 ? links[0] : null;
 
       // Fallback: si no se encuentra por user_id pero se proporciona el email, se busca por email para vincularlo dinámicamente
       if (!activeLink && email) {
