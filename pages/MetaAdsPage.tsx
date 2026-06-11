@@ -619,13 +619,29 @@ export default function MetaAdsPage() {
             grouped[cid].ads.push(ad);
           });
 
-          if (Object.keys(grouped).length === 0) return (
+          // Sort ads in each campaign group by spend descending (highest spend first)
+          Object.keys(grouped).forEach(cid => {
+            grouped[cid].ads.sort((a, b) => {
+              const spendA = parseFloat(adInsightsMap[a.id]?.spend || 0);
+              const spendB = parseFloat(adInsightsMap[b.id]?.spend || 0);
+              return spendB - spendA;
+            });
+          });
+
+          // Sort campaigns by total campaign spend descending (highest spend campaign first)
+          const sortedGroupedEntries = Object.entries(grouped).sort((a, b) => {
+            const spendA = a[1].ads.reduce((sum, ad) => sum + parseFloat(adInsightsMap[ad.id]?.spend || 0), 0);
+            const spendB = b[1].ads.reduce((sum, ad) => sum + parseFloat(adInsightsMap[ad.id]?.spend || 0), 0);
+            return spendB - spendA;
+          });
+
+          if (sortedGroupedEntries.length === 0) return (
             <p className="text-sm text-zinc-400 text-center py-16">Hay {activeAds.length} anuncios activos pero sin gasto registrado en el período seleccionado.</p>
           );
 
           return (
             <div className={`space-y-10 transition-opacity duration-200 ${isDateReloading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-              {Object.entries(grouped).map(([cid, group]) => (
+              {sortedGroupedEntries.map(([cid, group]) => (
                 <div key={cid}>
                   <div className="flex items-center gap-2 mb-5">
                     <div className="w-1 h-5 rounded-full bg-blue-500 flex-shrink-0" />
