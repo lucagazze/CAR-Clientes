@@ -378,7 +378,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
     if (isMoneyLabel)
       return `$${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(0)}`;
     if (isCostLabel)
-      return `$${v.toFixed(2)}`;
+      return `$${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(0)}`;
     if (isRoasLabel) return `${v.toFixed(2)}x`;
     if (v >= 1000) return (v / 1000).toFixed(1) + "k";
     return v.toFixed(v < 10 ? 2 : 0);
@@ -510,11 +510,11 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
                     if (isMoney)
                       return `$ ${v.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
                     if (isCost)
-                      return `$ ${v.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                      return `$ ${v.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
                     if (isPercentage) return `${v.toFixed(2)}%`;
                     if (isRoas) return `${v.toFixed(2)}x`;
                     return v.toLocaleString("es-AR", {
-                      maximumFractionDigits: 2,
+                      maximumFractionDigits: 0,
                     });
                   };
                   return (

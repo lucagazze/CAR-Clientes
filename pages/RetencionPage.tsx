@@ -22,8 +22,7 @@ const KlaviyoLogo = (props: React.SVGProps<SVGSVGElement>) => (
 
 const fmtCurrency = (n: number) => {
   if (typeof n !== 'number') return '—';
-  const showDecimals = n < 10 || n % 1 !== 0;
-  return `$ ${n.toLocaleString('es-AR', showDecimals ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 })}`;
+  return `$ ${Math.round(n).toLocaleString('es-AR')}`;
 };
 
 const PRESETS: { id: DatePreset | 'custom'; label: string }[] = [

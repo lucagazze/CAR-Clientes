@@ -923,7 +923,7 @@ export default function CostosPage() {
                                       )}
                                     </td>
                                     <td className="p-3.5 font-bold text-zinc-800 dark:text-zinc-200">
-                                      ${v.price.toLocaleString('es-AR')}
+                                      ${v.price.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
                                     </td>
                                     <td className="p-3.5">
                                       <div className="relative flex items-center max-w-[120px]">
@@ -1421,7 +1421,7 @@ export default function CostosPage() {
                 <div className="flex items-center gap-4">
                   <div className="text-right">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Total Costos</span>
-                    <span className="text-[20px] font-black text-violet-500">${grandTotalCost.toLocaleString('es-AR')}</span>
+                    <span className="text-[20px] font-black text-violet-500">${grandTotalCost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                   </div>
                   <button
                     onClick={() => handleOpenAddModal('equipo')}
@@ -1484,8 +1484,8 @@ export default function CostosPage() {
                             <td className="p-3 font-bold text-zinc-800 dark:text-zinc-200">{item.name}</td>
                             <td className="p-3 text-zinc-500">{item.startDate.split('-').reverse().join('/')}</td>
                             <td className="p-3 text-zinc-500">{item.endDate.split('-').reverse().join('/')}</td>
-                            <td className="p-3 font-bold">${item.cost.toLocaleString()}</td>
-                            <td className="p-3 font-bold text-violet-500">${item.dailyCost.toLocaleString()}</td>
+                            <td className="p-3 font-bold">${item.cost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</td>
+                            <td className="p-3 font-bold text-violet-500">${item.dailyCost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</td>
                             <td className="p-3 text-zinc-400">{item.currency}</td>
                             <td className="p-3 text-center">
                               <span className={`inline-block w-2 h-2 rounded-full ${item.adSpend ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
@@ -1598,8 +1598,8 @@ export default function CostosPage() {
                             <td className="p-3 font-bold text-zinc-800 dark:text-zinc-200">{item.name}</td>
                             <td className="p-3 text-zinc-500">{item.startDate.split('-').reverse().join('/')}</td>
                             <td className="p-3 text-zinc-500">{item.endDate.split('-').reverse().join('/')}</td>
-                            <td className="p-3 font-bold">${item.cost.toLocaleString()}</td>
-                            <td className="p-3 font-bold text-violet-500">${item.dailyCost.toLocaleString()}</td>
+                            <td className="p-3 font-bold">${item.cost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</td>
+                            <td className="p-3 font-bold text-violet-500">${item.dailyCost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</td>
                             <td className="p-3 text-zinc-400">{item.currency}</td>
                             <td className="p-3 text-center">
                               <span className={`inline-block w-2 h-2 rounded-full ${item.adSpend ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
@@ -1725,8 +1725,8 @@ export default function CostosPage() {
                             <td className="p-3 font-bold text-zinc-800 dark:text-zinc-200">{item.name}</td>
                             <td className="p-3 text-zinc-500">{item.startDate.split('-').reverse().join('/')}</td>
                             <td className="p-3 text-zinc-500">{item.endDate.split('-').reverse().join('/')}</td>
-                            <td className="p-3 font-bold">${item.cost.toLocaleString()}</td>
-                            <td className="p-3 font-bold text-violet-500">${item.dailyCost.toLocaleString()}</td>
+                            <td className="p-3 font-bold">${item.cost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</td>
+                            <td className="p-3 font-bold text-violet-500">${item.dailyCost.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</td>
                             <td className="p-3 text-zinc-400">{item.currency}</td>
                             <td className="p-3 text-center">
                               <span className={`inline-block w-2.5 h-2.5 rounded-full ${item.adSpend ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`} />
