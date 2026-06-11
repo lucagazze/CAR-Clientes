@@ -237,19 +237,86 @@ const MiniCal = ({ year, month, since, until, hovering, onDay, onHover, onPrev, 
   return (
     <div className="w-[240px] overflow-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="flex items-center mb-4 px-1">
-        <div className="w-8 flex justify-start">{onPrev && <button onClick={onPrev} className="p-1 hover:bg-zinc-105 dark:hover:bg-zinc-800 rounded-md transition-colors group"><ChevronDown className="w-4 h-4 rotate-90 text-zinc-400 group-hover:text-zinc-650 dark:group-hover:text-zinc-205" /></button>}</div>
-        <span className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 flex-1 text-center">{MONTHS_ES[month]} {year}</span>
-        <div className="w-8 flex justify-end">{onNext && <button onClick={onNext} className="p-1 hover:bg-zinc-105 dark:hover:bg-zinc-800 rounded-md transition-colors group"><ChevronDown className="w-4 h-4 -rotate-90 text-zinc-400 group-hover:text-zinc-650 dark:group-hover:text-zinc-205" /></button>}</div>
+        <div className="w-8 flex justify-start">
+          {onPrev && (
+            <button
+              onClick={onPrev}
+              className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-755 rounded-lg transition-all group"
+            >
+              <ChevronDown className="w-3.5 h-3.5 rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+            </button>
+          )}
+        </div>
+        <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-100 flex-1 text-center tracking-tight">
+          {MONTHS_ES[month]} {year}
+        </span>
+        <div className="w-8 flex justify-end">
+          {onNext && (
+            <button
+              onClick={onNext}
+              className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-755 rounded-lg transition-all group"
+            >
+              <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+            </button>
+          )}
+        </div>
       </div>
       <div key={`${year}-${month}`} className={`grid grid-cols-7 gap-y-1 ${animClass}`}>
-        {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <div key={i} className="text-[10px] font-bold text-zinc-350 text-center pb-2 uppercase tracking-tighter">{d}</div>)}
+        {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
+          <div
+            key={i}
+            className="text-[9.5px] font-semibold text-zinc-400 dark:text-zinc-500 text-center pb-2 uppercase tracking-wider"
+          >
+            {d}
+          </div>
+        ))}
         {days.map((d, i) => {
           if (!d) return <div key={`empty-${i}`} />;
-          const isToday = d === todayStr; const isFuture = d > todayStr; const isSelected = d === since || d === until;
+          const isToday = d === todayStr;
+          const isFuture = d > todayStr;
+          const isSelected = d === since || d === until;
           const isInRange = since && until && d > since && d < until;
-          const isHovering = since && !until && hovering && ((d > since && d <= hovering) || (d < since && d >= hovering));
+          const isHovering = since && !until && hovering && (
+            (hovering > since && d > since && d <= hovering) ||
+            (hovering < since && d >= hovering && d < since)
+          );
+
+          // Range limits for seamless background drawing
+          const displayStart = since && until ? since : (since && hovering ? (hovering < since ? hovering : since) : since);
+          const displayEnd = since && until ? until : (since && hovering ? (hovering > since ? hovering : since) : null);
+          
+          const isStart = d === displayStart;
+          const isEnd = d === displayEnd;
+          const hasRange = displayStart && displayEnd && displayStart !== displayEnd;
+
           return (
-            <button key={d} onMouseEnter={() => !isFuture && onHover(d)} onClick={() => !isFuture && onDay(d)} disabled={isFuture} className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center ${isSelected ? 'bg-violet-600 text-white rounded-full z-10 shadow-md shadow-violet-200 dark:shadow-none' : (isInRange || isHovering) ? 'bg-violet-50 dark:bg-violet-500/10 text-violet-600' : isFuture ? 'text-zinc-200 dark:text-zinc-800 cursor-default' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-105 dark:hover:bg-zinc-800 rounded-full'} ${isToday && !isSelected ? 'text-violet-650 dark:text-violet-500 ring-1 ring-violet-100 dark:ring-violet-900/30' : ''}`}>{d.split('-')[2]}</button>
+            <div key={d} className="relative py-0.5 flex items-center justify-center w-full">
+              {/* Range connector background */}
+              {hasRange && (isInRange || (isHovering && d !== displayStart && d !== displayEnd)) && (
+                <div className="absolute inset-y-0.5 left-0 right-0 bg-violet-50 dark:bg-violet-500/10" />
+              )}
+              {hasRange && isStart && (
+                <div className="absolute inset-y-0.5 right-0 left-1/2 bg-violet-50 dark:bg-violet-500/10" />
+              )}
+              {hasRange && isEnd && (
+                <div className="absolute inset-y-0.5 left-0 right-1/2 bg-violet-50 dark:bg-violet-500/10" />
+              )}
+
+              <button
+                key={d}
+                onMouseEnter={() => !isFuture && onHover && onHover(d)}
+                onClick={() => !isFuture && onDay(d)}
+                disabled={isFuture}
+                className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center rounded-full ${
+                  isSelected || (since && !until && hovering && (d === since || d === hovering))
+                    ? 'bg-violet-600 text-white z-10 shadow-md shadow-violet-200 dark:shadow-none'
+                    : isFuture ? 'text-zinc-200 dark:text-zinc-800 cursor-default' :
+                    'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                } ${isToday && !isSelected && !(since && !until && hovering && (d === since || d === hovering)) ? 'text-violet-600 dark:text-violet-500 ring-1 ring-violet-100 dark:ring-violet-900/30' : ''}`}
+              >
+                {d.split('-')[2]}
+              </button>
+            </div>
           );
         })}
       </div>
@@ -783,7 +850,7 @@ export default function InformesPage() {
           </div>
 
           {/* Styled Datepicker Dropdown */}
-          <div className="flex items-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-1.5 py-1 shadow-sm h-10 relative z-40" ref={datePickerRef}>
+          <div className="flex items-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-1.5 py-1 shadow-sm h-10 relative z-40 self-start w-fit" ref={datePickerRef}>
             <button onClick={() => setShowDatePicker(!showDatePicker)} className="flex items-center gap-2 px-3 h-8 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all group">
               {loadingSocial && (igProfile || fbProfile) ? (
                 <Loader2 className="w-4 h-4 text-violet-500 animate-spin" />
@@ -797,9 +864,9 @@ export default function InformesPage() {
             </button>
             {showDatePicker && (
               <div className="absolute left-0 md:left-auto md:right-0 top-full mt-2.5 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-850 shadow-2xl z-50 flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[280px] sm:w-[310px] md:w-auto origin-top-left md:origin-top-right">
-                <div className="w-full md:w-[150px] border-b md:border-b-0 md:border-r border-zinc-100 dark:border-zinc-800 p-2 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible">
+                <div className="w-full md:w-[150px] border-b md:border-b-0 md:border-r border-zinc-150 dark:border-zinc-800 p-2 md:p-3 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible scrollbar-hide">
                   {PRESETS.map(p => (
-                    <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`flex-shrink-0 text-left px-2.5 py-1 rounded-xl text-[10px] font-black transition-all ${pendingPreset === p.id ? 'bg-violet-600 text-white shadow-md shadow-violet-500/10' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
+                    <button key={p.id} onClick={() => { const r = presetToRange(p.id as any); setPendingPreset(p.id as any); setPendingSince(r.since); setPendingUntil(r.until); }} className={`flex-shrink-0 text-center md:text-left px-2 py-0.5 md:px-2.5 md:py-1 rounded-[6px] md:rounded-[10px] text-[9.5px] md:text-[10px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-violet-600 text-white shadow-md shadow-violet-500/10' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>{p.label}</button>
                   ))}
                 </div>
                 <div className="p-4 flex flex-col items-center md:items-stretch">

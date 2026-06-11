@@ -778,22 +778,22 @@ const MiniCal = ({
           {onPrev && (
             <button
               onClick={onPrev}
-              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors group"
+              className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-750 rounded-lg transition-all group"
             >
-              <ChevronDown className="w-4 h-4 rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+              <ChevronDown className="w-3.5 h-3.5 rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
             </button>
           )}
         </div>
-        <span className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 flex-1 text-center">
+        <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-100 flex-1 text-center tracking-tight">
           {MONTHS_ES[month]} {year}
         </span>
         <div className="w-8 flex justify-end">
           {onNext && (
             <button
               onClick={onNext}
-              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors group"
+              className="p-1 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-750 rounded-lg transition-all group"
             >
-              <ChevronDown className="w-4 h-4 -rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
+              <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
             </button>
           )}
         </div>
@@ -802,7 +802,7 @@ const MiniCal = ({
         {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
           <div
             key={i}
-            className="text-[10px] font-bold text-zinc-300 text-center pb-2 uppercase tracking-tighter"
+            className="text-[9.5px] font-semibold text-zinc-400 dark:text-zinc-500 text-center pb-2 uppercase tracking-wider"
           >
             {d}
           </div>
@@ -817,29 +817,48 @@ const MiniCal = ({
             since &&
             !until &&
             hovering &&
-            ((d > since && d <= hovering) || (d < since && d >= hovering));
+            ((hovering > since && d > since && d <= hovering) ||
+              (hovering < since && d >= hovering && d < since));
+
+          // Range limits for seamless background drawing
+          const displayStart = since && until ? since : (since && hovering ? (hovering < since ? hovering : since) : since);
+          const displayEnd = since && until ? until : (since && hovering ? (hovering > since ? hovering : since) : null);
+          
+          const isStart = d === displayStart;
+          const isEnd = d === displayEnd;
+          const hasRange = displayStart && displayEnd && displayStart !== displayEnd;
 
           return (
-            <button
-              key={d}
-              onMouseEnter={() => !isFuture && onHover(d)}
-              onClick={() => !isFuture && onDay(d)}
-              disabled={isFuture}
-              className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center
-                ${
-                  isSelected
-                    ? "bg-blue-600 text-white rounded-full z-10 shadow-md shadow-blue-200 dark:shadow-none"
-                    : isInRange || isHovering
-                      ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600"
+            <div key={d} className="relative py-0.5 flex items-center justify-center w-full">
+              {/* Range connector background */}
+              {hasRange && (isInRange || (isHovering && d !== displayStart && d !== displayEnd)) && (
+                <div className="absolute inset-y-0.5 left-0 right-0 bg-blue-50 dark:bg-blue-500/10" />
+              )}
+              {hasRange && isStart && (
+                <div className="absolute inset-y-0.5 right-0 left-1/2 bg-blue-50 dark:bg-blue-500/10" />
+              )}
+              {hasRange && isEnd && (
+                <div className="absolute inset-y-0.5 left-0 right-1/2 bg-blue-50 dark:bg-blue-500/10" />
+              )}
+
+              <button
+                onMouseEnter={() => !isFuture && onHover && onHover(d)}
+                onClick={() => !isFuture && onDay(d)}
+                disabled={isFuture}
+                className={`h-8 w-8 text-[11px] font-bold transition-all relative flex items-center justify-center rounded-full
+                  ${
+                    isSelected || (since && !until && hovering && (d === since || d === hovering))
+                      ? "bg-blue-600 text-white z-10 shadow-md shadow-blue-200 dark:shadow-none"
                       : isFuture
                         ? "text-zinc-200 dark:text-zinc-800 cursor-default"
-                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full"
-                }
-                ${isToday && !isSelected ? "text-blue-600 dark:text-blue-500 ring-1 ring-blue-100 dark:ring-blue-900/30" : ""}
-              `}
-            >
-              {d.split("-")[2]}
-            </button>
+                        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  }
+                  ${isToday && !isSelected && !(since && !until && hovering && (d === since || d === hovering)) ? "text-blue-600 dark:text-blue-500 ring-1 ring-blue-100 dark:ring-blue-900/30" : ""}
+                `}
+              >
+                {d.split("-")[2]}
+              </button>
+            </div>
           );
         })}
       </div>
@@ -1677,7 +1696,7 @@ export default function DashboardPage() {
           </h1>
         </div>
         <div
-          className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 shadow-sm h-9 relative z-20"
+          className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 shadow-sm h-9 relative z-20 self-start w-fit"
           ref={datePickerRef}
         >
           <div className="relative">
@@ -1739,7 +1758,7 @@ export default function DashboardPage() {
                         setPendingSince(r.since);
                         setPendingUntil(r.until);
                       }}
-                      className={`flex-shrink-0 text-center md:text-left px-2.5 py-1 rounded-[10px] text-[10px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? "bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none" : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
+                      className={`flex-shrink-0 text-center md:text-left px-2 py-0.5 md:px-2.5 md:py-1 rounded-[6px] md:rounded-[10px] text-[9.5px] md:text-[10px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? "bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none" : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
                     >
                       {p.label}
                     </button>
