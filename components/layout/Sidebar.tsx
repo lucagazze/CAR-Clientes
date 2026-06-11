@@ -109,6 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const configuracionItems = [
     { path: '/perfil',           icon: User,   label: 'Mi Perfil',      configured: true },
     { path: '/links',            icon: Link2,  label: 'Mis Accesos',    configured: true },
+    { path: '/integraciones',    icon: Workflow, label: 'Integraciones',  configured: true },
     { path: '/cerebro',          icon: Brain,  label: 'Cerebro de IA',  configured: true, adminOnly: true },
   ].filter(i => !i.adminOnly || isAdmin);
 
