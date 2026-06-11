@@ -1073,7 +1073,7 @@ export default function CostosPage() {
               <div className="flex justify-end">
                 <button
                   onClick={handleSavePlatformCommissions}
-                  className="h-10 px-6 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[12px] font-bold shadow-md hover:opacity-90 transition-all flex items-center gap-2"
+                  className="h-9 px-6 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90 flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" />
                   Guardar Comisiones
@@ -1126,7 +1126,7 @@ export default function CostosPage() {
                       onChange={e => setPaymentFees(prev => ({ ...prev, tiendanubeCPT: parseFloat(e.target.value) || 0 }))}
                       className="w-20 h-9 px-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold text-right"
                     />
-                    <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg text-[11px] font-bold">Guardar</button>
+                    <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90">Guardar</button>
                   </div>
                 </div>
 
@@ -1151,7 +1151,7 @@ export default function CostosPage() {
                       onChange={e => setPaymentFees(prev => ({ ...prev, shopifyFees: parseFloat(e.target.value) || 0 }))}
                       className="w-20 h-9 px-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold text-right"
                     />
-                    <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg text-[11px] font-bold">Guardar</button>
+                    <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90">Guardar</button>
                   </div>
                 </div>
 
@@ -1176,7 +1176,7 @@ export default function CostosPage() {
                       onChange={e => setPaymentFees(prev => ({ ...prev, iibb: parseFloat(e.target.value) || 0 }))}
                       className="w-20 h-9 px-3 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/[0.05] text-[12px] font-bold text-right"
                     />
-                    <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg text-[11px] font-bold">Guardar</button>
+                    <button onClick={handleSavePaymentFees} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90">Guardar</button>
                   </div>
                 </div>
               </div>
@@ -1383,7 +1383,7 @@ export default function CostosPage() {
               <div className="pt-2 flex justify-center">
                 <button
                   onClick={handleSaveShipping}
-                  className="w-full sm:w-[320px] h-11 bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-[12px] font-black shadow-md transition-colors"
+                  className="w-full sm:w-[320px] h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90 flex items-center justify-center gap-1.5"
                 >
                   Guardar
                 </button>

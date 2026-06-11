@@ -196,7 +196,7 @@ export default function PerfilPage() {
                 <button
                   onClick={handleSaveName}
                   disabled={savingName || !displayName.trim()}
-                  className="h-9 w-9 rounded-xl bg-violet-600 hover:bg-violet-700 text-white flex items-center justify-center transition-all disabled:opacity-50"
+                  className="h-9 w-9 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   {savingName ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 </button>
@@ -300,7 +300,7 @@ export default function PerfilPage() {
               <button
                 onClick={handleChangePassword}
                 disabled={savingPwd || !newPwd || !confirmPwd || newPwd !== confirmPwd}
-                className="w-full h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-md shadow-amber-500/20"
+                className="w-full h-9 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-sm hover:scale-[1.01] active:scale-[0.99]"
               >
                 {savingPwd ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
                 Cambiar contraseña
@@ -344,7 +344,7 @@ export default function PerfilPage() {
         <p className="text-[11px] font-black text-zinc-400 uppercase tracking-[0.18em] mb-3">Sesión</p>
         <button
           onClick={() => signOut()}
-          className="w-full h-10 rounded-xl border border-red-200 dark:border-red-800 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 text-[13px] font-bold flex items-center justify-center gap-2 transition-all"
+          className="w-full h-9 rounded-xl border border-red-200 dark:border-red-900/50 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm"
         >
           <LogOut className="w-4 h-4" />
           Cerrar sesión

@@ -54,8 +54,7 @@ export default function LoginPage() {
       style={{ height: '100dvh', minHeight: '100dvh' }}
     >
       {/* Decorative Glow Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-violet-600/10 dark:bg-violet-600/[0.07] blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-pink-500/10 dark:bg-pink-500/[0.05] blur-[100px] pointer-events-none" />
+      {/* Removed to keep the page super clean and professional */}
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-6 py-4 w-full">
@@ -166,10 +165,10 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`w-full h-11 rounded-xl text-[13px] font-black uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`w-full h-9 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed ${
                     darkMode
-                      ? 'bg-white text-zinc-950 hover:bg-zinc-100 shadow-[0_4px_20px_rgba(255,255,255,0.12)] border border-transparent'
-                      : 'bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:border-zinc-300'
+                      ? 'bg-white text-zinc-950 hover:bg-zinc-100 border border-transparent shadow-sm'
+                      : 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm'
                   }`}
                 >
                   {loading ? (

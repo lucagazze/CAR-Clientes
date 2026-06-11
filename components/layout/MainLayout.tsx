@@ -11,18 +11,26 @@ class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, 
     return { hasError: true, error };
   }
   componentDidCatch(error: any) {
-    const msg = String(error?.message || error || '').toLowerCase();
-    if (
-      msg.includes('loading chunk') ||
-      msg.includes('chunkloaderror') ||
-      msg.includes('failed to fetch') ||
-      msg.includes('module script') ||
-      msg.includes('load failed') ||
-      msg.includes('dynamically imported') ||
-      msg.includes('dynamic import')
-    ) {
-      // Stale Vercel/Vite deploy or network drop — clear cache and reload once
-      window.location.reload();
+    console.error('RouteErrorBoundary caught an error:', error);
+    try {
+      const now = Date.now();
+      const lastReloadStr = sessionStorage.getItem('last_route_error_reload_time');
+      const lastReload = lastReloadStr ? parseInt(lastReloadStr, 10) : 0;
+      
+      if (now - lastReload > 8000) {
+        // Safe to try auto-reloading once
+        sessionStorage.setItem('last_route_error_reload_time', String(now));
+        window.location.reload();
+      } else {
+        // Redirection as a fallback when reload didn't fix it
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/') {
+          sessionStorage.setItem('error_redirected_from', currentPath);
+          window.location.replace('/');
+        }
+      }
+    } catch (e) {
+      console.error('Error in RouteErrorBoundary recovery logic:', e);
     }
   }
   render() {
@@ -37,7 +45,7 @@ class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, 
           <p className="text-[15px] font-bold text-zinc-700 dark:text-zinc-300">Error al cargar esta sección</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-5 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[13px] font-bold hover:opacity-90 transition-all shadow-sm"
+            className="px-5 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-90 shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-1.5"
           >
             Reintentar
           </button>
@@ -58,6 +66,7 @@ import { AppleLoader } from '../ui/AppleLoader';
 import { TopLoadingBar } from '../ui/TopLoadingBar';
 import { CenteredPageLoader } from '../ui/CenteredPageLoader';
 import { useUnread } from '../../contexts/UnreadContext';
+import { useToast } from '../Toast';
 
 // Retry wrapper — automatically retries downloading a lazy chunk up to 3 times
 // (1 s delay between attempts). Protects against transient network drops and
@@ -141,12 +150,27 @@ export const MainLayout = () => {
   const location = useLocation();
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
+  const { showToast } = useToast();
+
   // Scroll to top on navigation/page transition
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [location.pathname]);
+
+  // Check for auto-recovery redirect from a crashed route
+  useEffect(() => {
+    try {
+      const redirectedFrom = sessionStorage.getItem('error_redirected_from');
+      if (redirectedFrom) {
+        sessionStorage.removeItem('error_redirected_from');
+        showToast('Hubo un problema al cargar la sección anterior. Te redirigimos al inicio.', 'warning');
+      }
+    } catch (e) {
+      console.warn('Could not read error_redirected_from from sessionStorage', e);
+    }
+  }, [location.pathname, showToast]);
 
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');

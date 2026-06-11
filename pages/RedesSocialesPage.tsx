@@ -1152,7 +1152,7 @@ export default function RedesSocialesPage() {
                           <button
                             key={f.id}
                             onClick={() => setMediaFilter(f.id as any)}
-                            className={`flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[9.5px] sm:text-[11px] font-black transition-all whitespace-nowrap ${
+                            className={`flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[11px] font-black transition-all whitespace-nowrap ${
                               mediaFilter === f.id
                                 ? 'bg-white dark:bg-zinc-900 text-zinc-800 dark:text-white shadow-sm'
                                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -1435,7 +1435,7 @@ export default function RedesSocialesPage() {
                           <button
                             key={f.id}
                             onClick={() => setFbMediaFilter(f.id as any)}
-                            className={`flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[9.5px] sm:text-[11px] font-black transition-all whitespace-nowrap ${
+                            className={`flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[11px] font-black transition-all whitespace-nowrap ${
                               fbMediaFilter === f.id
                                 ? 'bg-white dark:bg-zinc-900 text-zinc-800 dark:text-white shadow-sm'
                                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
