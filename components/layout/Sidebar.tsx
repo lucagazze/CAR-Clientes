@@ -217,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         to={item.path}
         title={isUnconfigured ? `${item.label} (no configurado)` : item.label}
         onClick={() => window.innerWidth < 768 && setIsOpen(false)}
-        className={`group flex items-center gap-2.5 px-3 py-2 md:py-1.5 rounded-xl text-[12px] md:text-[11px] font-bold transition-all duration-150 active:scale-[0.98] ${
+        className={`group flex items-center gap-2.5 px-3 py-2 md:py-1.5 rounded-xl text-[12px] md:text-[12px] font-bold transition-all duration-150 active:scale-[0.98] ${
           isActive
             ? 'bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 shadow-md shadow-black/10 dark:shadow-white/5'
             : isUnconfigured
