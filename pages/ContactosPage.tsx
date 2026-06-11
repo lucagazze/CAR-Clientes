@@ -242,10 +242,6 @@ export default function ContactosPage() {
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
 
-  const cwUrl = (profile as any)?.chatwoot_url;
-  const cwToken = (profile as any)?.chatwoot_token;
-  const hasChatwoot = !!(cwUrl && cwToken);
-
   // Auto-detect platform just like PedidosPage
   let platform = (profile as any)?.ecommerce_platform;
   if (profile && !platform) {
@@ -265,8 +261,6 @@ export default function ContactosPage() {
   const [selectedStoreCust, setSelectedStoreCust] = useState<any>(null);
   const [storeCustStats, setStoreCustStats] = useState<{ ordersCount: number; totalSpent: number } | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [chatwootContactId, setChatwootContactId] = useState<number | null>(null);
-  const [checkingChatwoot, setCheckingChatwoot] = useState(false);
   const [selectedCustOrders, setSelectedCustOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
@@ -647,27 +641,10 @@ export default function ContactosPage() {
   const handleSelectStoreCustomer = async (c: any) => {
     setSelectedStoreCust(c);
     setStoreCustStats(null);
-    setChatwootContactId(null);
     setSelectedCustOrders([]);
     setOrdersError(null);
     
     if (!c) return;
-
-    // Search Chatwoot contact by email in the background if configured
-    if (cwUrl && cwToken && c.email) {
-      setCheckingChatwoot(true);
-      try {
-        const cwData = await chatwoot.searchContacts(cwUrl, cwToken, c.email, 1);
-        const contact = (cwData?.payload || cwData?.data || [])[0];
-        if (contact) {
-          setChatwootContactId(contact.id);
-        }
-      } catch (err) {
-        console.warn('Error fetching Chatwoot contact:', err);
-      } finally {
-        setCheckingChatwoot(false);
-      }
-    }
 
     // Load stats and orders list
     setLoadingStats(true);
@@ -850,8 +827,8 @@ export default function ContactosPage() {
   // Filters logic
   const filteredCustomers = useMemo(() => {
     return storeCustomers.filter(c => {
-      // If Tiendanube, metrics are loaded asynchronously, so we don't filter them out here
-      if (c.orders_count === null) return true;
+      // Show only customers who purchased from the store (orders_count > 0 or unknown null)
+      if (c.orders_count !== null && c.orders_count <= 0) return false;
       
       if (filterType === 'new') {
         return c.orders_count === 1;
@@ -1090,34 +1067,6 @@ export default function ContactosPage() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    {/* Start Chat Button (via Chatwoot linkage) */}
-                    {hasChatwoot && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!chatwootContactId || !cwUrl || !cwToken) return;
-                          try {
-                            const conversationsList = await chatwoot.getContactConversations(cwUrl, cwToken, chatwootContactId);
-                            if (conversationsList && conversationsList.length > 0) {
-                              navigate(`/atencion?convId=${conversationsList[0].id}`);
-                            } else {
-                              navigate('/atencion');
-                            }
-                          } catch {
-                            navigate('/atencion');
-                          }
-                        }}
-                        disabled={checkingChatwoot || !chatwootContactId}
-                        className="flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[12px] font-black shadow-sm shadow-blue-500/10 transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none"
-                      >
-                        {checkingChatwoot ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <MessageSquare className="w-4 h-4" />
-                        )}
-                        {chatwootContactId ? 'Iniciar Chat' : 'Sin chat activo'}
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -1211,17 +1160,7 @@ export default function ContactosPage() {
                   </div>
                 </div>
 
-                {hasChatwoot && !chatwootContactId && !checkingChatwoot && (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-250 dark:border-amber-900/30 rounded-xl flex items-start gap-3 text-[11.5px] text-amber-700 dark:text-amber-400">
-                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold">Sin vinculación directa de mensajería</p>
-                      <p className="text-[10.5px] opacity-90 mt-0.5">
-                        No se encontró un contacto en Chatwoot con el correo <strong>{selectedStoreCust.email}</strong>. Para chatear, buscalo por su nombre o teléfono directamente en la sección de atención.
-                      </p>
-                    </div>
-                  </div>
-                )}
+
 
                 {/* Orders History List */}
                 <div className="space-y-3 pt-2">
