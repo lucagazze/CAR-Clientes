@@ -592,7 +592,7 @@ export default function MetaAdsPage() {
                 <div className="h-52 bg-zinc-100 dark:bg-zinc-800" />
                 <div className="p-4 space-y-3">
                   <div className="h-4 w-3/4 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
-                  <div className="grid grid-cols-4 gap-2">{[...Array(4)].map((_, j) => <div key={j} className="h-12 bg-zinc-100 dark:bg-zinc-800/60 rounded-xl" />)}</div>
+                  <div className="grid grid-cols-2 gap-2">{[...Array(6)].map((_, j) => <div key={j} className="h-9 bg-zinc-100 dark:bg-zinc-800/60 rounded-xl" />)}</div>
                 </div>
               </div>
             ))}
@@ -704,7 +704,7 @@ export default function MetaAdsPage() {
                               {ad.creative?.object_type && (<p className="text-[10px] text-zinc-400 mt-0.5 font-semibold uppercase tracking-wider">{ad.creative.object_type}</p>)}
                             </div>
                             {insights && (<>
-                              <div className="grid grid-cols-4 gap-2">
+                              <div className="grid grid-cols-2 gap-2">
                                 {[
                                   { label: 'Gasto', val: `$${adSpend.toFixed(0)}`, highlight: false },
                                   { label: resultLabel, val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
@@ -713,9 +713,9 @@ export default function MetaAdsPage() {
                                   { label: 'Alcance', val: fmtN(adReach), highlight: false },
                                   { label: 'Impr.', val: fmtN(adImpr), highlight: false },
                                 ].map(({ label, val, highlight }) => (
-                                  <div key={label} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2.5 border border-zinc-100 dark:border-white/[0.04] text-center">
-                                    <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide mb-1">{label}</p>
-                                    <p className={`text-[12px] font-bold leading-none ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-zinc-100'}`}>{val}</p>
+                                  <div key={label} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2 px-2.5 border border-zinc-100 dark:border-white/[0.04] flex items-center justify-between gap-1">
+                                    <p className="text-[10px] font-bold text-zinc-450 dark:text-zinc-400 uppercase tracking-wide text-left truncate flex-1">{label}</p>
+                                    <p className={`text-[12px] font-extrabold text-center w-12 shrink-0 leading-none ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-zinc-100'}`}>{val}</p>
                                   </div>
                                 ))}
                               </div>

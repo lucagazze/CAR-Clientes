@@ -449,6 +449,7 @@ export default function PedidosPage() {
   const [until, setUntil]                         = useState(todayStr());
   const [sortAsc, setSortAsc]                     = useState(false);
   const [visibleCount, setVisibleCount]           = useState(PAGE_SIZE);
+  const [loadingMore, setLoadingMore]             = useState(false);
 
   const load = useCallback(async (s: string, u: string, isInitial = false) => {
     if (!isShopify && !isWoo && !isTiendaNube) return;
@@ -563,12 +564,16 @@ export default function PedidosPage() {
   const loaderRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (visibleCount >= filtered.length) return;
+    if (visibleCount >= filtered.length || loadingMore) return;
 
     const observer = new IntersectionObserver((entries) => {
       const first = entries[0];
-      if (first.isIntersecting) {
-        setVisibleCount(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+      if (first.isIntersecting && !loadingMore) {
+        setLoadingMore(true);
+        setTimeout(() => {
+          setVisibleCount(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+          setLoadingMore(false);
+        }, 400);
       }
     }, { threshold: 0.1, rootMargin: '100px' });
 
@@ -582,7 +587,7 @@ export default function PedidosPage() {
         observer.unobserve(currentLoader);
       }
     };
-  }, [filtered.length, visibleCount]);
+  }, [filtered.length, visibleCount, loadingMore]);
 
   const stats = useMemo(() => {
     const valid = orders.filter(o => !o.cancelled_at && o.financial_status !== 'voided');
@@ -779,7 +784,7 @@ export default function PedidosPage() {
                 </table>
               </div>
 
-              {visibleCount < filtered.length && (
+              {(visibleCount < filtered.length || loadingMore) && (
                 <div ref={loaderRef} className="flex items-center justify-center py-6 gap-2 border-t border-zinc-100 dark:border-white/[0.04]">
                   <RefreshCw className="w-4 h-4 animate-spin text-pink-500" />
                   <span className="text-[12px] font-bold text-zinc-400">Cargando más pedidos...</span>
