@@ -268,8 +268,16 @@ export default function TiendaPage() {
       <div className="page-header print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5 text-pink-500" />
+            <div className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800/50 flex items-center justify-center overflow-hidden shrink-0">
+              {detectedPlatform === 'shopify' ? (
+                <img src="/assets/shopify-bag.webp" alt="Shopify" className="w-6 h-6 object-contain" />
+              ) : detectedPlatform === 'tiendanube' ? (
+                <img src="/assets/tiendanube.webp" alt="Tiendanube" className="w-6 h-6 object-contain" />
+              ) : detectedPlatform === 'wordpress' ? (
+                <img src="/assets/logowordpress.webp" alt="WooCommerce" className="w-6 h-6 object-contain" />
+              ) : (
+                <ShoppingBag className="w-5 h-5 text-zinc-400" />
+              )}
             </div>
             <h1 className="page-title">Rendimiento de Tienda</h1>
           </div>

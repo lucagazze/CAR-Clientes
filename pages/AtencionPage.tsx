@@ -544,8 +544,8 @@ export default function AtencionPage() {
       <div className="page-header">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-violet-500" />
+            <div className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800/50 flex items-center justify-center overflow-hidden shrink-0">
+              <MessageCircle className="w-5 h-5 text-violet-500" />
             </div>
             <h1 className="page-title">Informes de Atención</h1>
           </div>

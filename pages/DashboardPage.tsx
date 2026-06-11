@@ -1919,16 +1919,16 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 {detectedPlatform === 'shopify' ? (
-                  <img src="/assets/shopify-bag.webp" alt="Shopify" className="w-4.5 h-4.5 object-contain shrink-0" />
+                  <img src="/assets/shopify-bag.webp" alt="Shopify" className="w-5 h-5 object-contain shrink-0" />
                 ) : detectedPlatform === 'tiendanube' ? (
-                  <img src="/assets/tiendanube.webp" alt="Tiendanube" className="w-4.5 h-4.5 object-contain shrink-0" />
+                  <img src="/assets/tiendanube.webp" alt="Tiendanube" className="w-5 h-5 object-contain shrink-0" />
                 ) : detectedPlatform === 'wordpress' ? (
-                  <img src="/assets/logowordpress.webp" alt="WooCommerce" className="w-4.5 h-4.5 object-contain shrink-0" />
+                  <img src="/assets/logowordpress.webp" alt="WooCommerce" className="w-5 h-5 object-contain shrink-0" />
                 ) : (
                   <div className="w-2 h-2 rounded-full bg-pink-500 shrink-0" />
                 )}
                 <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                  Tienda Online ({detectedPlatform === 'wordpress' ? 'WooCommerce' : detectedPlatform === 'shopify' ? 'Shopify' : 'Tiendanube'})
+                  Tienda Online
                 </h2>
               </div>
               {shopifyError && (
@@ -2131,9 +2131,9 @@ export default function DashboardPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <img src="/assets/meta (1).webp" alt="Meta" className="w-4 h-4 object-contain shrink-0" />
+                <img src="/assets/meta (1).webp" alt="Meta" className="w-5 h-5 object-contain shrink-0" />
                 <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                  Captación (Meta Ads)
+                  Meta Ads
                 </h2>
               </div>
               {metaError && (
@@ -2363,9 +2363,9 @@ export default function DashboardPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <KlaviyoLogo className="w-3.5 h-3.5 text-[#15B374] shrink-0" />
+                <KlaviyoLogo className="w-5 h-5 text-[#15B374] shrink-0" />
                 <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                  Retención (Email Marketing)
+                  Email Marketing
                 </h2>
               </div>
               {klaviyoError && (
@@ -2587,8 +2587,8 @@ export default function DashboardPage() {
         {(profile as any)?.chatwoot_token && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-3.5 h-3.5 text-violet-500 shrink-0" />
-              <h2 className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Atención al Cliente</h2>
+              <MessageSquare className="w-5 h-5 text-violet-500 shrink-0" />
+              <h2 className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Mensajería</h2>
             </div>
             <EmailLoader
               key={`chatwoot-${activeSince}-${activeUntil}`}

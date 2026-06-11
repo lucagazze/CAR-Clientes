@@ -538,8 +538,8 @@ export default function CaptacionPage() {
       <div className="page-header print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-              <Megaphone className="w-5 h-5 text-blue-500" />
+            <div className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800/50 flex items-center justify-center overflow-hidden shrink-0">
+              <img src="/assets/meta (1).webp" alt="Meta Ads" className="w-6 h-6 object-contain" />
             </div>
             <h1 className="page-title">Meta Ads</h1>
           </div>
