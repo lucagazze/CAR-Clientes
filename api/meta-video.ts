@@ -19,6 +19,8 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 let tokenCache: { value: string; expiresAt: number } | null = null;
 let pageTokensCache: { [pageId: string]: { value: string; expiresAt: number } } = {};
+let creativeCache: { [creativeId: string]: { value: any; expiresAt: number } } = {};
+let videoCache: { [videoId: string]: { value: any; expiresAt: number } } = {};
 
 async function getMetaToken(): Promise<string> {
   const now = Date.now();
@@ -137,6 +139,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!adId && !creativeId && !videoId) {
     return res.status(400).json({ error: 'adId, creativeId, videoId, or action=download is required' });
   }
+
+  // Cache lookup to bypass Meta API rate limits
+  const now = Date.now();
+  if (typeof creativeId === 'string' && creativeCache[creativeId] && creativeCache[creativeId].expiresAt > now) {
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(200).json(creativeCache[creativeId].value);
+  }
+  if (typeof videoId === 'string' && videoCache[videoId] && videoCache[videoId].expiresAt > now) {
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(200).json(videoCache[videoId].value);
+  }
+
+  // Intercept res.json to populate memory cache on successful resolves
+  const originalJson = res.json.bind(res);
+  res.json = (body: any) => {
+    if (body && body.type !== 'none' && body.type !== 'failed' && res.statusCode === 200) {
+      const expiresAt = Date.now() + 2 * 3600 * 1000; // 2 hours TTL
+      if (typeof creativeId === 'string') {
+        creativeCache[creativeId] = { value: body, expiresAt };
+      } else if (typeof videoId === 'string') {
+        videoCache[videoId] = { value: body, expiresAt };
+      }
+    }
+    return originalJson(body);
+  };
 
   try {
     const token = await getMetaToken();
