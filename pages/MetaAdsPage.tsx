@@ -586,8 +586,8 @@ export default function MetaAdsPage() {
 
         {/* Skeleton */}
         {accountId && loading && activeAds.length === 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-            {[...Array(12)].map((_, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[...Array(8)].map((_, i) => (
               <div key={i} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 flex flex-col">
                 <div className="h-52 bg-zinc-100 dark:bg-zinc-800" />
                 <div className="p-4 space-y-3">
@@ -648,7 +648,7 @@ export default function MetaAdsPage() {
                     <h4 className="text-[14px] font-black text-zinc-800 dark:text-zinc-100 tracking-tight truncate">{group.campaignName}</h4>
                     <span className="text-[11px] font-bold text-zinc-400 flex-shrink-0">{group.ads.length} creativos</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                     {group.ads.map(ad => {
                       const insights = adInsightsMap[ad.id];
                       const adSpend = parseFloat(insights?.spend || 0);
@@ -714,9 +714,9 @@ export default function MetaAdsPage() {
                                   { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: false },
                                   { label: 'Alcance', val: fmtN(adReach), highlight: false },
                                 ].map(({ label, val, highlight }) => (
-                                  <div key={label} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2 px-2.5 border border-zinc-100 dark:border-white/[0.04] flex items-center justify-between gap-1">
-                                    <p className="text-[10px] font-bold text-zinc-450 dark:text-zinc-400 uppercase tracking-wide text-left truncate flex-1">{label}</p>
-                                    <p className={`text-[12px] font-extrabold text-center w-12 shrink-0 leading-none ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-zinc-100'}`}>{val}</p>
+                                  <div key={label} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-1.5 px-2 border border-zinc-100 dark:border-white/[0.04] flex items-center justify-between gap-1 min-w-0">
+                                    <p className="text-[9px] font-black text-zinc-450 dark:text-zinc-500 uppercase tracking-tight text-left min-w-0 flex-1 truncate" title={label}>{label}</p>
+                                    <p className={`text-[11px] font-black text-right shrink-0 leading-none ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-zinc-100'}`}>{val}</p>
                                   </div>
                                 ))}
                               </div>
