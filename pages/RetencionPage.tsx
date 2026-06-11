@@ -233,8 +233,8 @@ export default function RetencionPage() {
       <div className="page-header print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800/50 flex items-center justify-center overflow-hidden shrink-0">
-              <img src="/assets/Klaviyo-Logo-Photoroom.webp" alt="Klaviyo" className="w-5 h-5 object-contain shrink-0" />
+            <div className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
+              <img src="/assets/Klaviyo-Logo-Photoroom.webp" alt="Klaviyo" className="w-8 h-8 object-contain shrink-0" />
             </div>
             <h1 className="page-title">Email Marketing</h1>
           </div>
