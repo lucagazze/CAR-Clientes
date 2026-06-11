@@ -1870,7 +1870,7 @@ export default function DashboardPage() {
             >
               {currentStore ? (
                 <>
-                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
                     icon={Receipt}
                     label="Ticket Promedio"
@@ -2083,7 +2083,7 @@ export default function DashboardPage() {
             >
               {currentMeta ? (
                 <>
-                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:overflow-x-auto scrollbar-hide">
+                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
                     icon={DollarSign}
                     label="Inversión"
@@ -2307,7 +2307,7 @@ export default function DashboardPage() {
             >
               {currentKlaviyo ? (
                 <>
-                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+                  <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
                   <ShopifyMetric
                     icon={Package}
                     label="Entregas"
@@ -2521,7 +2521,7 @@ export default function DashboardPage() {
               duration={900}
             >
             {chatwootSummary ? (
-              <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
+              <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:flex-nowrap lg:overflow-x-auto scrollbar-hide">
                 {[
                   { key: 'conversations_count',      label: 'Conversaciones', icon: MessageCircle, isTime: false, info: 'Total de conversaciones iniciadas en el período. Incluye todos los canales conectados (WhatsApp, Instagram, Facebook, Web).' },
                   { key: 'incoming_messages_count',  label: 'Msj. Entrantes', icon: Inbox,         isTime: false, info: 'Mensajes recibidos de clientes. Refleja el volumen de consultas y la demanda de atención en el período.' },
