@@ -91,24 +91,34 @@ function OrderExpandedDetail({ order }: { order: any }) {
       {/* Products List */}
       <div className="space-y-2">
         <p className="text-[10px] font-black text-zinc-400 uppercase tracking-wider mb-2">Productos</p>
-        {lineItems.map((item: any, idx: number) => (
-          <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-150/65 dark:border-white/[0.04]">
-            <div className="flex items-center gap-2 min-w-0 pr-2">
-              <span className="text-[11px] font-black px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-350">
-                ×{item.quantity}
-              </span>
-              <div className="min-w-0">
-                <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 truncate">{item.title}</p>
-                {item.variant_title && (
-                  <p className="text-[10px] text-zinc-400 mt-0.5">{item.variant_title}</p>
-                )}
+        {lineItems.map((item: any, idx: number) => {
+          const img = item._wc_image;
+          return (
+            <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-150/65 dark:border-white/[0.04]">
+              <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className="shrink-0 min-w-[28px] h-7 px-1.5 rounded bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 flex items-center justify-center">
+                  <span className="text-[11px] font-black">×{item.quantity}</span>
+                </div>
+                <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-white/[0.06]">
+                  {img ? (
+                    <img src={img} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <ShoppingBag className="w-3.5 h-3.5 text-zinc-400" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 truncate">{item.title}</p>
+                  {item.variant_title && (
+                    <p className="text-[10px] text-zinc-400 mt-0.5">{item.variant_title}</p>
+                  )}
+                </div>
               </div>
+              <span className="text-[12px] font-bold shrink-0 text-zinc-800 dark:text-zinc-200">
+                {fmtCurr(parseFloat(item.price || 0) * item.quantity)}
+              </span>
             </div>
-            <span className="text-[12px] font-bold shrink-0 text-zinc-800 dark:text-zinc-200">
-              {fmtCurr(parseFloat(item.price || 0) * item.quantity)}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Order breakdown */}
@@ -725,7 +735,8 @@ export default function ContactosPage() {
                   title: it.name,
                   quantity: it.quantity,
                   price: it.price,
-                  variant_title: it.meta_data?.filter((m: any) => m.display_key && !m.display_key.startsWith('_')).map((m: any) => m.display_value).join(' / ') || null
+                  variant_title: it.meta_data?.filter((m: any) => m.display_key && !m.display_key.startsWith('_')).map((m: any) => m.display_value).join(' / ') || null,
+                  _wc_image: it.image?.src || null
                 }))
               };
             });
@@ -736,7 +747,7 @@ export default function ContactosPage() {
             'x-tn-store-id': tiendanubeStoreId,
             'x-tn-token': tiendanubeToken
           };
-
+ 
           const oUrl = `/api/shopify/tn/orders?email=${encodeURIComponent(email)}&per_page=200`;
           const oRes = await fetch(oUrl, { headers: tnHeaders });
           if (oRes.ok) {
@@ -751,7 +762,7 @@ export default function ContactosPage() {
               const fulfillment_status = (o.shipping_status === 'shipped' || o.shipping_status === 'delivered') ? 'fulfilled' : 'unfulfilled';
               
               const customerName = o.customer?.name || o.shipping_address?.name || 'Cliente Tiendanube';
-
+ 
               return {
                 id: o.id,
                 order_number: o.number,
@@ -775,7 +786,8 @@ export default function ContactosPage() {
                   title: it.name,
                   quantity: it.quantity,
                   price: it.price,
-                  variant_title: it.variant_values ? it.variant_values.map((vv: any) => vv.es || vv.en || Object.values(vv || {})[0] || '').filter(Boolean).join(' / ') : null
+                  variant_title: it.variant_values ? it.variant_values.map((vv: any) => vv.es || vv.en || Object.values(vv || {})[0] || '').filter(Boolean).join(' / ') : null,
+                  _wc_image: it.image?.src || null
                 }))
               };
             });

@@ -321,6 +321,7 @@ export default function MensajeriaPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const mobileTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const audioCacheRef = useRef<Record<string, string>>({});
   // Persist manuallyUnread in localStorage so it survives reloads
   const unreadStorageKey = `car_manually_unread_${profile?.id || 'default'}`;
   const [manuallyUnread, setManuallyUnreadRaw] = useState<Set<number>>(() => {
@@ -342,6 +343,7 @@ export default function MensajeriaPage() {
   const [prevProfileId, setPrevProfileId] = useState(profileId);
   if (profileId !== prevProfileId) {
     setPrevProfileId(profileId);
+    audioCacheRef.current = {};
     
     // Clear/load cached conversations
     const key = profileId ? `car_convs_${profileId}` : null;
@@ -787,6 +789,40 @@ export default function MensajeriaPage() {
     return () => clearInterval(interval);
   }, [cwUrl, cwToken, fetchConversationsData]);
 
+  const bufferToBase64 = (buffer: ArrayBuffer): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const blob = new Blob([buffer]);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const fetchAndTranscribe = async (url: string): Promise<string | null> => {
+    try {
+      const proxyUrl = `/api/scrape-website?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) return null;
+      const arrayBuffer = await res.arrayBuffer();
+      const base64 = await bufferToBase64(arrayBuffer);
+      const transcribeRes = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: base64, mimeType: 'audio/wav' }),
+      });
+      if (!transcribeRes.ok) return null;
+      const data = await transcribeRes.json();
+      return data.text || null;
+    } catch (err) {
+      console.error('Error transcribing audio message:', err);
+      return null;
+    }
+  };
+
   const generateAiDraft = async () => {
     if (!profile?.id || !selected || messages.length === 0) return;
     setGeneratingDraft(true);
@@ -794,12 +830,56 @@ export default function MensajeriaPage() {
     try {
       const realMessages = messages.filter((m: any) => m?.message_type !== 2);
       const last25 = realMessages.slice(-25);
+
+      // Transcribe any voice note in the last 25 messages
+      const history = await Promise.all(last25.map(async (m: any) => {
+        const who = m?.message_type === 1 ? 'Agente' : (contact(selected).name || 'Cliente');
+        let audioText = '';
+        if (Array.isArray(m.attachments) && m.attachments.length > 0) {
+          const audioAttachment = m.attachments.find((att: any) => {
+            const fType = (att.file_type || '').toLowerCase();
+            const url = att.data_url || att.data?.url || '';
+            return url && (fType.includes('audio') || url.match(/\.(mp3|wav|ogg|oga|opus|m4a)/i));
+          });
+          if (audioAttachment) {
+            const url = audioAttachment.data_url || audioAttachment.data?.url || '';
+            if (audioCacheRef.current[url]) {
+              audioText = ` [Audio transcrito: "${audioCacheRef.current[url]}"]`;
+            } else {
+              const text = await fetchAndTranscribe(url);
+              if (text) {
+                audioCacheRef.current[url] = text;
+                audioText = ` [Audio transcrito: "${text}"]`;
+              } else {
+                audioText = ' [audio]';
+              }
+            }
+          }
+        }
+        const content = m?.content || '';
+        const bodyContent = content + audioText;
+        return `${who}: ${bodyContent.trim() || '[archivo adjunto]'}`;
+      }));
+
       const lastIncoming = [...last25].reverse().find((m: any) => m?.message_type === 0);
       const lastMsg = last25[last25.length - 1];
-      const history = last25.map((m: any) => {
-        const who = m?.message_type === 1 ? 'Agente' : (contact(selected).name || 'Cliente');
-        return `${who}: ${m?.content || '[archivo adjunto]'}`;
-      });
+
+      let itemText = lastIncoming?.content || lastMsg?.content || '';
+      if (lastIncoming && Array.isArray(lastIncoming.attachments)) {
+        const audioAttachment = lastIncoming.attachments.find((att: any) => {
+          const fType = (att.file_type || '').toLowerCase();
+          const url = att.data_url || att.data?.url || '';
+          return url && (fType.includes('audio') || url.match(/\.(mp3|wav|ogg|oga|opus|m4a)/i));
+        });
+        if (audioAttachment) {
+          const url = audioAttachment.data_url || audioAttachment.data?.url || '';
+          const cachedText = audioCacheRef.current[url];
+          if (cachedText) {
+            itemText = `Mensaje de voz: "${cachedText}"`;
+          }
+        }
+      }
+
       const { data: { session: freshSession } } = await supabase.auth.getSession();
       const token = freshSession?.access_token || '';
       const res = await fetch('/api/draft-reply', {
@@ -810,7 +890,7 @@ export default function MensajeriaPage() {
         },
         body: JSON.stringify({
           clientId: profile.id,
-          itemText: lastIncoming?.content || lastMsg?.content || '',
+          itemText,
           username: contact(selected).name || contact(selected).phone_number || 'Cliente',
           conversationHistory: history,
           isDM: true,
