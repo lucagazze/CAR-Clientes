@@ -615,7 +615,7 @@ export default function MetaAdsPage() {
           <div className="relative self-start w-fit" ref={datePickerRef}>
             <button
               onClick={() => setShowDatePicker(!showDatePicker)}
-              className="flex items-center gap-2 px-4 h-9 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full text-[12px] font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 h-9 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full text-[9.5px] sm:text-[10.5px] font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
             >
               {loading && activeAds.length > 0 ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" /> : <Calendar className="w-3.5 h-3.5 text-blue-500" />}
               {presetLabel}
@@ -645,7 +645,7 @@ export default function MetaAdsPage() {
                         setPendingSince(r.since);
                         setPendingUntil(r.until);
                       }}
-                      className={`flex-shrink-0 text-center md:text-left px-1 py-1 md:px-2.5 md:py-1 rounded-[4px] md:rounded-[10px] text-[8.5px] sm:text-[9px] md:text-[10px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200/40 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                      className={`flex-shrink-0 text-center md:text-left px-1 py-1 md:px-2.5 md:py-1 rounded-[4px] md:rounded-[10px] text-[8px] md:text-[9px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200/40 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
                     >
                       {p.label}
                     </button>

@@ -337,7 +337,7 @@ export default function TiendaPage() {
                 ) : (
                   <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-pink-500 transition-colors" />
                 )}
-                <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
+                <span className="text-[9.5px] sm:text-[10.5px] font-bold text-zinc-700 dark:text-zinc-200">
                   {activePreset === 'custom' 
                     ? (activeSince === activeUntil ? fmtDateRange(activeSince) : `${fmtDateRange(activeSince)} - ${fmtDateRange(activeUntil)}`)
                     : ({
@@ -384,7 +384,7 @@ export default function TiendaPage() {
                           setPendingSince(r.since);
                           setPendingUntil(r.until);
                         }}
-                        className={`flex-shrink-0 text-center md:text-left px-1 py-1 md:px-2.5 md:py-1 rounded-[4px] md:rounded-[10px] text-[8.5px] sm:text-[9px] md:text-[10px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-pink-600 text-white shadow-md shadow-pink-200/40 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                        className={`flex-shrink-0 text-center md:text-left px-1 py-1 md:px-2.5 md:py-1 rounded-[4px] md:rounded-[10px] text-[8px] md:text-[9px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-pink-600 text-white shadow-md shadow-pink-200/40 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
                       >
                         {p.label}
                       </button>
