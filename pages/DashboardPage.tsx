@@ -1690,7 +1690,7 @@ export default function DashboardPage() {
               ) : (
                 <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
               )}
-              <span className="text-[14px] md:text-[13px] font-bold text-zinc-700 dark:text-zinc-200">
+              <span className="text-[13px] font-bold text-zinc-700 dark:text-zinc-200">
                 {activePreset === "custom"
                   ? (activeSince === activeUntil ? fmtDateRange(activeSince) : `${fmtDateRange(activeSince)} - ${fmtDateRange(activeUntil)}`)
                   : (

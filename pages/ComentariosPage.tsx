@@ -966,7 +966,7 @@ export default function ComentariosPage() {
               <button
                 key={p}
                 onClick={() => setPlatformFilter(p)}
-                className={`px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-[9.5px] sm:text-[10px] font-black transition-all border flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${
+                className={`px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-[12px] sm:text-[10px] font-black transition-all border flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${
                   isActive
                     ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-sm'
                     : 'bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'

@@ -789,7 +789,7 @@ export default function InformesPage() {
               ) : (
                 <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-violet-500 transition-colors" />
               )}
-              <span className="text-[13.5px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200">
+              <span className="text-[12px] font-black text-zinc-700 dark:text-zinc-200">
                 {activePreset === 'custom' ? `${fmtDateRange(activeSince)} - ${fmtDateRange(activeUntil)}` : PRESETS.find(p => p.id === activePreset)?.label || activePreset}
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
