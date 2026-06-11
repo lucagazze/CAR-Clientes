@@ -104,7 +104,7 @@ const PLATFORMS: IntegrationPlatform[] = [
     name: "Klaviyo",
     category: "marketing",
     description: "Sincronizá flujos, listas de correo y analizá métricas de retención de clientes.",
-    logoComponent: KlaviyoLogo,
+    logoUrl: "/assets/Klaviyo-Logo-Photoroom.webp",
     isSimulated: false
   }
 ];
@@ -728,11 +728,9 @@ export default function IntegracionesPage() {
             {/* Header info */}
             <div className="flex items-center gap-4 mb-6 pb-5 border-b border-zinc-100 dark:border-white/[0.04]">
               <div className="w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800 flex items-center justify-center overflow-hidden shrink-0">
-                {selectedPlatform.logoUrl ? (
+                {selectedPlatform.logoUrl && (
                   <img src={selectedPlatform.logoUrl} alt={selectedPlatform.name} className="w-6 h-6 object-contain" />
-                ) : selectedPlatform.logoComponent ? (
-                  <KlaviyoLogo className="w-6 h-6 text-[#15B374]" />
-                ) : null}
+                )}
               </div>
               <div>
                 <h2 className="text-[18px] font-black text-zinc-900 dark:text-white leading-tight">
