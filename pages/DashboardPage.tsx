@@ -379,7 +379,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
       return `$${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v.toFixed(0)}`;
     if (isCostLabel)
       return `$${v.toFixed(2)}`;
-    if (isRoasLabel) return `${v.toFixed(2)}x`;
+    if (isRoasLabel) return `${v.toFixed(1)}`;
     if (v >= 1000) return (v / 1000).toFixed(1) + "k";
     return v.toFixed(v < 10 ? 2 : 0);
   };
@@ -512,7 +512,7 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
                     if (isCost)
                       return `$ ${v.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                     if (isPercentage) return `${v.toFixed(2)}%`;
-                    if (isRoas) return `${v.toFixed(2)}x`;
+                    if (isRoas) return `${v.toFixed(1)}`;
                     return v.toLocaleString("es-AR", {
                       maximumFractionDigits: 2,
                     });
@@ -2230,7 +2230,7 @@ export default function DashboardPage() {
                       <ShopifyMetric
                         icon={BarChart2}
                         label="ROAS"
-                        value={`${currentMeta.roas?.toFixed(2) || 0}x`}
+                        value={`${currentMeta.roas?.toFixed(1) || 0}`}
                         change={getMetaChange(currentMeta?.roas, prevMeta?.roas)}
                         trend={(currentMeta?.roas || 0) >= (prevMeta?.roas || 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.roas, date: d.date }))}

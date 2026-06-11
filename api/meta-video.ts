@@ -29,13 +29,60 @@ async function getMetaToken(): Promise<string> {
   return value;
 }
 
-async function getPageToken(pageId: string, systemToken: string): Promise<string | null> {
+async function getClientTokens(clientId?: string, accountId?: string): Promise<{ fb_page_id?: string; fb_page_access_token?: string; facebook_access_token?: string } | null> {
+  try {
+    if (clientId) {
+      const { data, error } = await supabase
+        .from('car_clients')
+        .select('fb_page_id, fb_page_access_token, facebook_access_token')
+        .eq('id', clientId)
+        .maybeSingle();
+      if (!error && data) return data;
+    }
+    if (accountId) {
+      const idWithAct = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+      const idWithoutAct = accountId.startsWith('act_') ? accountId.substring(4) : accountId;
+      const { data, error } = await supabase
+        .from('car_clients')
+        .select('fb_page_id, fb_page_access_token, facebook_access_token')
+        .or(`meta_account_id.eq.${idWithAct},meta_account_id.eq.${idWithoutAct}`)
+        .maybeSingle();
+      if (!error && data) return data;
+    }
+  } catch (err) {
+    console.error("Exception fetching client tokens in getClientTokens:", err);
+  }
+  return null;
+}
+
+async function resolvePageToken(pageId: string, clientTokens: any, agencyToken: string): Promise<string | null> {
+  if (clientTokens && String(clientTokens.fb_page_id) === String(pageId) && clientTokens.fb_page_access_token) {
+    return clientTokens.fb_page_access_token;
+  }
+
   const now = Date.now();
   if (pageTokensCache[pageId] && pageTokensCache[pageId].expiresAt > now) {
     return pageTokensCache[pageId].value;
   }
+
+  if (clientTokens && clientTokens.facebook_access_token) {
+    try {
+      const res = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${clientTokens.facebook_access_token}&limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        const page = (data.data || []).find((p: any) => String(p.id) === String(pageId));
+        if (page && page.access_token) {
+          pageTokensCache[pageId] = { value: page.access_token, expiresAt: now + 15 * 60 * 1000 };
+          return page.access_token;
+        }
+      }
+    } catch (err) {
+      console.error(`Error fetching page token using client user token for page ${pageId}:`, err);
+    }
+  }
+
   try {
-    const res = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${systemToken}&limit=100`);
+    const res = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${agencyToken}&limit=100`);
     if (res.ok) {
       const data = await res.json();
       const page = (data.data || []).find((p: any) => String(p.id) === String(pageId));
@@ -45,13 +92,14 @@ async function getPageToken(pageId: string, systemToken: string): Promise<string
       }
     }
   } catch (err) {
-    console.error("Error fetching page token:", err);
+    console.error(`Error fetching page token using agency token for page ${pageId}:`, err);
   }
+
   return null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { adId, creativeId, videoId, action, url, filename } = req.query;
+  const { adId, creativeId, videoId, action, url, filename, clientId, accountId } = req.query;
 
   if (action === 'download') {
     if (!url || typeof url !== 'string' || !isMetaUrl(url)) {
@@ -94,11 +142,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = await getMetaToken();
     if (!token) return res.status(500).json({ error: 'No Meta token configured' });
 
+    let clientTokens: any = null;
+    if (clientId || accountId) {
+      clientTokens = await getClientTokens(
+        typeof clientId === 'string' ? clientId : undefined,
+        typeof accountId === 'string' ? accountId : undefined
+      );
+    }
+
+    async function ensureClientTokensForAccount(accId: string) {
+      if (!clientTokens && accId) {
+        clientTokens = await getClientTokens(undefined, accId);
+      }
+    }
+
+    function getAdToken() {
+      return (clientTokens?.facebook_access_token) || token;
+    }
+
     const base = 'https://graph.facebook.com/v21.0';
 
     // Helper function to resolve video source
     async function resolveVideoSource(vidId: string, useToken?: string) {
-      const activeToken = useToken || token;
+      const activeToken = useToken || getAdToken();
       const videoRes = await fetch(
         `${base}/${vidId}?fields=source,picture,format&access_token=${activeToken}`
       );
@@ -117,26 +183,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return null;
     }
 
-    let activeToken = token;
+    let activeToken = getAdToken();
     let pageToken: string | null = null;
     let creativeData: any = null;
 
     // Fetch creative spec first (if creativeId is provided) so we can extract Page ID & token
     if (creativeId && typeof creativeId === 'string') {
+      const adToken = getAdToken();
       const creativeRes = await fetch(
-        `${base}/${creativeId}?fields=video_id,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id,effective_object_story_id,effective_instagram_story_id,object_story_id&access_token=${token}`
+        `${base}/${creativeId}?fields=video_id,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id,effective_object_story_id,effective_instagram_story_id,object_story_id&access_token=${adToken}`
       );
 
       if (creativeRes.ok) {
         creativeData = await creativeRes.json();
+        if (creativeData.account_id) {
+          await ensureClientTokensForAccount(creativeData.account_id);
+        }
         const pageId =
           creativeData.object_story_spec?.page_id ||
           (creativeData.effective_object_story_id ? creativeData.effective_object_story_id.split('_')[0] : null) ||
           (creativeData.object_story_id ? creativeData.object_story_id.split('_')[0] : null);
 
-        pageToken = pageId ? await getPageToken(pageId, token) : null;
+        pageToken = pageId ? await resolvePageToken(pageId, clientTokens, token) : null;
         if (pageToken) {
           activeToken = pageToken;
+        } else {
+          activeToken = getAdToken();
         }
       }
     }
@@ -176,7 +248,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (hashes.length > 0) {
             try {
               const imagesRes = await fetch(
-                `${base}/act_${accountId}/adimages?hashes=${JSON.stringify(hashes)}&fields=url,hash&access_token=${activeToken}`
+                `${base}/act_${accountId}/adimages?hashes=${JSON.stringify(hashes)}&fields=url,hash&access_token=${getAdToken()}`
               );
               if (imagesRes.ok) {
                 const imagesData = await imagesRes.json();
@@ -392,7 +464,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 3. Fallback to Meta Ad Previews API (on creative ID first)
     if (creativeId && typeof creativeId === 'string') {
       const previewRes = await fetch(
-        `${base}/${creativeId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${token}`
+        `${base}/${creativeId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${getAdToken()}`
       );
 
       if (previewRes.ok) {
@@ -411,7 +483,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 4. Fallback to Meta Ad Previews API (on ad ID)
     if (adId && typeof adId === 'string') {
       const previewRes = await fetch(
-        `${base}/${adId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${token}`
+        `${base}/${adId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${getAdToken()}`
       );
 
       if (previewRes.ok) {

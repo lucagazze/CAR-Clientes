@@ -281,13 +281,14 @@ export default function MetaAdsPage() {
     if (ad.id) params.set('adId', ad.id);
     if (ad.creative?.id) params.set('creativeId', ad.creative.id);
     if (ad.creative?.video_id) params.set('videoId', ad.creative.video_id);
+    if (clientId) params.set('clientId', clientId);
     try {
       const res = await fetch(`/api/meta-video?${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       let thumbnail: string | null = null;
       if (data.type === 'carousel' && data.cards?.[0]?.url) thumbnail = data.cards[0].url;
-      else if (data.type === 'video_source' && data.picture) thumbnail = data.picture;
+      else if ((data.type === 'video_source' || data.type === 'ad_preview') && data.picture) thumbnail = data.picture;
       else if (data.type === 'image' && data.url) thumbnail = data.url;
       setResolvedDetails(prev => ({ ...prev, [ad.id]: data }));
       if (thumbnail) setResolvedThumbnails(prev => ({ ...prev, [ad.id]: thumbnail! }));
@@ -297,7 +298,7 @@ export default function MetaAdsPage() {
       // Always clear the resolving flag so the spinner doesn't get stuck
       setResolvingIds(prev => { const next = { ...prev }; delete next[ad.id]; return next; });
     }
-  }, []);
+  }, [clientId]);
 
   // ── Sliding-window background resolver ──────────────────────────────────────
   useEffect(() => {
@@ -692,7 +693,7 @@ export default function MetaAdsPage() {
                                   { label: 'Gasto', val: `$${adSpend.toFixed(0)}`, highlight: false },
                                   { label: resultLabel, val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
                                   { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—', highlight: false },
-                                  { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(2)}x` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
+                                  { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
                                   { label: 'Alcance', val: fmtN(adReach), highlight: false },
                                   { label: 'Impr.', val: fmtN(adImpr), highlight: false },
                                 ].map(({ label, val, highlight }) => (
@@ -819,7 +820,7 @@ export default function MetaAdsPage() {
                           { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
                           { label: purchases > 0 ? 'Ventas' : leads > 0 ? 'Leads' : 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
                           { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
-                          { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(2)}x` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
+                          { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
                           { label: 'Alcance', val: fmtN(adReach) },
                           { label: 'Impresiones', val: fmtN(adImpr) },
                         ].map(({ label, val, highlight }: any) => (
@@ -907,6 +908,15 @@ export default function MetaAdsPage() {
                           {card.name && <p className="px-3 pb-2.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 text-center truncate bg-zinc-50 dark:bg-zinc-950">{card.name}</p>}
                         </div>
                       );
+                    })() : mediaData.type === 'ad_preview' && mediaData.embed_html ? (() => {
+                      const resizedHtml = mediaData.embed_html
+                        .replace(/width="\d+"/g, 'width="100%"')
+                        .replace(/height="\d+"/g, 'height="400"')
+                        .replace(/<iframe/g, `<iframe style="width:100%;height:400px;border:none;"`);
+                      const cleanHtml = DOMPurify.sanitize(resizedHtml, {
+                        ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'style', 'src', 'width', 'height'],
+                      });
+                      return <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 w-full" style={{ height: 400 }} dangerouslySetInnerHTML={{ __html: cleanHtml }} />;
                     })() : mediaData.type === 'image' || thumbUrl ? (
                       <div className="rounded-2xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm w-full aspect-[4/5] flex-shrink-0 relative flex items-center justify-center">
                         <SmoothImage
@@ -916,16 +926,7 @@ export default function MetaAdsPage() {
                           className="object-contain"
                         />
                       </div>
-                    ) : mediaData.type === 'ad_preview' && mediaData.embed_html ? (() => {
-                      const resizedHtml = mediaData.embed_html
-                        .replace(/width="\d+"/g, 'width="100%"')
-                        .replace(/height="\d+"/g, 'height="400"')
-                        .replace(/<iframe/g, `<iframe style="width:100%;height:400px;border:none;"`);
-                      const cleanHtml = DOMPurify.sanitize(resizedHtml, {
-                        ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'style', 'src', 'width', 'height'],
-                      });
-                      return <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 w-full" style={{ height: 400 }} dangerouslySetInnerHTML={{ __html: cleanHtml }} />;
-                    })() : (
+                    ) : (
                       <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 aspect-[4/5] w-full flex-shrink-0 flex flex-col items-center justify-center text-zinc-400 gap-2">
                         <ImageIcon className="w-8 h-8" />
                         <span className="text-[11px] font-bold">Sin preview disponible</span>
@@ -954,7 +955,7 @@ export default function MetaAdsPage() {
                           { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
                           { label: purchases > 0 ? 'Ventas' : leads > 0 ? 'Leads' : 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
                           { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
-                          { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(2)}x` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
+                          { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
                           { label: 'Alcance', val: fmtN(adReach) },
                           { label: 'Impresiones', val: fmtN(adImpr) },
                         ].map(({ label, val, highlight }: any) => (
