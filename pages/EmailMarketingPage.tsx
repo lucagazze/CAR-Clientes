@@ -1179,13 +1179,13 @@ export default function EmailMarketingPage() {
             <button
               key={t.id}
               onClick={() => setTab(t.id as any)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-bold transition-all whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-1 px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[10.5px] sm:text-[12px] font-bold transition-all whitespace-nowrap ${
                 tab === t.id ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
               }`}
             >
               {t.icon}
               <span>{t.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${tab === t.id ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400' : 'bg-zinc-200 dark:bg-white/10 text-zinc-400'}`}>
+              <span className={`text-[8.5px] px-1 py-0.5 rounded-full font-black ${tab === t.id ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400' : 'bg-zinc-200 dark:bg-white/10 text-zinc-400'}`}>
                 {t.count}
               </span>
             </button>
@@ -1211,7 +1211,7 @@ export default function EmailMarketingPage() {
                       <button
                         key={s}
                         onClick={() => setStatusFilter(s)}
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
+                        className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[9.5px] sm:text-[10px] font-bold transition-all ${
                           statusFilter === s
                             ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow'
                             : 'bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10'
