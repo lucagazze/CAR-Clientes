@@ -630,6 +630,8 @@ export const ecommerce = {
         customer_name: o.customer ? `${o.customer.first_name || ''} ${o.customer.last_name || ''}`.trim() : 'Sin Cliente',
         line_items_count: o.line_items?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
         line_items: o.line_items?.map((item: any) => ({
+          product_id: item.product_id,
+          variant_id: item.variant_id,
           title: item.title,
           quantity: item.quantity,
           price: parseFloat(item.price || 0),

@@ -908,6 +908,7 @@ export default function DashboardPage() {
   const [atencPrevSeriesAll, setAtencPrevSeriesAll] = useState<Record<string, any[]>>({});
   const [currentStore, setCurrentStore] = useState<any>(null);
   const [prevStore, setPrevStore] = useState<any>(null);
+  const [productImages, setProductImages] = useState<Record<string, string>>({});
   const [fetchingStore, setFetchingStore] = useState(true);
   const [shopifyError, setShopifyError] = useState<string | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -1036,6 +1037,7 @@ export default function DashboardPage() {
   useEffect(() => {
     setCurrentStore(null);
     setPrevStore(null);
+    setProductImages({});
     setCurrentMeta(null);
     setPrevMeta(null);
     setMetaDaily([]);
@@ -1051,6 +1053,21 @@ export default function DashboardPage() {
     setLinks([]);
     setHistorical90d([]);
   }, [profile?.id]);
+
+  useEffect(() => {
+    if (detectedPlatform === 'shopify' && (profile as any)?.shopify_domain && (profile as any)?.shopify_access_token) {
+      ecommerce.getProducts((profile as any).shopify_domain, (profile as any).shopify_access_token)
+        .then(prods => {
+          const map: Record<string, string> = {};
+          for (const p of prods) {
+            const src = typeof p.image === 'string' ? p.image : p.image?.src;
+            if (src) map[String(p.id)] = src;
+          }
+          setProductImages(map);
+        })
+        .catch(e => console.error("Error loading products for images:", e));
+    }
+  }, [profile?.id, detectedPlatform]);
 
   // Global keydown listeners for Escape
   useEffect(() => {
@@ -2932,28 +2949,38 @@ export default function DashboardPage() {
                   Productos Solicitados
                 </span>
                 <div className="border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-850">
-                  {selectedOrder.line_items?.map((item: any, idx: number) => (
-                    <div key={idx} className="p-4 flex items-center justify-between text-[13px] font-medium text-zinc-700 dark:text-zinc-350">
-                      <div className="min-w-0 pr-3">
-                        <p className="font-bold text-zinc-900 dark:text-white truncate">
-                          {item.title}
-                        </p>
-                        {item.variant_title && (
-                          <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                            Variante: {item.variant_title}
+                  {selectedOrder.line_items?.map((item: any, idx: number) => {
+                    const img = item._wc_image || productImages[String(item.product_id)];
+                    return (
+                      <div key={idx} className="p-3.5 flex items-center gap-3 text-[13px] font-medium text-zinc-700 dark:text-zinc-350">
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center border border-zinc-250/30 dark:border-white/[0.06]">
+                          {img ? (
+                            <img src={img} alt={item.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                          ) : (
+                            <Package className="w-3.5 h-3.5 text-zinc-450 dark:text-zinc-550" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="font-bold text-zinc-900 dark:text-white truncate">
+                            {item.title}
                           </p>
-                        )}
+                          {item.variant_title && item.variant_title !== 'Default Title' && (
+                            <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                              Variante: {item.variant_title}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-zinc-900 dark:text-white">
+                            ${(item.price * item.quantity).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                          </p>
+                          <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                            {item.quantity} x ${item.price?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-bold text-zinc-900 dark:text-white">
-                          ${(item.price * item.quantity).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
-                        </p>
-                        <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                          {item.quantity} x ${item.price?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
