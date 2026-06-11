@@ -199,7 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         return <img src="/assets/meta (1).webp" alt="Meta" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
       }
       if (isEmailMarketing) {
-        return <KlaviyoLogo className={className} />;
+        return <img src="/assets/Klaviyo-Logo-Photoroom.webp" alt="Klaviyo" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
       }
       if (isTiendaOnline) {
         if (detectedPlatform === 'shopify') return <img src="/assets/shopify-bag.webp" alt="Shopify" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;

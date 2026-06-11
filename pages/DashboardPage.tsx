@@ -2363,7 +2363,7 @@ export default function DashboardPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <KlaviyoLogo className="w-5 h-5 text-[#15B374] shrink-0" />
+                <img src="/assets/Klaviyo-Logo-Photoroom.webp" alt="Klaviyo" className="w-5 h-5 object-contain shrink-0" />
                 <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                   Email Marketing
                 </h2>
