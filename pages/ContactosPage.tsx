@@ -292,7 +292,7 @@ export default function ContactosPage() {
 
   // Filters and Sorting
   const [filterType, setFilterType] = useState<'all' | 'new' | 'frequent'>('all');
-  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'spent' | 'orders'>('name');
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'spent' | 'orders'>('recent');
 
   // Load Store Customers
   const loadData = useCallback(async () => {

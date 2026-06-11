@@ -572,6 +572,14 @@ export default function PedidosPage() {
     load(since, until, false);
   }, [since, until]);
 
+  useEffect(() => {
+    const handleNewOrder = () => {
+      load(since, until, false);
+    };
+    window.addEventListener('car_new_order_event', handleNewOrder);
+    return () => window.removeEventListener('car_new_order_event', handleNewOrder);
+  }, [load, since, until]);
+
   const setPresetRange = useCallback((idx: number) => {
     setPreset(idx);
     setSince(PRESETS[idx].since());

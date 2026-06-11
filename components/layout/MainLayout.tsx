@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 // Route-level ErrorBoundary — resets automatically on every navigation via `key`
 class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
@@ -148,6 +148,7 @@ export const MainLayout = () => {
   const activeProfile = isViewingAs ? viewAsProfile : profile;
   const { unreadCount } = useUnread();
   const location = useLocation();
+  const navigate = useNavigate();
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   const { showToast } = useToast();
@@ -158,6 +159,28 @@ export const MainLayout = () => {
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [location.pathname]);
+
+  // Listen for new orders to show global notification
+  useEffect(() => {
+    const handleNewOrder = () => {
+      if (location.pathname !== '/pedidos') {
+        showToast(
+          <div 
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate('/pedidos');
+            }}
+          >
+            ¡Llegó un pedido nuevo! 🛍️ <span className="underline ml-1">Ver</span>
+          </div>,
+          'success'
+        );
+      }
+    };
+    window.addEventListener('car_new_order_event', handleNewOrder);
+    return () => window.removeEventListener('car_new_order_event', handleNewOrder);
+  }, [location.pathname, showToast, navigate]);
 
   // Check for auto-recovery redirect from a crashed route
   useEffect(() => {

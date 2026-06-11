@@ -14,9 +14,8 @@ import AnalisisProductosPage from './AnalisisProductosPage';
 const PINK = '#ec4899';
 
 const fmtCurr = (n: number) => {
-  if (typeof n !== 'number') return '—';
-  const showDecimals = n < 10 || n % 1 !== 0;
-  return `$ ${n.toLocaleString('es-AR', showDecimals ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 })}`;
+  if (typeof n !== 'number' || isNaN(n)) return '—';
+  return `$ ${n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 };
 
 const MiniCal = ({ year, month, since, until, hovering, onDay, onHover, onPrev, onNext }: any) => {

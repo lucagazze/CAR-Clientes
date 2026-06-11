@@ -551,7 +551,12 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else if (isTN) {
         count = await ecommerce.getTiendaNubeUnfulfilledCount(tnStoreId, tnToken);
       }
-      setPendingOrdersCount(count);
+      setPendingOrdersCount(prev => {
+        if (prev > 0 && count > prev) {
+          window.dispatchEvent(new CustomEvent('car_new_order_event', { detail: count - prev }));
+        }
+        return count;
+      });
     } catch {
       // silent
     } finally {
