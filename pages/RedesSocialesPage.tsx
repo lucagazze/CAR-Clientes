@@ -160,9 +160,11 @@ export default function RedesSocialesPage() {
   const fbPageId = (profile as any)?.fb_page_id;
 
   // Unified loading states to prevent flashing empty/unconnected pages
-  const isIgTabLoading = !!igId && !igProfile && igLoading;
-  const isFbTabLoading = !!fbPageId && !fbProfile && (fbLoading || activeTab === 'facebook');
-  const loading = authLoading || (profile === undefined) || (activeTab === 'instagram' ? isIgTabLoading : isFbTabLoading);
+  const loading = authLoading || (profile === undefined) || (
+    // Only show full-screen loader on initial mount when neither Instagram nor Facebook profile has been loaded yet
+    (!!igId && !igProfile && igLoading && !fbProfile) ||
+    (!!fbPageId && !fbProfile && fbLoading && !igProfile && !igId)
+  );
 
   // Helper to determine if a comment thread is unanswered/pending
   const isCommentPending = (comment: any) => {
@@ -827,6 +829,13 @@ export default function RedesSocialesPage() {
     setPendingLoaded(false);
   }, [clientId]);
 
+  // Auto-select Facebook if only Facebook is configured
+  useEffect(() => {
+    if (!igId && fbPageId) {
+      setActiveTab('facebook');
+    }
+  }, [igId, fbPageId]);
+
   // Load Instagram independently (SWR)
   useEffect(() => {
     if (!clientId) return;
@@ -1011,6 +1020,23 @@ export default function RedesSocialesPage() {
     <CenteredPageLoader isLoading={loading || authLoading}>
     <div className="space-y-5 md:space-y-8 w-full pt-3 md:pt-6 animate-in fade-in duration-300">
       
+      {/* Top progress bar for page/tab transitions */}
+      {(igLoading || fbLoading) && !loading && (
+        <div className="fixed top-14 left-0 right-0 h-[3px] bg-transparent z-[999] overflow-hidden">
+          <div 
+            className="h-full" 
+            style={{
+              width: '100%',
+              animation: 'top-bar-loading 1.5s infinite linear',
+              background: activeTab === 'instagram' 
+                ? 'linear-gradient(90deg, transparent, #ec4899, #8b5cf6, #ec4899, transparent)' 
+                : 'linear-gradient(90deg, transparent, #2563eb, #3b82f6, #2563eb, transparent)',
+              backgroundSize: '200% 100%'
+            }} 
+          />
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
         <div>
@@ -2249,6 +2275,14 @@ export default function RedesSocialesPage() {
           </div>
         </div>
       )}
+      
+      {/* Keyframes inyectados inline para la barra de progreso superior */}
+      <style>{`
+        @keyframes top-bar-loading {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
     </div>
     </CenteredPageLoader>
   );
