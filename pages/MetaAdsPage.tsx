@@ -660,7 +660,7 @@ export default function MetaAdsPage() {
                       const adImpr = parseInt(insights?.impressions || 0);
                       const adCtr = parseFloat(insights?.inline_link_click_ctr || 0);
                       const adRoas = parseFloat(insights?.purchase_roas?.[0]?.value || 0);
-                      const resultLabel = purchases > 0 ? 'Ventas' : leads > 0 ? 'Leads' : messages > 0 ? 'Msgs' : 'Result.';
+                      const resultLabel = 'Resultados';
                       const adReactions = getA('post_reaction');
                       const adComments = getA('comment');
                       const adShares = getA('post');
@@ -834,7 +834,7 @@ export default function MetaAdsPage() {
                         <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2">Rendimiento</p>
                         {[
                           { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
-                          { label: purchases > 0 ? 'Ventas' : leads > 0 ? 'Leads' : 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
+                          { label: 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
                           { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
                           { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
                           { label: 'Alcance', val: fmtN(adReach) },
@@ -969,7 +969,7 @@ export default function MetaAdsPage() {
                         <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2">Rendimiento</p>
                         {[
                           { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
-                          { label: purchases > 0 ? 'Ventas' : leads > 0 ? 'Leads' : 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
+                          { label: 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
                           { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
                           { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
                           { label: 'Alcance', val: fmtN(adReach) },
