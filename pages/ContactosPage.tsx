@@ -994,42 +994,52 @@ export default function ContactosPage() {
                   <p className="text-[12px] font-bold">Sin clientes</p>
                 </div>
               ) : (
-                visibleCustomers.map(c => {
-                  const isSelected = selectedStoreCust?.id === c.id;
-                  return (
-                    <div
-                      key={c.id}
-                      onClick={() => handleSelectStoreCustomer(c)}
-                      className={`mx-2.5 my-0.5 px-2.5 py-1.5 flex items-center gap-2.5 transition-all duration-200 cursor-pointer rounded-xl group ${
-                        isSelected
-                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/10'
-                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/35 border border-transparent'
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-[12px] truncate font-bold ${isSelected ? 'text-white' : 'text-zinc-800 dark:text-zinc-100'}`}>
-                          {c.name || 'Cliente sin nombre'}
-                        </p>
+                <>
+                  {visibleCustomers.map(c => {
+                    const isSelected = selectedStoreCust?.id === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => handleSelectStoreCustomer(c)}
+                        className={`mx-2.5 my-0.5 px-2.5 py-1.5 flex items-center gap-2.5 transition-all duration-200 cursor-pointer rounded-xl group ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/10'
+                            : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/35 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          {/* Pedidos Count */}
+                          <span className={`inline-flex items-center justify-center shrink-0 min-w-[18px] h-[18px] px-1 rounded-md text-[9.5px] font-black tracking-tighter ${
+                            isSelected 
+                              ? 'bg-white/20 text-white' 
+                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                          }`}>
+                            {c.orders_count ?? 0}
+                          </span>
+                          <p className={`text-[12px] truncate font-bold flex-1 ${isSelected ? 'text-white' : 'text-zinc-800 dark:text-zinc-100'}`}>
+                            {c.email || c.name || 'Sin email'}
+                          </p>
+                        </div>
+
+                        {/* Gasto Total Badge */}
+                        {c.total_spent !== null && c.total_spent !== undefined && c.total_spent > 0 && (
+                          <span className={`text-[10.5px] font-extrabold whitespace-nowrap shrink-0 ${isSelected ? 'text-white' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                            {fmtCurr(c.total_spent)}
+                          </span>
+                        )}
                       </div>
+                    );
+                  })}
 
-                      {/* Gasto Total Badge */}
-                      {c.total_spent !== null && c.total_spent !== undefined && c.total_spent > 0 && (
-                        <span className={`text-[10.5px] font-extrabold whitespace-nowrap shrink-0 ${isSelected ? 'text-white' : 'text-emerald-500 dark:text-emerald-400'}`}>
-                          {fmtCurr(c.total_spent)}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Infinite scroll sentinel */}
-            <div ref={sentinelRef} className="py-1">
-              {visibleCount < sortedCustomers.length && (
-                <div className="flex justify-center py-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
-                </div>
+                  {/* Infinite scroll sentinel */}
+                  <div ref={sentinelRef} className="py-1">
+                    {visibleCount < sortedCustomers.length && (
+                      <div className="flex justify-center py-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, memo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { ecommerce } from '../services/ecommerce';
@@ -403,56 +403,7 @@ const OrderCard = memo(function OrderCard({ order, productImages }: { order: any
   );
 });
 
-// ─── Pagination ───────────────────────────────────────────────────────────
-
-const Pagination = memo(function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
-  if (totalPages <= 1) return null;
-
-  const pages: (number | '…')[] = [];
-  if (totalPages <= 7) {
-    for (let i = 1; i <= totalPages; i++) pages.push(i);
-  } else {
-    pages.push(1);
-    if (page > 3) pages.push('…');
-    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
-    if (page < totalPages - 2) pages.push('…');
-    pages.push(totalPages);
-  }
-
-  return (
-    <div className="flex items-center justify-center gap-1.5 py-5 flex-wrap">
-      <button
-        onClick={() => onChange(page - 1)} disabled={page === 1}
-        className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed"
-      >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-      {pages.map((p, i) =>
-        p === '…'
-          ? <span key={`ellipsis-${i}`} className="w-8 h-8 flex items-center justify-center text-[12px] text-zinc-400">…</span>
-          : (
-            <button
-              key={p}
-              onClick={() => onChange(p as number)}
-              className={`w-8 h-8 rounded-xl text-[12px] font-bold ${
-                page === p
-                  ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800'
-              }`}
-            >
-              {p}
-            </button>
-          )
-      )}
-      <button
-        onClick={() => onChange(page + 1)} disabled={page === totalPages}
-        className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed"
-      >
-        <ChevronRightIcon className="w-4 h-4" />
-      </button>
-    </div>
-  );
-});
+// Pagination component removed in favor of Infinite Scroll
 
 // ─── presets ──────────────────────────────────────────────────────────────
 
@@ -497,7 +448,7 @@ export default function PedidosPage() {
   const [since, setSince]                         = useState(daysAgo(29));
   const [until, setUntil]                         = useState(todayStr());
   const [sortAsc, setSortAsc]                     = useState(false);
-  const [page, setPage]                           = useState(1);
+  const [visibleCount, setVisibleCount]           = useState(PAGE_SIZE);
 
   const load = useCallback(async (s: string, u: string, isInitial = false) => {
     if (!isShopify && !isWoo && !isTiendaNube) return;
@@ -584,7 +535,7 @@ export default function PedidosPage() {
     setPreset(idx);
     setSince(PRESETS[idx].since());
     setUntil(PRESETS[idx].until());
-    setPage(1);
+    setVisibleCount(PAGE_SIZE);
   }, []);
 
   const filtered = useMemo(() => {
@@ -605,11 +556,33 @@ export default function PedidosPage() {
     return sortAsc ? [...list].reverse() : list;
   }, [orders, filterPayment, filterFulfillment, search, sortAsc]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage   = Math.min(page, totalPages);
-  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginated = filtered.slice(0, visibleCount);
 
-  const handleFilterChange = useCallback((fn: () => void) => { fn(); setPage(1); }, []);
+  const handleFilterChange = useCallback((fn: () => void) => { fn(); setVisibleCount(PAGE_SIZE); }, []);
+
+  const loaderRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (visibleCount >= filtered.length) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const first = entries[0];
+      if (first.isIntersecting) {
+        setVisibleCount(prev => Math.min(prev + PAGE_SIZE, filtered.length));
+      }
+    }, { threshold: 0.1, rootMargin: '100px' });
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [filtered.length, visibleCount]);
 
   const stats = useMemo(() => {
     const valid = orders.filter(o => !o.cancelled_at && o.financial_status !== 'voided');
@@ -766,12 +739,11 @@ export default function PedidosPage() {
               {/* Table meta */}
               <div className="px-5 py-3 border-b border-zinc-100 dark:border-white/[0.04] flex items-center justify-between gap-2">
                 <p className="text-[11px] font-bold text-zinc-400">
-                  {filtered.length} pedido{filtered.length !== 1 ? 's' : ''}
-                  {orders.length !== filtered.length && <span className="text-zinc-300 dark:text-zinc-600"> de {orders.length}</span>}
-                  {totalPages > 1 && <span className="ml-1.5 text-zinc-300 dark:text-zinc-600">· pág. {safePage}/{totalPages}</span>}
+                  Mostrando {Math.min(visibleCount, filtered.length)} de {filtered.length} pedido{filtered.length !== 1 ? 's' : ''}
+                  {orders.length !== filtered.length && <span className="text-zinc-300 dark:text-zinc-600"> (filtrados de {orders.length})</span>}
                 </p>
                 <button
-                  onClick={() => { setSortAsc(v => !v); setPage(1); }}
+                  onClick={() => { setSortAsc(v => !v); setVisibleCount(PAGE_SIZE); }}
                   className="flex items-center gap-1 text-[11px] font-bold text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 >
                   {sortAsc ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -807,11 +779,12 @@ export default function PedidosPage() {
                 </table>
               </div>
 
-              <Pagination
-                page={safePage}
-                totalPages={totalPages}
-                onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              />
+              {visibleCount < filtered.length && (
+                <div ref={loaderRef} className="flex items-center justify-center py-6 gap-2 border-t border-zinc-100 dark:border-white/[0.04]">
+                  <RefreshCw className="w-4 h-4 animate-spin text-pink-500" />
+                  <span className="text-[12px] font-bold text-zinc-400">Cargando más pedidos...</span>
+                </div>
+              )}
             </>
           )}
         </div>
