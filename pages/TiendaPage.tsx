@@ -287,7 +287,7 @@ export default function TiendaPage() {
                 ) : (
                   <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-pink-500 transition-colors" />
                 )}
-                <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
+                <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200 whitespace-nowrap">
                   {activePreset === 'custom' 
                     ? (activeSince === activeUntil ? fmtDateRange(activeSince) : `${fmtDateRange(activeSince)} - ${fmtDateRange(activeUntil)}`)
                     : ({
