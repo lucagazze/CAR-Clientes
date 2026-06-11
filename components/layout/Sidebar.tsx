@@ -217,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         to={item.path}
         title={isUnconfigured ? `${item.label} (no configurado)` : item.label}
         onClick={() => window.innerWidth < 768 && setIsOpen(false)}
-        className={`group flex items-center gap-2.5 px-3 py-2 md:py-1.5 rounded-xl text-[12px] md:text-[12px] font-bold transition-all duration-150 active:scale-[0.98] ${
+        className={`group flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-[11px] md:text-[12px] font-bold transition-all duration-150 active:scale-[0.98] ${
           isActive
             ? 'bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 shadow-md shadow-black/10 dark:shadow-white/5'
             : isUnconfigured
@@ -355,7 +355,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-7 scrollbar-hide">
           
           {/* Principal */}
-          <div className="space-y-1.5 md:space-y-1">
+          <div className="space-y-1">
             <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-[0.2em] px-3.5 mb-2.5 flex items-center gap-2 select-none">
               Principal
             </p>
@@ -364,7 +364,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
           {/* Metricas — solo si hay al menos 1 item */}
           {metricasItems.length > 0 && (
-            <div className="space-y-1.5 md:space-y-1">
+            <div className="space-y-1">
               <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-[0.2em] px-3.5 mb-2.5 flex items-center gap-2 select-none">
                 Metricas
               </p>
@@ -374,7 +374,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
           {/* Activos — solo si hay al menos 1 item */}
           {activosItems.length > 0 && (
-            <div className="space-y-1.5 md:space-y-1">
+            <div className="space-y-1">
               <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-[0.2em] px-3.5 mb-2.5 flex items-center gap-2 select-none">
                 Activos
               </p>
@@ -383,7 +383,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
           )}
 
           {/* Configuración */}
-          <div className="space-y-1.5 md:space-y-1">
+          <div className="space-y-1">
             <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-[0.2em] px-3.5 mb-2.5 flex items-center gap-2 select-none">
               Configuración
             </p>
@@ -392,7 +392,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
           {/* Administración */}
           {profile?.is_admin && !isViewingAs && (
-            <div className="space-y-1.5 md:space-y-1">
+            <div className="space-y-1">
               <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-[0.2em] px-3.5 mb-2.5 flex items-center gap-2 select-none">
                 Administración
               </p>
