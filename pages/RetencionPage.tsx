@@ -14,6 +14,12 @@ import { AppleLoader } from '../components/ui/AppleLoader';
 
 const MAIN_COLOR = '#10b981'; // Green (Emerald) for Retention
 
+const KlaviyoLogo = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M5.04 3h3.6v18h-3.6zM10.8 11.28h3.6V21h-3.6zM16.56 3h3.6v8.28h-3.6zM10.8 3h3.6v6.12h-3.6z" />
+  </svg>
+);
+
 const fmtCurrency = (n: number) => {
   if (typeof n !== 'number') return '—';
   const showDecimals = n < 10 || n % 1 !== 0;
@@ -227,8 +233,8 @@ export default function RetencionPage() {
       <div className="page-header print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <Mail className="w-5 h-5 text-emerald-500" />
+            <div className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800/50 flex items-center justify-center overflow-hidden shrink-0">
+              <KlaviyoLogo className="w-5 h-5 text-[#15B374]" />
             </div>
             <h1 className="page-title">Email Marketing</h1>
           </div>

@@ -227,7 +227,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         }`}
       >
         {renderIcon()}
-        <span className="tracking-tight flex-1">{(item.path === '/tienda' && detectedPlatform) ? `Tienda (${detectedPlatform === 'wordpress' ? 'WooCommerce' : detectedPlatform === 'shopify' ? 'Shopify' : 'Tiendanube'})` : item.label}</span>
+        <span className="tracking-tight flex-1">{item.label}</span>
         {/* Unread badge / Loading spinner */}
         {((item.path === '/comentarios' && commentsLoading) || (item.path === '/mensajeria' && unreadLoading) || (item.path === '/pedidos' && ordersLoading)) ? (
           <Loader2 className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 animate-spin shrink-0" />
