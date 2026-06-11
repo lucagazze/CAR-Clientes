@@ -358,11 +358,17 @@ export const metaAds = {
     }),
 
   // ── CAMPAIGNS ─────────────────────────────────────────────
-  getCampaigns: (accountId = META_AD_ACCOUNT) =>
-    apiGet(`${accountId}/campaigns`, {
+  getCampaigns: async (accountId = META_AD_ACCOUNT) => {
+    const cacheKey = `campaigns:${accountId}`;
+    const cached = metaGetCached(cacheKey);
+    if (cached) return cached;
+    const res = await apiGet(`${accountId}/campaigns`, {
       fields: 'id,name,status,objective,buying_type,daily_budget,lifetime_budget,start_time,stop_time,bid_strategy',
       limit: '100',
-    }),
+    });
+    metaSetCache(cacheKey, res);
+    return res;
+  },
 
   // ── CHECK if account has spend in the last 15 days ────────
   hasRecentSpend: async (accountId: string): Promise<boolean> => {
@@ -393,11 +399,17 @@ export const metaAds = {
     }),
 
   // ── ALL ADS FOR ACCOUNT ──────────────────────────────────
-  getAccountAds: (accountId = META_AD_ACCOUNT) =>
-    apiGet(`${accountId}/ads`, {
+  getAccountAds: async (accountId = META_AD_ACCOUNT) => {
+    const cacheKey = `ads:${accountId}`;
+    const cached = metaGetCached(cacheKey);
+    if (cached) return cached;
+    const res = await apiGet(`${accountId}/ads`, {
       fields: 'id,name,status,campaign_id,preview_shareable_link,creative{id,name,body,title,thumbnail_url,image_url,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_permalink_url}',
       limit: '150',
-    }),
+    });
+    metaSetCache(cacheKey, res);
+    return res;
+  },
 
   // ── AD-LEVEL INSIGHTS for a specific adset ────────────────
   getAdInsightsForAdset: async (adsetId: string, fields: string, timeRange: TimeRange): Promise<any[]> => {
@@ -412,13 +424,18 @@ export const metaAds = {
 
   // ── AD-LEVEL INSIGHTS FOR ACCOUNT ────────────────────────
   getAdInsightsForAccount: async (accountId: string, fields: string, timeRange: TimeRange): Promise<any[]> => {
+    const cacheKey = `adinsights:${accountId}:${fields}:${JSON.stringify(timeRange)}`;
+    const cached = metaGetCached(cacheKey);
+    if (cached) return cached;
     const res = await apiGet(`${accountId}/insights`, {
       fields,
       level: 'ad',
       time_range: JSON.stringify(timeRange),
       limit: '150',
     });
-    return res?.data || [];
+    const data = res?.data || [];
+    metaSetCache(cacheKey, data);
+    return data;
   },
 
   // ── LIFETIME INSIGHTS FOR A SINGLE AD ───────────────────

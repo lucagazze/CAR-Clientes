@@ -510,11 +510,11 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [fetchCommentsCount]);
 
-  // Poll comments every 5 seconds
+  // Poll comments every 60 seconds (prevents Meta API rate limit exhaustion)
   useEffect(() => {
     if (!profile?.id) return;
     fetchCommentsCount();
-    const interval = setInterval(fetchCommentsCount, 5_000);
+    const interval = setInterval(fetchCommentsCount, 60_000);
     return () => clearInterval(interval);
   }, [profile?.id, fetchCommentsCount]);
 

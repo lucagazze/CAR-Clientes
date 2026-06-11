@@ -259,7 +259,7 @@ export default function MetaAdsPage() {
     const tr = { since: since || activeSince, until: until || activeUntil };
     const adFields = 'ad_id,spend,impressions,reach,inline_link_click_ctr,inline_link_clicks,actions,cost_per_action_type,action_values,purchase_roas,video_30_sec_watched_actions,video_p100_watched_actions';
     Promise.all([
-      metaAds.getAccountAds(accountId),
+      metaAds.getAccountAds(accountId).catch((err) => { console.error("Error fetching account ads:", err); return { data: [] }; }),
       metaAds.getAdInsightsForAccount(accountId, adFields, tr).catch(() => []),
       metaAds.getCampaigns(accountId).catch(() => ({ data: [] })),
     ]).then(([adsRes, insightsRes, campsRes]) => {
