@@ -440,9 +440,11 @@ export const MainLayout = () => {
         <div ref={scrollContainerRef} className={`flex-1 w-full print:overflow-visible print:h-auto print:p-6 ${
           location.pathname === '/mensajeria' || location.pathname === '/clientes'
             ? 'overflow-hidden p-0 h-[calc(100dvh-56px)] md:h-screen flex flex-col'
-            : isFixedPage 
-              ? 'overflow-hidden p-4 md:p-6 h-[calc(100dvh-56px)] md:h-screen flex flex-col' 
-              : 'overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 md:p-8 lg:p-10 pb-8'
+            : location.pathname === '/admin/meta'
+              ? 'overflow-x-hidden overflow-y-auto px-2 py-3 sm:px-3 sm:py-4 md:p-4 lg:p-6 pb-8'
+              : isFixedPage 
+                ? 'overflow-hidden p-4 md:p-6 h-[calc(100dvh-56px)] md:h-screen flex flex-col' 
+                : 'overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 md:p-8 lg:p-10 pb-8'
         }`}>
           {/* Spacer so content starts below the fixed mobile header */}
           <div className="h-14 md:hidden" />

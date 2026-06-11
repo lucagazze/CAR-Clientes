@@ -530,7 +530,7 @@ export default function MetaAdsPage() {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <CenteredPageLoader isLoading={loading || authLoading}>
-      <div className="w-full animate-fade-in pb-20 pt-6 px-4 md:px-6 lg:px-8">
+      <div className="w-full animate-fade-in pb-20 pt-6 px-2 md:px-4 lg:px-6">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -586,13 +586,13 @@ export default function MetaAdsPage() {
 
         {/* Skeleton */}
         {accountId && loading && activeAds.length === 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[...Array(8)].map((_, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+            {[...Array(12)].map((_, i) => (
               <div key={i} className="rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900/50 flex flex-col">
                 <div className="h-52 bg-zinc-100 dark:bg-zinc-800" />
                 <div className="p-4 space-y-3">
                   <div className="h-4 w-3/4 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
-                  <div className="grid grid-cols-2 gap-2">{[...Array(6)].map((_, j) => <div key={j} className="h-9 bg-zinc-100 dark:bg-zinc-800/60 rounded-xl" />)}</div>
+                  <div className="grid grid-cols-2 gap-2">{[...Array(8)].map((_, j) => <div key={j} className="h-9 bg-zinc-100 dark:bg-zinc-800/60 rounded-xl" />)}</div>
                 </div>
               </div>
             ))}
@@ -648,25 +648,25 @@ export default function MetaAdsPage() {
                     <h4 className="text-[14px] font-black text-zinc-800 dark:text-zinc-100 tracking-tight truncate">{group.campaignName}</h4>
                     <span className="text-[11px] font-bold text-zinc-400 flex-shrink-0">{group.ads.length} creativos</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
                     {group.ads.map(ad => {
                       const insights = adInsightsMap[ad.id];
                       const adSpend = parseFloat(insights?.spend || 0);
                       const adActions = insights?.actions || [];
                       const getA = (type: string) => { const a = adActions.find((x: any) => x.action_type === type || x.action_type === `offsite_conversion.fb_pixel_${type}`); return a ? parseInt(a.value) : 0; };
-                      const purchases = getA('purchase'); const leads = getA('lead'); const messages = getA('onsite_conversion.messaging_conversation_started_7d');
-                      const adResults = purchases || leads || messages;
-                      const adCpa = adResults > 0 ? adSpend / adResults : 0;
-                      const adImpr = parseInt(insights?.impressions || 0);
+                      const purchases = getA('purchase');
+                      const leads = getA('lead');
+                      const messages = getA('onsite_conversion.messaging_conversation_started_7d') || getA('onsite_conversion.messaging_first_reply');
+                      const totalResults = purchases + leads + messages;
+                      const adCpa = totalResults > 0 ? adSpend / totalResults : 0;
                       const adCtr = parseFloat(insights?.inline_link_click_ctr || 0);
                       const adRoas = parseFloat(insights?.purchase_roas?.[0]?.value || 0);
-                      const resultLabel = 'Resultados';
+                      const adReach = parseInt(insights?.reach || 0);
                       const adReactions = getA('post_reaction');
                       const adComments = getA('comment');
                       const adShares = getA('post');
                       const adClicks = parseInt(insights?.inline_link_clicks || 0);
                       const adVideoViews = parseInt(insights?.video_30_sec_watched_actions?.[0]?.value || 0) || getA('video_view');
-                      const adReach = parseInt(insights?.reach || 0);
                       const isVideo = ad.creative?.object_type === 'VIDEO' || !!ad.creative?.video_id;
                       const isCarousel = resolvedDetails[ad.id]?.type === 'carousel' || ad.creative?.object_type === 'CAROUSEL';
                       const thumbUrl = resolvedThumbnails[ad.id] || ad.creative?.image_url || ad.creative?.thumbnail_url;
@@ -701,17 +701,18 @@ export default function MetaAdsPage() {
                           <div className="p-4 flex flex-col gap-3 flex-1">
                             <div>
                               <p className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100 leading-snug line-clamp-2">{ad.name || 'Sin nombre'}</p>
-                              {ad.creative?.object_type && (<p className="text-[10px] text-zinc-400 mt-0.5 font-semibold uppercase tracking-wider">{ad.creative.object_type}</p>)}
                             </div>
                             {insights && (<>
                               <div className="grid grid-cols-2 gap-2">
                                 {[
                                   { label: 'Gasto', val: `$${adSpend.toFixed(0)}`, highlight: false },
-                                  { label: resultLabel, val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
+                                  { label: 'Compras', val: purchases > 0 ? String(purchases) : '—', highlight: purchases > 0 },
+                                  { label: 'Leads', val: leads > 0 ? String(leads) : '—', highlight: leads > 0 },
+                                  { label: 'Mensajes', val: messages > 0 ? String(messages) : '—', highlight: messages > 0 },
                                   { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—', highlight: false },
-                                  { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
+                                  { label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : '—', highlight: adRoas > 1 },
+                                  { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: false },
                                   { label: 'Alcance', val: fmtN(adReach), highlight: false },
-                                  { label: 'Impr.', val: fmtN(adImpr), highlight: false },
                                 ].map(({ label, val, highlight }) => (
                                   <div key={label} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2 px-2.5 border border-zinc-100 dark:border-white/[0.04] flex items-center justify-between gap-1">
                                     <p className="text-[10px] font-bold text-zinc-450 dark:text-zinc-400 uppercase tracking-wide text-left truncate flex-1">{label}</p>
@@ -746,9 +747,11 @@ export default function MetaAdsPage() {
           const adSpend = parseFloat(insights?.spend || 0);
           const adActions = insights?.actions || [];
           const getR = (type: string) => { const a = adActions.find((x: any) => x.action_type === type || x.action_type === `offsite_conversion.fb_pixel_${type}`); return a ? parseInt(a.value) : 0; };
-          const purchases = getR('purchase'); const leads = getR('lead'); const msgs = getR('onsite_conversion.messaging_conversation_started_7d');
-          const adResults = purchases || leads || msgs;
-          const adCpa = adResults > 0 ? adSpend / adResults : 0;
+          const purchases = getR('purchase');
+          const leads = getR('lead');
+          const msgs = getR('onsite_conversion.messaging_conversation_started_7d') || getR('onsite_conversion.messaging_first_reply');
+          const totalResults = purchases + leads + msgs;
+          const adCpa = totalResults > 0 ? adSpend / totalResults : 0;
           const adRoas = parseFloat(insights?.purchase_roas?.[0]?.value || 0);
           const adCtr = parseFloat(insights?.inline_link_click_ctr || 0);
           const adReach = parseInt(insights?.reach || 0);
@@ -834,11 +837,13 @@ export default function MetaAdsPage() {
                         <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2">Rendimiento</p>
                         {[
                           { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
-                          { label: 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
+                          { label: 'Compras', val: purchases > 0 ? String(purchases) : '—', highlight: purchases > 0 },
+                          { label: 'Leads', val: leads > 0 ? String(leads) : '—', highlight: leads > 0 },
+                          { label: 'Mensajes', val: msgs > 0 ? String(msgs) : '—', highlight: msgs > 0 },
                           { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
-                          { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
+                          { label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : '—', highlight: adRoas > 1 },
+                          { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—' },
                           { label: 'Alcance', val: fmtN(adReach) },
-                          { label: 'Impresiones', val: fmtN(adImpr) },
                         ].map(({ label, val, highlight }: any) => (
                           <div key={label} className="flex items-center justify-between text-[12px] font-bold">
                             <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
@@ -969,11 +974,13 @@ export default function MetaAdsPage() {
                         <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2">Rendimiento</p>
                         {[
                           { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
-                          { label: 'Resultados', val: adResults > 0 ? String(adResults) : '—', highlight: adResults > 0 },
+                          { label: 'Compras', val: purchases > 0 ? String(purchases) : '—', highlight: purchases > 0 },
+                          { label: 'Leads', val: leads > 0 ? String(leads) : '—', highlight: leads > 0 },
+                          { label: 'Mensajes', val: msgs > 0 ? String(msgs) : '—', highlight: msgs > 0 },
                           { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
-                          { label: adRoas > 0 ? 'ROAS' : 'CTR', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—', highlight: adRoas > 1 },
+                          { label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : '—', highlight: adRoas > 1 },
+                          { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—' },
                           { label: 'Alcance', val: fmtN(adReach) },
-                          { label: 'Impresiones', val: fmtN(adImpr) },
                         ].map(({ label, val, highlight }: any) => (
                           <div key={label} className="flex items-center justify-between text-[12px] font-bold">
                             <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
