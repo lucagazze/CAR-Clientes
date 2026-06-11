@@ -3,13 +3,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
-import { ShoppingBag, DollarSign, Package, Calendar, ChevronDown, Receipt, Tag, TrendingUp, CheckCircle, Clock, BarChart2, Download, X, Search, AlertCircle, XCircle, Loader2, RefreshCw, Users, ChevronRight } from 'lucide-react';
+import { ShoppingBag, DollarSign, Package, Calendar, ChevronDown, Receipt, Tag, TrendingUp, CheckCircle, Clock, BarChart2, Download, X, Search, AlertCircle, XCircle, Loader2, RefreshCw, Users, ChevronRight, MapPin, Building } from 'lucide-react';
 import { ecommerce } from '../services/ecommerce';
 import { getPrevPeriod, today, daysAgo, presetToRange } from '../services/metaAds';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
 import { DashboardMetric, MetricDetailChart } from '../components/ui/DashboardMetrics';
 import EmailLoader from '../components/ui/EmailLoader';
-import AnalisisProductosPage from './AnalisisProductosPage';
 
 const PINK = '#ec4899';
 
@@ -425,7 +424,220 @@ export default function TiendaPage() {
               />
             )}
 
-            <AnalisisProductosPage />
+            {/* Customer Split Analysis */}
+            {data.customerSplit && (
+              <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+                <h3 className="text-[13px] font-black text-zinc-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-pink-500" />
+                  Tipo de Clientes
+                </h3>
+                {(() => {
+                  const totalSplit = (data.customerSplit.new || 0) + (data.customerSplit.returning || 0);
+                  const newPct = totalSplit > 0 ? ((data.customerSplit.new || 0) / totalSplit) * 100 : 0;
+                  const retPct = totalSplit > 0 ? ((data.customerSplit.returning || 0) / totalSplit) * 100 : 0;
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                        <div>
+                          <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Tasa de Recompra</p>
+                          <p className="text-[28px] font-black text-zinc-900 dark:text-white mt-1 leading-none">
+                            {data.customerSplit.returningRate?.toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="flex gap-6">
+                          <div>
+                            <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Nuevos</p>
+                            <p className="text-[16px] font-black text-zinc-700 dark:text-zinc-350 mt-1 leading-none">
+                              {data.customerSplit.new}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Recurrentes</p>
+                            <p className="text-[16px] font-black text-zinc-700 dark:text-zinc-350 mt-1 leading-none">
+                              {data.customerSplit.returning}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Stacked progress bar */}
+                      <div className="w-full h-3 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden flex">
+                        <div style={{ width: `${newPct}%` }} className="h-full bg-pink-500 transition-all duration-500" title={`Nuevos: ${newPct.toFixed(1)}%`} />
+                        <div style={{ width: `${retPct}%` }} className="h-full bg-indigo-500 transition-all duration-500" title={`Recurrentes: ${retPct.toFixed(1)}%`} />
+                      </div>
+
+                      {/* Legend */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] font-bold text-zinc-500 gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-pink-500 shrink-0" />
+                          <span>Clientes Nuevos: <strong className="text-zinc-800 dark:text-zinc-200">{newPct.toFixed(0)}%</strong></span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" />
+                          <span>Clientes Recurrentes: <strong className="text-zinc-800 dark:text-zinc-200">{retPct.toFixed(0)}%</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Geographic Breakdowns */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Provinces Card */}
+              <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+                <h3 className="text-[13px] font-black text-zinc-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-pink-500" />
+                  Provincias con más Ventas
+                </h3>
+                {data.topProvinces && data.topProvinces.length > 0 ? (
+                  <div className="space-y-3">
+                    {data.topProvinces.map((prov: any, idx: number) => {
+                      const maxCount = data.topProvinces[0]?.count || 1;
+                      const pct = (prov.count / maxCount) * 100;
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex items-center justify-between text-[11.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                            <span className="truncate pr-2">{prov.name}</span>
+                            <span className="shrink-0 text-zinc-500">{prov.count} {prov.count === 1 ? 'pedido' : 'pedidos'}</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800/60 overflow-hidden">
+                            <div style={{ width: `${pct}%` }} className="h-full bg-pink-500/80 rounded-full" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-zinc-450 dark:text-zinc-500 italic py-4 text-center">No hay datos geográficos disponibles</p>
+                )}
+              </div>
+
+              {/* Cities Card */}
+              <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+                <h3 className="text-[13px] font-black text-zinc-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Building className="w-4 h-4 text-pink-500" />
+                  Ciudades Destacadas
+                </h3>
+                {data.topCities && data.topCities.length > 0 ? (
+                  <div className="space-y-3">
+                    {data.topCities.map((city: any, idx: number) => {
+                      const maxCount = data.topCities[0]?.count || 1;
+                      const pct = (city.count / maxCount) * 100;
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex items-center justify-between text-[11.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                            <span className="truncate pr-2">{city.name}</span>
+                            <span className="shrink-0 text-zinc-500">{city.count} {city.count === 1 ? 'pedido' : 'pedidos'}</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800/60 overflow-hidden">
+                            <div style={{ width: `${pct}%` }} className="h-full bg-indigo-500/85 rounded-full" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-zinc-450 dark:text-zinc-500 italic py-4 text-center">No hay datos de ciudades disponibles</p>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Orders List */}
+            <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden">
+              <h3 className="text-[13px] font-black text-zinc-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-pink-500" />
+                Últimos 20 Pedidos
+              </h3>
+              {data.recentOrders && data.recentOrders.length > 0 ? (
+                <div className="overflow-x-auto -mx-6">
+                  <table className="w-full border-collapse text-left text-[12px] font-medium text-zinc-500">
+                    <thead>
+                      <tr className="border-b border-zinc-100 dark:border-zinc-850 text-zinc-400 font-bold uppercase tracking-wider text-[9.5px]">
+                        <th className="px-6 py-3">Pedido</th>
+                        <th className="px-6 py-3">Cliente</th>
+                        <th className="px-6 py-3">Fecha</th>
+                        <th className="px-6 py-3 text-right">Total</th>
+                        <th className="px-6 py-3 text-center">Pago</th>
+                        <th className="px-6 py-3 text-center">Envío</th>
+                        <th className="px-6 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-50 dark:divide-zinc-850/40">
+                      {data.recentOrders.map((order: any, idx: number) => {
+                        const isLocalPickup = (order.shipping_lines || []).some((sl: any) => {
+                          const title = (sl.title || '').toLowerCase();
+                          return title.includes('retiro') || title.includes('local') || title.includes('pick') || title.includes('sucursal') || title.includes('showroom') || title.includes('tienda');
+                        });
+                        const isFulfilled = order.fulfillment_status === 'fulfilled';
+                        const isPartial = order.fulfillment_status === 'partial';
+                        const shipBadgeCls = isFulfilled
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-500/15"
+                          : isPartial
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-500/15"
+                            : isLocalPickup
+                              ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 border border-indigo-500/15"
+                              : "bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-450 border border-zinc-200/10";
+                        const shipLabel = isFulfilled
+                          ? 'Enviado'
+                          : isPartial
+                            ? 'Parcial'
+                            : isLocalPickup
+                              ? 'Listo para retiro'
+                              : 'No enviado';
+
+                        const payStatus = order.financial_status === 'paid' ? 'paid' : order.financial_status === 'refunded' ? 'refunded' : order.financial_status === 'voided' ? 'voided' : 'pending';
+                        const payBadgeCls = payStatus === 'paid'
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-500/15"
+                          : payStatus === 'refunded'
+                            ? "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-500/15"
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-500/15";
+                        const payLabel = payStatus === 'paid' ? 'Pagado' : payStatus === 'refunded' ? 'Reembolsado' : payStatus === 'voided' ? 'Anulado' : 'Pendiente';
+
+                        return (
+                          <tr 
+                            key={idx} 
+                            onClick={() => setSelectedOrder(order)}
+                            className="hover:bg-zinc-50/50 dark:hover:bg-zinc-850/20 cursor-pointer transition-colors group"
+                          >
+                            <td className="px-6 py-3 font-bold text-zinc-900 dark:text-white">
+                              {order.order_number}
+                            </td>
+                            <td className="px-6 py-3 text-zinc-700 dark:text-zinc-350 font-bold max-w-[150px] truncate">
+                              {order.customer_name}
+                            </td>
+                            <td className="px-6 py-3 text-zinc-400 dark:text-zinc-500 font-semibold whitespace-nowrap">
+                              {new Date(order.created_at).toLocaleString('es-AR', {
+                                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                              })} hs
+                            </td>
+                            <td className="px-6 py-3 text-right font-black text-zinc-900 dark:text-white">
+                              ${order.total_price?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                            </td>
+                            <td className="px-6 py-3 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider inline-block ${payBadgeCls}`}>
+                                {payLabel}
+                              </span>
+                            </td>
+                            <td className="px-6 py-3 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider inline-block ${shipBadgeCls}`}>
+                                {shipLabel}
+                              </span>
+                            </td>
+                            <td className="px-6 py-3 text-right">
+                              <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-pink-500 transition-colors inline-block" />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-[12px] text-zinc-450 dark:text-zinc-500 italic py-4 text-center">No hay pedidos registrados en este período</p>
+              )}
+            </div>
 
 
               </>
@@ -538,15 +750,35 @@ export default function TiendaPage() {
                     {selectedOrder.financial_status === 'paid' ? 'Pagado' : 'Pendiente'}
                   </span>
                 </div>
-                <div className="flex-1 p-3 rounded-xl border border-zinc-150/60 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-900/10 flex items-center justify-between">
+                <div className="flex-1 p-3 rounded-xl border border-zinc-150/60 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-900/10 flex items-center justify-between gap-2">
                   <span className="text-[11px] font-bold text-zinc-450 dark:text-zinc-550">Estado de Envío</span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    selectedOrder.fulfillment_status === 'fulfilled'
+                  {(() => {
+                    const isLocalPickup = (selectedOrder.shipping_lines || []).some((sl: any) => {
+                      const title = (sl.title || '').toLowerCase();
+                      return title.includes('retiro') || title.includes('local') || title.includes('pick') || title.includes('sucursal') || title.includes('showroom') || title.includes('tienda');
+                    });
+                    const isFulfilled = selectedOrder.fulfillment_status === 'fulfilled';
+                    const isPartial = selectedOrder.fulfillment_status === 'partial';
+                    const badgeCls = isFulfilled
                       ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-500/15"
-                      : "bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-450 border border-zinc-200/10"
-                  }`}>
-                    {selectedOrder.fulfillment_status === 'fulfilled' ? 'Enviado' : 'No enviado'}
-                  </span>
+                      : isPartial
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-500/15"
+                        : isLocalPickup
+                          ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 border border-indigo-500/15"
+                          : "bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-450 border border-zinc-200/10";
+                    const label = isFulfilled
+                      ? 'Enviado'
+                      : isPartial
+                        ? 'Parcial'
+                        : isLocalPickup
+                          ? 'Listo para retiro'
+                          : 'No enviado';
+                    return (
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeCls}`}>
+                        {label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 

@@ -2771,12 +2771,21 @@ export default function DashboardPage() {
                 // Fulfillment Status
                 let fulfillmentText = 'No enviado';
                 let fulfillmentColor = 'bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200/10';
+                
+                const isLocalPickup = (order.shipping_lines || []).some((sl: any) => {
+                  const title = (sl.title || '').toLowerCase();
+                  return title.includes('retiro') || title.includes('local') || title.includes('pick') || title.includes('sucursal') || title.includes('showroom') || title.includes('tienda');
+                });
+
                 if (order.fulfillment_status === 'fulfilled') {
                   fulfillmentText = 'Enviado';
                   fulfillmentColor = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10';
                 } else if (order.fulfillment_status === 'partial') {
                   fulfillmentText = 'Parcial';
                   fulfillmentColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/10';
+                } else if (isLocalPickup) {
+                  fulfillmentText = 'Listo para retiro';
+                  fulfillmentColor = 'bg-indigo-500/10 text-indigo-650 dark:text-indigo-400 border border-indigo-500/10';
                 }
 
                 return (
@@ -2987,19 +2996,33 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 p-3 rounded-xl border border-zinc-150/60 dark:border-zinc-800/80 bg-zinc-50/30 dark:bg-zinc-900/10 flex items-center justify-between gap-2">
                   <span className="text-[11px] font-bold text-zinc-450 dark:text-zinc-550">Estado de Envío</span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    selectedOrder.fulfillment_status === 'fulfilled'
+                  {(() => {
+                    const isLocalPickup = (selectedOrder.shipping_lines || []).some((sl: any) => {
+                      const title = (sl.title || '').toLowerCase();
+                      return title.includes('retiro') || title.includes('local') || title.includes('pick') || title.includes('sucursal') || title.includes('showroom') || title.includes('tienda');
+                    });
+                    const isFulfilled = selectedOrder.fulfillment_status === 'fulfilled';
+                    const isPartial = selectedOrder.fulfillment_status === 'partial';
+                    const badgeCls = isFulfilled
                       ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-500/15"
-                      : selectedOrder.fulfillment_status === 'partial'
+                      : isPartial
                         ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-500/15"
-                        : "bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-450 border border-zinc-200/10"
-                  }`}>
-                    {selectedOrder.fulfillment_status === 'fulfilled'
+                        : isLocalPickup
+                          ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 border border-indigo-500/15"
+                          : "bg-zinc-100 text-zinc-650 dark:bg-zinc-800 dark:text-zinc-450 border border-zinc-200/10";
+                    const label = isFulfilled
                       ? 'Enviado'
-                      : selectedOrder.fulfillment_status === 'partial'
+                      : isPartial
                         ? 'Parcial'
-                        : 'No enviado'}
-                  </span>
+                        : isLocalPickup
+                          ? 'Listo para retiro'
+                          : 'No enviado';
+                    return (
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeCls}`}>
+                        {label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 
