@@ -899,7 +899,7 @@ export default function MetaAdsPage() {
                       const card = mediaData.cards[panelCarouselIndex];
                       return (
                         <div className="rounded-2xl overflow-hidden border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm w-full">
-                          <div className="relative aspect-square bg-zinc-50 dark:bg-zinc-950">
+                          <div className="relative aspect-[4/5] bg-zinc-50 dark:bg-zinc-950">
                             {card.isVideo && card.videoSrc ? (
                               <video src={card.videoSrc} poster={card.url || undefined} controls preload="none" playsInline {...{ referrerPolicy: 'no-referrer' }} className="absolute inset-0 w-full h-full object-contain bg-black" />
                             ) : card.url ? (
