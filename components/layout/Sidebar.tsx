@@ -91,6 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     { path: '/redes-sociales', icon: Instagram,     label: 'Redes Sociales',  configured: hasRedes },
     { path: '/pedidos',        icon: ShoppingCart,  label: 'Pedidos',         configured: hasEcommerce, badge: pendingOrdersCount, badgeLoading: ordersLoading },
     { path: '/inventario',     icon: Package,       label: 'Inventario',      configured: hasEcommerce },
+    { path: '/clientes',        icon: Users,         label: 'Clientes',        configured: hasEcommerce },
   ].filter(i => isAdmin || i.configured);
 
   const metricasItems = [
@@ -101,7 +102,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   ].filter(i => isAdmin || i.configured);
 
   const activosItems = [
-    { path: '/clientes',            icon: Users,      label: 'Clientes',           configured: hasEcommerce },
     { path: '/analisis-productos',  icon: BarChart2,  label: 'Análisis Productos', configured: hasEcommerce },
     { path: '/admin/meta',          icon: Target,     label: 'Creativos Ads',      configured: hasMeta },
     { path: '/email-marketing',     icon: Send,       label: 'Plantillas Email',   configured: hasKlaviyo },
