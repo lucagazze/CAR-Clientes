@@ -1014,7 +1014,7 @@ export default function ContactosPage() {
 
                       {/* Gasto Total Badge */}
                       {c.total_spent !== null && c.total_spent !== undefined && c.total_spent > 0 && (
-                        <span className={`text-[10.5px] font-extrabold whitespace-nowrap shrink-0 ${isSelected ? 'text-white' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                        <span className={`text-[10.5px] font-extrabold whitespace-nowrap shrink-0 ${isSelected ? 'text-white' : 'text-emerald-500 dark:text-emerald-400'}`}>
                           {fmtCurr(c.total_spent)}
                         </span>
                       )}
