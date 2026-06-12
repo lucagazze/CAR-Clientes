@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useViewAs } from '../../contexts/ViewAsContext';
 import { useUnread } from '../../contexts/UnreadContext';
+import { db } from '../../services/db';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -53,9 +54,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const { viewAsProfile, setViewAsProfile, isViewingAs } = useViewAs();
   const { unreadCount, pendingCommentsCount, commentsLoading, unreadLoading, pendingOrdersCount, ordersLoading } = useUnread();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [hasLinks, setHasLinks] = useState(false);
 
   // Use viewAsProfile if active, otherwise use real profile
   const activeProfile = isViewingAs ? viewAsProfile : profile;
+
+  React.useEffect(() => {
+    if (!activeProfile?.id) {
+      setHasLinks(false);
+      return;
+    }
+    db.links.getByClientId(activeProfile.id)
+      .then(data => {
+        setHasLinks(data && data.length > 0);
+      })
+      .catch(err => {
+        console.error("Error loading links in sidebar:", err);
+        setHasLinks(false);
+      });
+  }, [activeProfile?.id]);
 
   const detectedPlatform = React.useMemo(() => {
     const prof: any = activeProfile;
@@ -109,9 +126,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const configuracionItems = [
     { path: '/perfil',           icon: User,   label: 'Mi Perfil',      configured: true },
-    { path: '/links',            icon: Link2,  label: 'Mis Accesos',    configured: true },
+    { path: '/links',            icon: Link2,  label: 'Mis Accesos',    configured: hasLinks },
     { path: '/cerebro',          icon: Brain,  label: 'Cerebro de IA',  configured: true, adminOnly: true },
-  ].filter(i => !i.adminOnly || isAdmin);
+  ].filter(i => (!i.adminOnly || isAdmin) && (isAdmin || i.configured));
 
   const adminItems = [
     { path: '/admin',                  icon: Building2, label: 'Gestión Negocios' },
