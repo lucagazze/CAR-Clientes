@@ -539,12 +539,49 @@ export default function ComentariosPage() {
 
         const allItems = processMediaRes(igMediaRes50, fbMediaRes50, relevantAds, adsCommentsResults50);
         setPosts(allItems);
-        
+
         // Update badge with final accurate count from full deep-fetch
         const countFinal = allItems.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
         setPendingCommentsCount(countFinal);
         if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(countFinal)); } catch { /* ignore */ } }
         try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: allItems })); } catch { /* quota exceeded — skip cache */ }
+
+        // Background enrichment: the feed expansion's inline replies are often
+        // empty even when the page actually replied. For every post that looks
+        // like it has pending comments, fetch real replies for each apparently
+        // pending comment and update the count. Throttled to 4 posts at a time.
+        (async () => {
+          const enrichPost = async (post: PostItem) => {
+            if (!active) return;
+            const platform = post.platform;
+            const pendingsLooked = post.comments.filter((c: any) => isCommentPending(c, platform));
+            if (pendingsLooked.length === 0) return;
+            const updatedComments = await Promise.all(post.comments.map(async (c: any) => {
+              const hasReplies = (c.replies?.data?.length || 0) > 0;
+              if (hasReplies) return c;
+              try {
+                const r = platform === 'instagram'
+                  ? await metaAds.getInstagramCommentReplies(c.id, fbPageId || undefined)
+                  : await metaAds.getFacebookCommentReplies(c.id, fbPageId || undefined);
+                const data = r.data || [];
+                if (data.length === 0) return c;
+                return { ...c, replies: { data } };
+              } catch { return c; }
+            }));
+            const realPending = updatedComments.filter((c: any) => isCommentPending(c, platform)).length;
+            if (!active) return;
+            setPosts(prev => prev.map(p => p.id === post.id
+              ? { ...p, pendingComments: realPending, comments: updatedComments }
+              : p));
+          };
+
+          const candidates = allItems.filter(p => p.pendingComments > 0);
+          const CONCURRENCY = 4;
+          for (let i = 0; i < candidates.length; i += CONCURRENCY) {
+            if (!active) break;
+            await Promise.all(candidates.slice(i, i + CONCURRENCY).map(enrichPost));
+          }
+        })();
 
       } catch (err) {
         console.error('Error loading comments feed:', err);
@@ -691,18 +728,34 @@ export default function ComentariosPage() {
         const res = await metaAds.getAdCreativeCommentsAll(post.id, post.platform, fbPageId || undefined);
         const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
         const withReplies = await fillReplies(filtered, post.platform);
-        setComments(withReplies.map(normalizeComment));
+        const fresh = withReplies.map(normalizeComment);
+        setComments(fresh);
+        const realPending = fresh.filter((c: any) => isCommentPending(c, post.platform)).length;
+        setPosts(prev => prev.map(p => p.id === post.id
+          ? { ...p, pendingComments: realPending, totalComments: fresh.length, comments: fresh }
+          : p));
       } else if (post.platform === 'instagram') {
         const res = await metaAds.getInstagramMediaCommentsAll(post.id, fbPageId || undefined);
         const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
         const withReplies = await fillReplies(filtered, 'instagram');
-        setComments(withReplies.map(normalizeComment));
+        const fresh = withReplies.map(normalizeComment);
+        setComments(fresh);
+        const realPending = fresh.filter((c: any) => isCommentPending(c, 'instagram')).length;
+        setPosts(prev => prev.map(p => p.id === post.id
+          ? { ...p, pendingComments: realPending, totalComments: fresh.length, comments: fresh }
+          : p));
       } else {
         const res = await metaAds.getFacebookPostCommentsAll(post.id);
         const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
         const withReplies = await fillReplies(filtered, 'facebook');
         const fresh = withReplies.map(normalizeComment);
         setComments(fresh);
+
+        // Sync the card-level pending count with the real state we just discovered.
+        const realPending = fresh.filter((c: any) => isCommentPending(c, 'facebook')).length;
+        setPosts(prev => prev.map(p => p.id === post.id
+          ? { ...p, pendingComments: realPending, totalComments: fresh.length, comments: fresh }
+          : p));
 
         // Batch lookup names for FB users where from.name was null
         if (fbPageId) {
