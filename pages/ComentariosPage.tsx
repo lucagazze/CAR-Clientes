@@ -666,23 +666,42 @@ export default function ComentariosPage() {
           : { data: [] },
       });
 
+      // Helper: for each top-level comment, fetch its replies explicitly if the
+      // inline expansion came back empty. Meta sometimes drops nested replies
+      // depending on the token / permissions, which would make answered comments
+      // look pending.
+      const fillReplies = async (list: any[], platform: 'instagram' | 'facebook') => {
+        return Promise.all(list.map(async (c: any) => {
+          const hasReplies = (c.replies?.data?.length || 0) > 0;
+          if (hasReplies) return c;
+          try {
+            const r = platform === 'facebook'
+              ? await metaAds.getFacebookCommentReplies(c.id, fbPageId || undefined)
+              : await metaAds.getInstagramCommentReplies(c.id, fbPageId || undefined);
+            const data = r.data || [];
+            if (data.length === 0) return c;
+            return { ...c, replies: { data } };
+          } catch {
+            return c;
+          }
+        }));
+      };
+
       if (post.isAd) {
         const res = await metaAds.getAdCreativeCommentsAll(post.id, post.platform, fbPageId || undefined);
-        const fresh = (res.data || [])
-          .filter((c: any) => !isFromPage(c))
-          .map(normalizeComment);
-        setComments(fresh);
+        const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
+        const withReplies = await fillReplies(filtered, post.platform);
+        setComments(withReplies.map(normalizeComment));
       } else if (post.platform === 'instagram') {
         const res = await metaAds.getInstagramMediaCommentsAll(post.id, fbPageId || undefined);
-        const fresh = (res.data || [])
-          .filter((c: any) => !isFromPage(c))
-          .map(normalizeComment);
-        setComments(fresh);
+        const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
+        const withReplies = await fillReplies(filtered, 'instagram');
+        setComments(withReplies.map(normalizeComment));
       } else {
         const res = await metaAds.getFacebookPostCommentsAll(post.id);
-        const fresh = (res.data || [])
-          .filter((c: any) => !isFromPage(c))
-          .map(normalizeComment);
+        const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
+        const withReplies = await fillReplies(filtered, 'facebook');
+        const fresh = withReplies.map(normalizeComment);
         setComments(fresh);
 
         // Batch lookup names for FB users where from.name was null

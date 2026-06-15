@@ -690,13 +690,58 @@ export const metaAds = {
     // Page Access Token is required for from.name — user token silently drops names (privacy).
     const pageId = postId.includes('_') ? postId.split('_')[0] : '';
     const fields = 'id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies.limit(100){id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}';
-    // filter=stream returns ALL comments (chronological), including ones Facebook would
-    // normally hide. Default (toplevel) excludes many — that's why posts showed only 2.
-    const params = { fields, limit: '100', filter: 'stream' };
+    const params = { fields, limit: '100' };
     if (pageId) {
       return apiGetPage(pageId, `${postId}/comments`, params);
     }
     return apiGetPageActive(`${postId}/comments`, params);
+  },
+
+  // Fetch replies for a single FB comment. Replies are children of the comment in Graph API.
+  // We follow paging.next to ensure we get every reply.
+  getFacebookCommentReplies: async (commentId: string, fbPageId?: string): Promise<{ data: any[] }> => {
+    const fields = 'id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url}';
+    const params = { fields, limit: '100' };
+    const fetchFirst = fbPageId
+      ? apiGetPage(fbPageId, `${commentId}/comments`, params)
+      : apiGetPageActive(`${commentId}/comments`, params);
+    const all: any[] = [];
+    let res: any = await fetchFirst;
+    while (res) {
+      if (Array.isArray(res.data)) all.push(...res.data);
+      const nextUrl = res?.paging?.next;
+      if (!nextUrl) break;
+      try {
+        const r = await fetch(nextUrl);
+        res = await r.json();
+        if (res?.error) break;
+      } catch { break; }
+      if (all.length > 500) break;
+    }
+    return { data: all };
+  },
+
+  // Same for Instagram — replies to an IG comment.
+  getInstagramCommentReplies: async (commentId: string, fbPageId?: string): Promise<{ data: any[] }> => {
+    const fields = 'id,text,timestamp,username,like_count,from';
+    const params = { fields, limit: '100' };
+    const fetchFirst = fbPageId
+      ? apiGetPage(fbPageId, `${commentId}/replies`, params)
+      : apiGetPageActive(`${commentId}/replies`, params);
+    const all: any[] = [];
+    let res: any = await fetchFirst;
+    while (res) {
+      if (Array.isArray(res.data)) all.push(...res.data);
+      const nextUrl = res?.paging?.next;
+      if (!nextUrl) break;
+      try {
+        const r = await fetch(nextUrl);
+        res = await r.json();
+        if (res?.error) break;
+      } catch { break; }
+      if (all.length > 500) break;
+    }
+    return { data: all };
   },
 
   // Fetches every comment by following paging.next until exhausted.
