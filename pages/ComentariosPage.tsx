@@ -289,18 +289,14 @@ export default function ComentariosPage() {
     return false;
   }, [igUsername, igId, fbPageId, metaAccountId]);
 
-  // Helper: is comment pending? = last message in thread was from customer (not page)
+  // Helper: is comment pending? = the page has NEVER replied to this thread.
+  // Once we reply at least once, the thread is considered answered — follow-up
+  // "gracias" from the user does NOT make it pending again.
   const isCommentPending = useCallback((comment: any, _postPlatform: 'instagram' | 'facebook') => {
-    // If the top-level comment itself is from the page, not pending
     if (isFromPage(comment)) return false;
     const replies = comment.replies?.data || [];
-    if (replies.length === 0) return true; // no reply yet → pending
-    // Sort replies oldest→newest, check if last one is from page
-    const sorted = [...replies].sort((a, b) =>
-      new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
-    );
-    const latest = sorted[sorted.length - 1];
-    return !isFromPage(latest);
+    if (replies.length === 0) return true;
+    return !replies.some((r: any) => isFromPage(r));
   }, [isFromPage]);
 
   // Track fb page id

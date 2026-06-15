@@ -393,24 +393,22 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       }
 
-      // Helper to check if a comment is pending
+      // Pending = page has NEVER replied to the thread. Any reply from us
+      // (even followed by a "gracias" from the user) counts as answered.
+      const fromIsPage = (entry: any, isIg: boolean) => {
+        if (!entry) return false;
+        if (isIg) {
+          if (entry.username && igUsername && entry.username.toLowerCase() === igUsername.toLowerCase()) return true;
+          if (igId && entry.from?.id && String(entry.from.id) === String(igId)) return true;
+          return false;
+        }
+        return entry.from?.id === fbPageId;
+      };
       const isCommentPendingLocal = (comment: any, isIg: boolean) => {
-        const isFromPage = isIg 
-          ? (comment.username && igUsername && comment.username.toLowerCase() === igUsername.toLowerCase()) 
-          : comment.from?.id === fbPageId;
-        if (isFromPage) return false;
-
+        if (fromIsPage(comment, isIg)) return false;
         const replies = comment.replies?.data || [];
         if (replies.length === 0) return true;
-
-        const sorted = [...replies].sort((a, b) =>
-          new Date(a.timestamp || a.created_time).getTime() - new Date(b.timestamp || b.created_time).getTime()
-        );
-        const latest = sorted[sorted.length - 1];
-        const latestIsMe = isIg
-          ? (latest.username && igUsername && latest.username.toLowerCase() === igUsername.toLowerCase())
-          : latest.from?.id === fbPageId;
-        return !latestIsMe;
+        return !replies.some((r: any) => fromIsPage(r, isIg));
       };
 
       // Count pending comments in Instagram posts
