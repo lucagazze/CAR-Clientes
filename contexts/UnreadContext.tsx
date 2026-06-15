@@ -411,23 +411,59 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return !replies.some((r: any) => fromIsPage(r, isIg));
       };
 
-      // Count pending comments in Instagram posts
+      // Build the list of comments that LOOK pending from the inline data.
+      // We'll then verify each by fetching real replies — the inline expansion
+      // routinely returns empty replies even when the page did reply.
+      type Suspect = { commentId: string; isIg: boolean };
+      const suspects: Suspect[] = [];
+      const commentsById: Record<string, any> = {};
+
       igPosts.forEach((post: any) => {
         const rawComments = post.comments?.data || [];
-        const userComments = rawComments.filter((c: any) => 
-          c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true
-        );
-        const pending = userComments.filter((c: any) => isCommentPendingLocal(c, true));
-        total += pending.length;
+        rawComments.forEach((c: any) => {
+          const isFromPage = c.username && igUsername && c.username.toLowerCase() === igUsername.toLowerCase();
+          if (isFromPage) return;
+          commentsById[c.id] = c;
+          if (isCommentPendingLocal(c, true)) suspects.push({ commentId: c.id, isIg: true });
+        });
       });
-
-      // Count pending comments in Facebook posts
       fbPosts.forEach((post: any) => {
         const rawComments = post.comments?.data || [];
-        const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
-        const pending = userComments.filter((c: any) => isCommentPendingLocal(c, false));
-        total += pending.length;
+        rawComments.forEach((c: any) => {
+          if (c.from?.id === fbPageId) return;
+          commentsById[c.id] = c;
+          if (isCommentPendingLocal(c, false)) suspects.push({ commentId: c.id, isIg: false });
+        });
       });
+
+      // Verify each suspect by fetching real replies. Throttled to 8 in parallel.
+      const verifyOne = async ({ commentId, isIg }: Suspect): Promise<boolean> => {
+        try {
+          const r = isIg
+            ? await metaAds.getInstagramCommentReplies(commentId, fbPageId)
+            : await metaAds.getFacebookCommentReplies(commentId, fbPageId);
+          const replies = r.data || [];
+          if (replies.length === 0) return true; // really pending
+          // Any reply from page → already answered
+          return !replies.some((rep: any) => {
+            if (isIg) {
+              if (rep.username && igUsername && rep.username.toLowerCase() === igUsername.toLowerCase()) return true;
+              if (igId && rep.from?.id && String(rep.from.id) === String(igId)) return true;
+              return false;
+            }
+            return rep.from?.id === fbPageId;
+          });
+        } catch {
+          return true; // assume pending on failure
+        }
+      };
+
+      const CONCURRENCY = 8;
+      for (let i = 0; i < suspects.length; i += CONCURRENCY) {
+        const batch = suspects.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(batch.map(verifyOne));
+        results.forEach(stillPending => { if (stillPending) total += 1; });
+      }
 
       // 3. Fetch Ads comments if metaAccountId is present
       if (metaAccountId) {
@@ -466,16 +502,23 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               }
             });
             const results = await Promise.all(commentsPromises);
+            const adSuspects: Suspect[] = [];
             results.forEach(({ target, comments: rawComments }) => {
               const isIgAd = target.platform === 'instagram';
               const userComments = rawComments.filter((c: any) => {
-                return isIgAd 
-                  ? (c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true) 
+                return isIgAd
+                  ? (c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true)
                   : c.from?.id !== fbPageId;
               });
-              const pending = userComments.filter((c: any) => isCommentPendingLocal(c, isIgAd));
-              total += pending.length;
+              userComments.forEach((c: any) => {
+                if (isCommentPendingLocal(c, isIgAd)) adSuspects.push({ commentId: c.id, isIg: isIgAd });
+              });
             });
+            for (let i = 0; i < adSuspects.length; i += CONCURRENCY) {
+              const batch = adSuspects.slice(i, i + CONCURRENCY);
+              const verdicts = await Promise.all(batch.map(verifyOne));
+              verdicts.forEach(stillPending => { if (stillPending) total += 1; });
+            }
           }
         } catch (e) {
           console.error('Error fetching Ads for unread count:', e);

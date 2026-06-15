@@ -534,50 +534,59 @@ export default function ComentariosPage() {
         }
 
         const allItems = processMediaRes(igMediaRes50, fbMediaRes50, relevantAds, adsCommentsResults50);
+
+        // Show posts immediately with the optimistic counts so the grid renders
+        // fast. The header / sidebar badge will continue showing the loader
+        // (commentsLoading stays true) until the enrichment below finishes —
+        // that way the user only sees the real number.
         setPosts(allItems);
 
-        // Update badge with final accurate count from full deep-fetch
-        const countFinal = allItems.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
+        // Enrichment: feed's inline `replies` expansion is often empty even
+        // when we did reply. For every comment that looks pending, fetch its
+        // real replies and recompute the pending count for that post.
+        // Concurrency: 8 posts × replies-per-post fetched in parallel.
+        const enrichPost = async (post: PostItem): Promise<PostItem> => {
+          if (!active) return post;
+          const platform = post.platform;
+          const pendingsLooked = post.comments.filter((c: any) => isCommentPending(c, platform));
+          if (pendingsLooked.length === 0) return post;
+          const updatedComments = await Promise.all(post.comments.map(async (c: any) => {
+            const hasReplies = (c.replies?.data?.length || 0) > 0;
+            if (hasReplies) return c;
+            try {
+              const r = platform === 'instagram'
+                ? await metaAds.getInstagramCommentReplies(c.id, fbPageId || undefined)
+                : await metaAds.getFacebookCommentReplies(c.id, fbPageId || undefined);
+              const data = r.data || [];
+              if (data.length === 0) return c;
+              return { ...c, replies: { data } };
+            } catch { return c; }
+          }));
+          const realPending = updatedComments.filter((c: any) => isCommentPending(c, platform)).length;
+          return { ...post, pendingComments: realPending, comments: updatedComments };
+        };
+
+        const enriched: PostItem[] = [...allItems];
+        const candidatesIdx = allItems
+          .map((p, i) => ({ p, i }))
+          .filter(({ p }) => p.pendingComments > 0);
+        const CONCURRENCY = 8;
+        for (let i = 0; i < candidatesIdx.length; i += CONCURRENCY) {
+          if (!active) break;
+          const batch = candidatesIdx.slice(i, i + CONCURRENCY);
+          const results = await Promise.all(batch.map(({ p }) => enrichPost(p)));
+          results.forEach((newPost, k) => { enriched[batch[k].i] = newPost; });
+          // Live-update the grid as each batch resolves
+          if (active) setPosts([...enriched]);
+        }
+
+        if (!active) return;
+
+        // Final accurate count
+        const countFinal = enriched.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
         setPendingCommentsCount(countFinal);
         if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(countFinal)); } catch { /* ignore */ } }
-        try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: allItems })); } catch { /* quota exceeded — skip cache */ }
-
-        // Background enrichment: the feed expansion's inline replies are often
-        // empty even when the page actually replied. For every post that looks
-        // like it has pending comments, fetch real replies for each apparently
-        // pending comment and update the count. Throttled to 4 posts at a time.
-        (async () => {
-          const enrichPost = async (post: PostItem) => {
-            if (!active) return;
-            const platform = post.platform;
-            const pendingsLooked = post.comments.filter((c: any) => isCommentPending(c, platform));
-            if (pendingsLooked.length === 0) return;
-            const updatedComments = await Promise.all(post.comments.map(async (c: any) => {
-              const hasReplies = (c.replies?.data?.length || 0) > 0;
-              if (hasReplies) return c;
-              try {
-                const r = platform === 'instagram'
-                  ? await metaAds.getInstagramCommentReplies(c.id, fbPageId || undefined)
-                  : await metaAds.getFacebookCommentReplies(c.id, fbPageId || undefined);
-                const data = r.data || [];
-                if (data.length === 0) return c;
-                return { ...c, replies: { data } };
-              } catch { return c; }
-            }));
-            const realPending = updatedComments.filter((c: any) => isCommentPending(c, platform)).length;
-            if (!active) return;
-            setPosts(prev => prev.map(p => p.id === post.id
-              ? { ...p, pendingComments: realPending, comments: updatedComments }
-              : p));
-          };
-
-          const candidates = allItems.filter(p => p.pendingComments > 0);
-          const CONCURRENCY = 4;
-          for (let i = 0; i < candidates.length; i += CONCURRENCY) {
-            if (!active) break;
-            await Promise.all(candidates.slice(i, i + CONCURRENCY).map(enrichPost));
-          }
-        })();
+        try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: enriched })); } catch { /* quota exceeded */ }
 
       } catch (err) {
         console.error('Error loading comments feed:', err);
