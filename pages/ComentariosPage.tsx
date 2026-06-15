@@ -70,7 +70,7 @@ export default function ComentariosPage() {
   const [resolvedDetails, setResolvedDetails] = useState<Record<string, any>>({});
   const [resolvingIds, setResolvingIds] = useState<Record<string, boolean>>({});
   const [platformFilter, setPlatformFilter] = useState<'all' | 'instagram' | 'facebook' | 'ads'>('all');
-  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('pending');
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   // Slide-over state
@@ -802,12 +802,13 @@ export default function ComentariosPage() {
     if (!text || !selectedPost) return;
 
     const localId = `local_${Date.now()}`;
+    const wasPending = isCommentPending(comment, selectedPost.platform);
     const newReply = {
       id: localId,
       username: igUsername || 'Yo',
       text,
       timestamp: new Date().toISOString(),
-      from: { id: fbPageId, name: 'Yo' },
+      from: { id: selectedPost.platform === 'instagram' ? (igId || fbPageId) : fbPageId, name: 'Yo' },
       isSending: true,
     };
 
@@ -849,14 +850,17 @@ export default function ComentariosPage() {
         return { ...c, replies: { data: updatedReplies } };
       }));
 
-      // Update post pending count
-      setPosts(prev => prev.map(p => {
-        if (p.id !== selectedPost.id) return p;
-        return { ...p, pendingComments: Math.max(0, p.pendingComments - 1) };
-      }));
-
-      // Dispatch comments update to refresh sidebar badge
-      window.dispatchEvent(new Event('car_comments_update'));
+      // Update post pending count only if this comment was actually pending
+      if (wasPending) {
+        setPosts(prev => prev.map(p => {
+          if (p.id !== selectedPost.id) return p;
+          return { ...p, pendingComments: Math.max(0, p.pendingComments - 1) };
+        }));
+      }
+      // Note: no car_comments_update dispatch — the local setPosts triggers the
+      // useEffect that calls setPendingCommentsCount() on the shared context,
+      // which updates the sidebar badge instantly. Dispatching the event would
+      // refetch from Meta API, which lags behind and overwrites our local count.
     } catch (err: any) {
       // 3. On error: remove the optimistic reply and restore text
       setComments(prev => prev.map(c => {
@@ -1025,14 +1029,32 @@ export default function ComentariosPage() {
           })}
         </div>
 
-        {/* Sort toggle */}
-        <button
-          onClick={() => setSortOrder(o => o === 'newest' ? 'oldest' : 'newest')}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all"
-        >
-          {sortOrder === 'newest' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />}
-          {sortOrder === 'newest' ? 'Más reciente' : 'Más antiguo'}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Status filter */}
+          <div className="flex items-center rounded-full border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-0.5">
+            {(['pending', 'all'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black transition-all ${
+                  statusFilter === s
+                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                {s === 'pending' ? 'Pendientes' : 'Todos'}
+              </button>
+            ))}
+          </div>
+          {/* Sort toggle */}
+          <button
+            onClick={() => setSortOrder(o => o === 'newest' ? 'oldest' : 'newest')}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all"
+          >
+            {sortOrder === 'newest' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />}
+            {sortOrder === 'newest' ? 'Más reciente' : 'Más antiguo'}
+          </button>
+        </div>
       </div>
 
       {/* Errors */}

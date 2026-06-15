@@ -844,7 +844,7 @@ export default function RedesSocialesPage() {
     if (igId) {
       Promise.all([
         metaAds.getInstagramProfile(igId, fbPageId || undefined).catch(() => null),
-        metaAds.getInstagramMedia(igId, 8, undefined, fbPageId || undefined).catch(() => []),
+        metaAds.getInstagramMedia(igId, 24, undefined, fbPageId || undefined).catch(() => []),
       ]).then(([profileRes, mediaRes]) => {
         if (!active) return;
         setIgProfile(profileRes);
@@ -900,7 +900,7 @@ export default function RedesSocialesPage() {
 
     Promise.all([
       metaAds.getFacebookPageInfo(fbPageId).catch(() => null),
-      metaAds.getFacebookPageFeed(fbPageId, 8).catch(err => { setFbError(err.message || String(err)); return []; }),
+      metaAds.getFacebookPageFeed(fbPageId, 24).catch(err => { setFbError(err.message || String(err)); return []; }),
     ]).then(([profileRes, feedRes]) => {
       if (!active) return;
       setFbProfile(profileRes);
@@ -935,53 +935,101 @@ export default function RedesSocialesPage() {
     return fbMedia.filter(post => !post.full_picture);
   }, [fbMedia, fbMediaFilter]);
 
-  const loadMoreIg = async () => {
-    if (!igId || !igNextCursor || loadingMoreIg) return;
+  // Refs hold latest cursor/loading so the observer callback never sees a stale closure.
+  const igCursorRef = useRef<string | null>(null);
+  const fbCursorRef = useRef<string | null>(null);
+  const loadingMoreIgRef = useRef(false);
+  const loadingMoreFbRef = useRef(false);
+  useEffect(() => { igCursorRef.current = igNextCursor; }, [igNextCursor]);
+  useEffect(() => { fbCursorRef.current = fbNextCursor; }, [fbNextCursor]);
+  useEffect(() => { loadingMoreIgRef.current = loadingMoreIg; }, [loadingMoreIg]);
+  useEffect(() => { loadingMoreFbRef.current = loadingMoreFb; }, [loadingMoreFb]);
+
+  const loadMoreIg = useCallback(async () => {
+    if (!igId || !igCursorRef.current || loadingMoreIgRef.current) return;
+    loadingMoreIgRef.current = true;
     setLoadingMoreIg(true);
     try {
-      const res = await metaAds.getInstagramMedia(igId, 8, igNextCursor, fbPageId || undefined);
+      const res = await metaAds.getInstagramMedia(igId, 24, igCursorRef.current, fbPageId || undefined);
       const newPosts = res?.data || [];
       setIgMedia(prev => [...prev, ...newPosts]);
-      setIgNextCursor(res?.paging?.cursors?.after || null);
+      const next = res?.paging?.cursors?.after || null;
+      igCursorRef.current = next;
+      setIgNextCursor(next);
     } catch (e) { console.error(e); }
-    finally { setLoadingMoreIg(false); }
-  };
+    finally {
+      loadingMoreIgRef.current = false;
+      setLoadingMoreIg(false);
+    }
+  }, [igId, fbPageId]);
 
-  const loadMoreFb = async () => {
-    if (!fbPageId || !fbNextCursor || loadingMoreFb) return;
+  const loadMoreFb = useCallback(async () => {
+    if (!fbPageId || !fbCursorRef.current || loadingMoreFbRef.current) return;
+    loadingMoreFbRef.current = true;
     setLoadingMoreFb(true);
     try {
-      const res = await metaAds.getFacebookPageFeed(fbPageId, 8, fbNextCursor);
+      const res = await metaAds.getFacebookPageFeed(fbPageId, 24, fbCursorRef.current);
       const newPosts = (res?.data || []).map((p: any) => ({ ...p, source: p.source || p.attachments?.data?.[0]?.media?.source || null }));
       setFbMedia(prev => [...prev, ...newPosts]);
-      setFbNextCursor(res?.paging?.cursors?.after || null);
+      const next = res?.paging?.cursors?.after || null;
+      fbCursorRef.current = next;
+      setFbNextCursor(next);
     } catch (e) { console.error(e); }
-    finally { setLoadingMoreFb(false); }
-  };
+    finally {
+      loadingMoreFbRef.current = false;
+      setLoadingMoreFb(false);
+    }
+  }, [fbPageId]);
 
   // IntersectionObserver for Instagram sentinel
   useEffect(() => {
-    if (!igSentinelRef.current) return;
+    const el = igSentinelRef.current;
+    if (!el || !igId) return;
     const observer = new IntersectionObserver(
       (entries) => { if (entries[0].isIntersecting) loadMoreIg(); },
-      { rootMargin: '200px' }
+      { rootMargin: '800px 0px' }
     );
-    observer.observe(igSentinelRef.current);
+    observer.observe(el);
     return () => observer.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [igNextCursor, loadingMoreIg, igId]);
+  }, [igNextCursor, igId, loadMoreIg]);
 
   // IntersectionObserver for Facebook sentinel
   useEffect(() => {
-    if (!fbSentinelRef.current) return;
+    const el = fbSentinelRef.current;
+    if (!el || !fbPageId) return;
     const observer = new IntersectionObserver(
       (entries) => { if (entries[0].isIntersecting) loadMoreFb(); },
-      { rootMargin: '200px' }
+      { rootMargin: '800px 0px' }
     );
-    observer.observe(fbSentinelRef.current);
+    observer.observe(el);
     return () => observer.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fbNextCursor, loadingMoreFb, fbPageId]);
+  }, [fbNextCursor, fbPageId, loadMoreFb]);
+
+  // Fallback: listen to scroll on the page's scroll container and trigger loadMore
+  // when within 800px of the bottom. Belt-and-suspenders for cases where the
+  // IntersectionObserver doesn't fire (custom scroll roots, etc.).
+  useEffect(() => {
+    const findScrollContainer = (): HTMLElement | null => {
+      let el: HTMLElement | null = igSentinelRef.current || fbSentinelRef.current;
+      while (el && el !== document.body) {
+        const style = window.getComputedStyle(el);
+        if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight) return el;
+        el = el.parentElement;
+      }
+      return null;
+    };
+    const onScroll = (e: Event) => {
+      const t = e.target as HTMLElement;
+      if (!t || typeof t.scrollTop !== 'number') return;
+      if (t.scrollHeight - t.scrollTop - t.clientHeight < 800) {
+        if (activeTab === 'instagram') loadMoreIg(); else loadMoreFb();
+      }
+    };
+    const container = findScrollContainer();
+    if (!container) return;
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, [activeTab, loadMoreIg, loadMoreFb, igMedia.length, fbMedia.length]);
 
 
   const igEngagementRate = useMemo(() => {
