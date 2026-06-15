@@ -333,25 +333,16 @@ export default function ComentariosPage() {
   // Load from cache initially
   useEffect(() => {
     if (!clientId) return;
-    const cacheKey = `comentarios_cache_${clientId}`;
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (parsed.posts) setPosts(parsed.posts);
-        setLoading(false);
-      } catch (e) {
-        console.error('Error parsing comments cache:', e);
-      }
-    }
+    // Cache is no longer restored to the grid — the user explicitly asked to
+    // see the loader until the FINAL number is ready, with no intermediate
+    // flicker. Cache is still written so external badge readers can pick it up.
   }, [clientId]);
 
   // Load data
   useEffect(() => {
     if (!clientId || (!fbPageId && !igId)) return;
     let active = true;
-    const hasCache = sessionStorage.getItem(`comentarios_cache_${clientId}`);
-    setLoading(!hasCache);
+    setLoading(true);
     setIgError(null);
     setFbError(null);
 
@@ -535,16 +526,8 @@ export default function ComentariosPage() {
 
         const allItems = processMediaRes(igMediaRes50, fbMediaRes50, relevantAds, adsCommentsResults50);
 
-        // Show posts immediately with the optimistic counts so the grid renders
-        // fast. The header / sidebar badge will continue showing the loader
-        // (commentsLoading stays true) until the enrichment below finishes —
-        // that way the user only sees the real number.
-        setPosts(allItems);
-
-        // Enrichment: feed's inline `replies` expansion is often empty even
-        // when we did reply. For every comment that looks pending, fetch its
-        // real replies and recompute the pending count for that post.
-        // Concurrency: 8 posts × replies-per-post fetched in parallel.
+        // Enrich BEFORE rendering anything: for every comment that looks
+        // pending in the inline data, fetch real replies. Concurrency 8.
         const enrichPost = async (post: PostItem): Promise<PostItem> => {
           if (!active) return post;
           const platform = post.platform;
@@ -576,13 +559,12 @@ export default function ComentariosPage() {
           const batch = candidatesIdx.slice(i, i + CONCURRENCY);
           const results = await Promise.all(batch.map(({ p }) => enrichPost(p)));
           results.forEach((newPost, k) => { enriched[batch[k].i] = newPost; });
-          // Live-update the grid as each batch resolves
-          if (active) setPosts([...enriched]);
         }
 
         if (!active) return;
 
-        // Final accurate count
+        // Single render with the final state — no intermediate flashes.
+        setPosts(enriched);
         const countFinal = enriched.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
         setPendingCommentsCount(countFinal);
         if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(countFinal)); } catch { /* ignore */ } }
@@ -999,14 +981,11 @@ export default function ComentariosPage() {
     else if (platformFilter === 'facebook') list = list.filter(p => p.platform === 'facebook' && !p.isAd);
     else if (platformFilter === 'ads') list = list.filter(p => p.isAd);
     if (statusFilter === 'pending') list = list.filter(p => p.pendingComments > 0);
-    // Sort by most recent incoming comment (user comment only, not our replies)
+    // Sort by post date (matches the order the user sees on IG / Facebook).
     list = [...list].sort((a, b) => {
-      const lastTs = (post: PostItem) => {
-        const all = post.comments.map((c: any) => c.timestamp || c.created_time || post.timestamp).filter(Boolean);
-        const latest = all.length ? all.reduce((mx, ts) => ts > mx ? ts : mx) : post.timestamp;
-        return new Date(latest).getTime();
-      };
-      return sortOrder === 'newest' ? lastTs(b) - lastTs(a) : lastTs(a) - lastTs(b);
+      const ta = new Date(a.timestamp).getTime();
+      const tb = new Date(b.timestamp).getTime();
+      return sortOrder === 'newest' ? tb - ta : ta - tb;
     });
     return list;
   }, [posts, platformFilter, statusFilter, sortOrder]);
