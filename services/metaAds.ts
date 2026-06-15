@@ -690,10 +690,66 @@ export const metaAds = {
     // Page Access Token is required for from.name — user token silently drops names (privacy).
     const pageId = postId.includes('_') ? postId.split('_')[0] : '';
     const fields = 'id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies.limit(100){id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}';
+    // filter=stream returns ALL comments (chronological), including ones Facebook would
+    // normally hide. Default (toplevel) excludes many — that's why posts showed only 2.
+    const params = { fields, limit: '100', filter: 'stream' };
     if (pageId) {
-      return apiGetPage(pageId, `${postId}/comments`, { fields, limit: '100' });
+      return apiGetPage(pageId, `${postId}/comments`, params);
     }
-    return apiGetPageActive(`${postId}/comments`, { fields, limit: '100' });
+    return apiGetPageActive(`${postId}/comments`, params);
+  },
+
+  // Fetches every comment by following paging.next until exhausted.
+  // Use this in detail views where the user expects to see the full thread.
+  getFacebookPostCommentsAll: async (postId: string): Promise<{ data: any[] }> => {
+    const all: any[] = [];
+    let res: any = await metaAds.getFacebookPostComments(postId);
+    while (res) {
+      if (Array.isArray(res.data)) all.push(...res.data);
+      const nextUrl = res?.paging?.next;
+      if (!nextUrl) break;
+      try {
+        const r = await fetch(nextUrl);
+        res = await r.json();
+        if (res?.error) break;
+      } catch { break; }
+      if (all.length > 2000) break; // safety cap
+    }
+    return { data: all };
+  },
+
+  getInstagramMediaCommentsAll: async (mediaId: string, fbPageId?: string): Promise<{ data: any[] }> => {
+    const all: any[] = [];
+    let res: any = await metaAds.getInstagramMediaComments(mediaId, fbPageId);
+    while (res) {
+      if (Array.isArray(res.data)) all.push(...res.data);
+      const nextUrl = res?.paging?.next;
+      if (!nextUrl) break;
+      try {
+        const r = await fetch(nextUrl);
+        res = await r.json();
+        if (res?.error) break;
+      } catch { break; }
+      if (all.length > 2000) break;
+    }
+    return { data: all };
+  },
+
+  getAdCreativeCommentsAll: async (storyId: string, platform: 'instagram' | 'facebook' = 'instagram', pageId?: string): Promise<{ data: any[] }> => {
+    const all: any[] = [];
+    let res: any = await metaAds.getAdCreativeComments(storyId, platform, pageId);
+    while (res) {
+      if (Array.isArray(res.data)) all.push(...res.data);
+      const nextUrl = res?.paging?.next;
+      if (!nextUrl) break;
+      try {
+        const r = await fetch(nextUrl);
+        res = await r.json();
+        if (res?.error) break;
+      } catch { break; }
+      if (all.length > 2000) break;
+    }
+    return { data: all };
   },
 
   replyToFacebookComment: async (commentId: string, message: string) => {

@@ -70,7 +70,7 @@ export default function ComentariosPage() {
   const [resolvedDetails, setResolvedDetails] = useState<Record<string, any>>({});
   const [resolvingIds, setResolvingIds] = useState<Record<string, boolean>>({});
   const [platformFilter, setPlatformFilter] = useState<'all' | 'instagram' | 'facebook' | 'ads'>('all');
-  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('pending');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   // Slide-over state
@@ -667,19 +667,19 @@ export default function ComentariosPage() {
       });
 
       if (post.isAd) {
-        const res = await metaAds.getAdCreativeComments(post.id, post.platform, fbPageId || undefined);
+        const res = await metaAds.getAdCreativeCommentsAll(post.id, post.platform, fbPageId || undefined);
         const fresh = (res.data || [])
           .filter((c: any) => !isFromPage(c))
           .map(normalizeComment);
         setComments(fresh);
       } else if (post.platform === 'instagram') {
-        const res = await metaAds.getInstagramMediaComments(post.id, fbPageId || undefined);
+        const res = await metaAds.getInstagramMediaCommentsAll(post.id, fbPageId || undefined);
         const fresh = (res.data || [])
           .filter((c: any) => !isFromPage(c))
           .map(normalizeComment);
         setComments(fresh);
       } else {
-        const res = await metaAds.getFacebookPostComments(post.id);
+        const res = await metaAds.getFacebookPostCommentsAll(post.id);
         const fresh = (res.data || [])
           .filter((c: any) => !isFromPage(c))
           .map(normalizeComment);
