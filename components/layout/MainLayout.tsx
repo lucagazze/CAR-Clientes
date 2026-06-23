@@ -382,7 +382,7 @@ export const MainLayout = () => {
               <Route path="/admin/email-monitor" element={<EmailMonitorPage />} />
               <Route path="/email-marketing" element={<EmailMarketingPage />} />
               <Route path="/publicador" element={<SocialPublisherPage />} />
-              <Route path="/publicaciones" element={<PublicacionesPage />} />
+              <Route path="/publicaciones" element={profile?.is_admin ? <PublicacionesPage /> : <Navigate to="/dashboard" replace />} />
               <Route path="/entradas" element={<EntradasPage />} />
               <Route path="/cerebro" element={<CerebroPage />} />
               <Route path="/pedidos" element={<PedidosPage />} />

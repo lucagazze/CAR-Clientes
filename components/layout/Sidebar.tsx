@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const activosItems = [
     { path: '/publicador',          icon: UploadCloud, label: 'Publicador',        configured: hasPublisher },
-    { path: '/publicaciones',       icon: History,     label: 'Historial Public.', configured: hasPublisher },
+    { path: '/publicaciones',       icon: History,     label: 'Historial Public.', configured: hasPublisher, adminOnly: true },
     { path: '/analisis-productos',  icon: BarChart2,  label: 'Análisis Productos', configured: hasEcommerce },
     { path: '/admin/meta',          icon: Target,     label: 'Creativos Ads',      configured: hasMeta },
     { path: '/analisis-creativo',   icon: Brain,      label: 'Análisis Creativo',  configured: true },
