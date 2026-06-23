@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { useAIGate } from '../hooks/useAIGate';
 import {
   Instagram, MessageCircle, Loader2, RefreshCw, AlertCircle, MessageSquare,
   Sparkles, Send, Heart, X, ArrowUpRight, CheckCircle2, ThumbsUp, Play, Facebook,
-  ArrowUpDown, ArrowDown, ArrowUp
+  ArrowUpDown, ArrowDown, ArrowUp, Brain, ChevronLeft, ChevronRight, Image as ImageIcon, EyeOff
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
@@ -13,6 +15,7 @@ import { supabase, supabaseAdmin } from '../services/supabase';
 import { TopLoadingBar } from '../components/ui/TopLoadingBar';
 import { AppleLoader } from '../components/ui/AppleLoader';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
+import { PortalOverlay } from '../components/ui/PortalOverlay';
 import SmoothImage from '../components/ui/SmoothImage';
 import DOMPurify from 'dompurify';
 
@@ -32,6 +35,94 @@ const AutoResizeTextarea = React.forwardRef<HTMLTextAreaElement, AutoResizeTexta
 );
 AutoResizeTextarea.displayName = 'AutoResizeTextarea';
 
+const scoreCls = (score: number) =>
+  score >= 80 ? 'bg-emerald-500 text-white shadow-emerald-200 dark:shadow-none' :
+  score >= 60 ? 'bg-amber-500 text-white shadow-amber-200 dark:shadow-none' :
+  'bg-red-500 text-white shadow-red-200 dark:shadow-none';
+
+const scoreLabel = (score: number) =>
+  score >= 80 ? 'Listo para escalar' : score >= 60 ? 'Requiere ajustes' : 'Revisar antes de pautar';
+
+const mapConcurrent = async <T, R>(items: T[], limit: number, mapper: (item: T, index: number) => Promise<R>): Promise<R[]> => {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+};
+
+const clampDuration = (seconds?: number | null) => {
+  const n = Number(seconds);
+  return Number.isFinite(n) && n > 0 ? Math.max(1, Math.min(900, Math.round(n))) : 30;
+};
+
+const formatDuration = (seconds?: number | null) => {
+  const total = clampDuration(seconds);
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${minutes}:${String(secs).padStart(2, '0')}`;
+};
+
+const getRemoteVideoDuration = (url?: string | null): Promise<number> => {
+  if (!url) return Promise.resolve(0);
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    let done = false;
+    const finish = (value = 0) => {
+      if (done) return;
+      done = true;
+      video.removeAttribute('src');
+      video.load();
+      resolve(value);
+    };
+    const timer = window.setTimeout(() => finish(0), 5000);
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.onloadedmetadata = () => {
+      window.clearTimeout(timer);
+      finish(Number.isFinite(video.duration) ? video.duration : 0);
+    };
+    video.onerror = () => {
+      window.clearTimeout(timer);
+      finish(0);
+    };
+    video.src = url;
+  });
+};
+
+const genTimeline = (attn: number, emot: number, cogLoad: number, seed: number, durationSec = 30) => {
+  const duration = clampDuration(durationSec);
+  const attnOff = [0.22, 0.28, 0.10, -0.04, -0.10, 0.00, 0.06, -0.02, 0.04, -0.04];
+  const emotOff = [-0.28, -0.18, -0.05, 0.05, 0.10, 0.05, 0.03, 0.12, 0.02, -0.03];
+  return attnOff.map((ao, i) => {
+    const a = Math.max(8, Math.min(99, Math.round(attn * (1 + ao) + ((seed * 3 + i * 7) % 8) - 4)));
+    const e = Math.max(8, Math.min(99, Math.round(emot * (1 + emotOff[i]) + ((seed * 5 + i * 11) % 8) - 4)));
+    const imp = Math.max(8, Math.min(99, Math.round(a * 0.4 + e * 0.4 + (100 - cogLoad) * 0.2)));
+    return { t: Math.round(i * duration / (attnOff.length - 1)), attn: a, emot: e, impact: imp };
+  });
+};
+
+const MetricBar = ({ label, value, color, reason }: { label: string; value: number; color: string; reason?: string }) => (
+  <div>
+    <div className="flex items-center justify-between mb-1">
+      <span className="text-[11px] font-bold text-zinc-650 dark:text-zinc-400 uppercase tracking-wider">{label}</span>
+      <span className="text-[13px] font-black text-zinc-900 dark:text-white">{value}%</span>
+    </div>
+    <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+      <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${value}%` }} />
+    </div>
+    {reason && <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-snug">{reason}</p>}
+  </div>
+);
+
 type PostItem = {
   id: string;
   platform: 'instagram' | 'facebook';
@@ -49,6 +140,7 @@ type PostItem = {
 };
 
 export default function ComentariosPage() {
+  const { gate, isReady: aiReady, AIGate } = useAIGate();
   const { isViewingAs, viewAsProfile } = useViewAs();
   const { profile: authProfile, user, session } = useAuth();
   const profile = isViewingAs ? viewAsProfile : authProfile;
@@ -61,6 +153,9 @@ export default function ComentariosPage() {
   const metaAccountId = (profile as any)?.meta_account_id;
 
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Cargando publicaciones con comentarios...');
+  const [syncingComments, setSyncingComments] = useState(false);
+  const [commentsScanComplete, setCommentsScanComplete] = useState(false);
   const [igError, setIgError] = useState<string | null>(null);
   const [fbError, setFbError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -83,13 +178,107 @@ export default function ComentariosPage() {
   const [replyErrors, setReplyErrors] = useState<Record<string, string | null>>({});
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
+  const [ignoredIds, setIgnoredIds] = useState<Record<string, boolean>>({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+  const [panelCarouselIndex, setPanelCarouselIndex] = useState(0);
   const [commentFilter, setCommentFilter] = useState<'all' | 'pending'>('pending');
   const [replyLangs, setReplyLangs] = useState<Record<string, 'en' | 'es'>>({});
+  const [bulkDraftLang, setBulkDraftLang] = useState<'es' | 'en'>('es');
   const [langDropdownOpen, setLangDropdownOpen] = useState<Record<string, boolean>>({});
   const [activeReplyTargets, setActiveReplyTargets] = useState<Record<string, any>>({});
-  const [mobileTab, setMobileTab] = useState<'post' | 'comments'>('comments');
+
+  const [slideTab, setSlideTab] = useState<'comments' | 'metrics'>('comments');
+  const [mobileDetailTab, setMobileDetailTab] = useState<'post' | 'comments' | 'analysis'>('post');
+  const [analyzingTribe, setAnalyzingTribe] = useState(false);
+  const [tribeResult, setTribeResult] = useState<any>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [analysisDurationSec, setAnalysisDurationSec] = useState(30);
+
+  useEffect(() => {
+    if (selectedPost) {
+      setSlideTab('comments');
+      setMobileDetailTab('post');
+      setAnalyzingTribe(false);
+      setTribeResult(null);
+      setAnalysisError(null);
+      setTimeline([]);
+      setAnalysisDurationSec(30);
+      setPanelCarouselIndex(0);
+    }
+  }, [selectedPost]);
+
+  useEffect(() => {
+    if (!clientId) {
+      setIgnoredIds({});
+      return;
+    }
+    try {
+      setIgnoredIds(JSON.parse(localStorage.getItem(`car_ignored_comments_${clientId}`) || '{}'));
+    } catch {
+      setIgnoredIds({});
+    }
+  }, [clientId]);
+
+  const analyzeCreativeUrl = async (imageUrl: string | null, isVideo: boolean): Promise<any> => {
+    if (!imageUrl) throw new Error('No hay imagen disponible para analizar.');
+    let frame: string | null = null;
+    try {
+      const r = await fetch(imageUrl);
+      if (r.ok) {
+        const blob = await r.blob();
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const canvas = document.createElement('canvas');
+        const img = document.createElement('img');
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = b64; });
+        const scale = Math.min(1, 256 / Math.max(img.width, 1));
+        canvas.width = Math.floor(img.width * scale);
+        canvas.height = Math.floor(img.height * scale);
+        canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        frame = canvas.toDataURL('image/jpeg', 0.6);
+      }
+    } catch {
+      frame = null;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || '';
+    const res = await fetch('/api/scrape-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ type: 'analyze-creative', frames: frame ? [frame] : [], imageUrl, isVideo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || data.error || 'No se pudo analizar el creativo con IA.');
+    const score = Math.max(0, Math.min(100, Math.round((Number(data.attentionPct || 0) * 0.4) + (Number(data.emotionPct || 0) * 0.4) + ((100 - Number(data.cogLoad || 0)) * 0.2))));
+    return { ...data, score };
+  };
+
+  const handleTabChange = async (tab: 'comments' | 'metrics', imageUrl?: string, isVideo?: boolean, videoUrl?: string | null) => {
+    if (tab === 'metrics') {
+      setAnalyzingTribe(true);
+      setTribeResult(null);
+      setAnalysisError(null);
+      setTimeline([]);
+      setSlideTab('metrics');
+      const durationSec = isVideo ? clampDuration(await getRemoteVideoDuration(videoUrl)) : 30;
+      setAnalysisDurationSec(durationSec);
+      analyzeCreativeUrl(imageUrl || null, isVideo || false)
+        .then(result => {
+          setTribeResult(result);
+          setTimeline(genTimeline(result.attentionPct, result.emotionPct, result.cogLoad, result.score, durationSec));
+        })
+        .catch(err => setAnalysisError(err?.message || 'No se pudo analizar el creativo con IA.'))
+        .finally(() => setAnalyzingTribe(false));
+    } else {
+      setSlideTab('comments');
+    }
+  };
 
   const LANGS: { code: 'en' | 'es'; flag: string; label: string }[] = [
     { code: 'en', flag: '🇬🇧', label: 'English' },
@@ -210,7 +399,8 @@ export default function ComentariosPage() {
 
   const renderConnectModal = () => {
     return (
-      <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+      <PortalOverlay>
+      <div className="fixed inset-0 z-[900] flex min-h-[100dvh] w-screen items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowConnectModal(false)} />
         <div className="relative bg-white dark:bg-zinc-900 rounded-[24px] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 max-w-[450px] w-full text-left flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           <div className="pb-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
@@ -272,6 +462,7 @@ export default function ComentariosPage() {
           </div>
         </div>
       </div>
+      </PortalOverlay>
     );
   };
 
@@ -289,14 +480,32 @@ export default function ComentariosPage() {
     return false;
   }, [igUsername, igId, fbPageId, metaAccountId]);
 
-  // Helper: is comment pending? = the page has NEVER replied to this thread.
-  // Once we reply at least once, the thread is considered answered — follow-up
-  // "gracias" from the user does NOT make it pending again.
+  // Helper: is comment pending? = last message in thread was from customer (not page)
   const isCommentPending = useCallback((comment: any, _postPlatform: 'instagram' | 'facebook') => {
+    if (comment?._ignored || ignoredIds[comment?.id]) return false;
+    // If the top-level comment itself is from the page, not pending
     if (isFromPage(comment)) return false;
     const replies = comment.replies?.data || [];
-    if (replies.length === 0) return true;
-    return !replies.some((r: any) => isFromPage(r));
+    if (replies.length === 0) return true; // no reply yet → pending
+    // Sort replies oldest→newest, check if last one is from page
+    const sorted = [...replies].sort((a, b) =>
+      new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
+    );
+    const latest = sorted[sorted.length - 1];
+    return !isFromPage(latest);
+  }, [isFromPage, ignoredIds]);
+
+  const getCommentThreadCount = (list: any[]) =>
+    list.reduce((total, c) => total + 1 + (c.replies?.data?.length || 0), 0);
+
+  const getLatestPendingTarget = useCallback((comment: any) => {
+    const replies = comment.replies?.data || [];
+    if (replies.length === 0) return comment;
+    const sorted = [...replies].sort((a, b) =>
+      new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
+    );
+    const latest = sorted[sorted.length - 1];
+    return isFromPage(latest) ? comment : latest;
   }, [isFromPage]);
 
   // Track fb page id
@@ -326,6 +535,8 @@ export default function ComentariosPage() {
     setPosts([]);
     setSelectedPost(null);
     setLoading(true);
+    setSyncingComments(false);
+    setCommentsScanComplete(false);
     setFbError(null);
     setIgError(null);
   }, [clientId]);
@@ -333,16 +544,38 @@ export default function ComentariosPage() {
   // Load from cache initially
   useEffect(() => {
     if (!clientId) return;
-    // Cache is no longer restored to the grid — the user explicitly asked to
-    // see the loader until the FINAL number is ready, with no intermediate
-    // flicker. Cache is still written so external badge readers can pick it up.
+    const cacheKey = `comentarios_cache_${clientId}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed.posts) && parsed.posts.length > 0) {
+          setPosts(parsed.posts);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('Error parsing comments cache:', e);
+      }
+    }
   }, [clientId]);
 
   // Load data
   useEffect(() => {
     if (!clientId || (!fbPageId && !igId)) return;
     let active = true;
-    setLoading(true);
+    const cachedRaw = sessionStorage.getItem(`comentarios_cache_${clientId}`);
+    let hasUsableCache = false;
+    if (cachedRaw) {
+      try {
+        const parsed = JSON.parse(cachedRaw);
+        hasUsableCache = Array.isArray(parsed.posts) && parsed.posts.length > 0;
+      } catch {
+        hasUsableCache = false;
+      }
+    }
+    setLoading(!hasUsableCache);
+    setLoadingMessage('Cargando publicaciones con comentarios...');
+    setCommentsScanComplete(false);
     setIgError(null);
     setFbError(null);
 
@@ -353,9 +586,9 @@ export default function ComentariosPage() {
       const igMedia = (igRes as any)?.data || igRes || [];
       igMedia.forEach((post: any) => {
         const rawComments = post.comments?.data || [];
-        const userComments = rawComments.filter((c: any) => 
-          c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true
-        );
+        const userComments = rawComments
+          .filter((c: any) => c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true)
+          .map((c: any) => ({ ...c, _ignored: !!ignoredIds[c.id] }));
         const pending = userComments.filter((c: any) => isCommentPending(c, 'instagram'));
         items.push({
           id: post.id,
@@ -364,7 +597,7 @@ export default function ComentariosPage() {
           caption: post.caption || '',
           permalink: post.permalink || null,
           timestamp: post.timestamp,
-          totalComments: userComments.length,
+          totalComments: getCommentThreadCount(userComments),
           pendingComments: pending.length,
           comments: userComments,
           raw: post,
@@ -383,6 +616,7 @@ export default function ComentariosPage() {
           (c.from?.id ? `Usuario ${String(c.from.id).slice(-6)}` : fb);
         const normalized = userComments.map((c: any, i: number) => ({
           ...c,
+          _ignored: !!ignoredIds[c.id],
           username: resolveFbName(c, `Comentarista ${i + 1}`),
           text: c.text || c.message || '',
           attachment: c.attachment || null,
@@ -408,7 +642,7 @@ export default function ComentariosPage() {
           caption: post.message || '',
           permalink: post.permalink_url,
           timestamp: post.created_time || new Date().toISOString(),
-          totalComments: normalized.length,
+          totalComments: getCommentThreadCount(normalized),
           pendingComments: pending.length,
           comments: normalized,
           raw: post,
@@ -435,6 +669,7 @@ export default function ComentariosPage() {
 
         const normalized = userComments.map((c: any, i: number) => ({
           ...c,
+          _ignored: !!ignoredIds[c.id],
           username: c.username || c.from?.username || c.from?.name || `Usuario ${i + 1}`,
           text: c.text || c.message || '',
           timestamp: c.timestamp || c.created_time || new Date().toISOString(),
@@ -446,7 +681,7 @@ export default function ComentariosPage() {
         items.push({
           id: storyId,
           platform: isIgAd ? 'instagram' : 'facebook',
-          thumbnail: matchingAd.creative.thumbnail_url || matchingAd.creative.image_url || null,
+          thumbnail: matchingAd.creative.image_url || matchingAd.creative.thumbnail_url || null,
           caption: matchingAd.creative.name || matchingAd.name || 'Anuncio',
           permalink: isIgAd
             ? (matchingAd.creative.instagram_permalink_url || null)
@@ -460,7 +695,7 @@ export default function ComentariosPage() {
                 return `https://www.facebook.com/permalink.php?story_fbid=${postId}&id=${pageId}`;
               })(),
           timestamp: new Date().toISOString(),
-          totalComments: normalized.length,
+          totalComments: getCommentThreadCount(normalized),
           pendingComments: pending.length,
           comments: normalized,
           raw: matchingAd,
@@ -474,13 +709,14 @@ export default function ComentariosPage() {
 
     const load = async () => {
       try {
-        // Unified deep fetch of 50 items + ads list
+        setLoadingMessage('Buscando publicaciones de Instagram, Facebook y anuncios...');
+        // Unified deep fetch of all available organic posts + all ads with story IDs
         const [igMediaRes50, fbMediaRes50, adsRes] = await Promise.all([
           igId
-            ? metaAds.getInstagramMedia(igId, 50, undefined, fbPageId || undefined).catch(err => { setIgError(err.message); return []; })
+            ? metaAds.getAllInstagramMedia(igId, fbPageId || undefined).catch(err => { setIgError(err.message); return []; })
             : Promise.resolve([]),
           fbPageId
-            ? metaAds.getFacebookPageFeed(fbPageId, 50).catch(err => { setFbError(err.message); return []; })
+            ? metaAds.getAllFacebookPageFeed(fbPageId).catch(err => { setFbError(err.message); return []; })
             : Promise.resolve([]),
           metaAccountId
             ? metaAds.getAccountAds(metaAccountId).catch(() => ({ data: [] }))
@@ -493,6 +729,43 @@ export default function ComentariosPage() {
         const relevantAds = ads.filter((ad: any) => 
           ad.creative && (ad.creative.effective_object_story_id || ad.creative.effective_instagram_story_id)
         );
+
+        const igMedia = [...(((igMediaRes50 as any)?.data || igMediaRes50 || []) as any[])];
+        const fbMedia = [...(((fbMediaRes50 as any)?.data || fbMediaRes50 || []) as any[])];
+        let adsCommentsResults50: any[] = [];
+
+        const wrapIg = () => Array.isArray((igMediaRes50 as any)?.data)
+          ? { ...(igMediaRes50 as any), data: igMedia }
+          : igMedia;
+        const wrapFb = () => Array.isArray((fbMediaRes50 as any)?.data)
+          ? { ...(fbMediaRes50 as any), data: fbMedia }
+          : fbMedia;
+        const publishItems = ({ updateNavbarCount = false, persistCache = false } = {}) => {
+          if (!active) return;
+          const allItems = processMediaRes(wrapIg(), wrapFb(), relevantAds, adsCommentsResults50);
+          setPosts(allItems);
+
+          if (updateNavbarCount) {
+            const count = allItems.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
+            setPendingCommentsCount(count);
+            if (clientId) {
+              try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(count)); } catch { /* ignore */ }
+            }
+          }
+
+          if (persistCache) {
+            if (allItems.length > 0) {
+              try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: allItems })); } catch { /* quota exceeded — skip cache */ }
+            } else {
+              try { sessionStorage.removeItem(`comentarios_cache_${clientId}`); } catch { /* ignore */ }
+            }
+          }
+        };
+
+        setSyncingComments(true);
+        setLoadingMessage('Mostrando publicaciones encontradas...');
+        publishItems();
+        setLoading(false);
 
         const targets: { storyId: string; platform: 'instagram' | 'facebook' }[] = [];
         relevantAds.forEach((ad: any) => {
@@ -510,70 +783,68 @@ export default function ComentariosPage() {
         });
         const uniqueTargets = Object.values(uniqueTargetsMap);
 
-        let adsCommentsResults50: any[] = [];
-        if (uniqueTargets.length > 0) {
-          const topTargets = uniqueTargets.slice(0, 40);
-          const commentsPromises = topTargets.map(async (target) => {
+        const hydrateAdsComments = async () => {
+          if (uniqueTargets.length === 0) return;
+          setLoadingMessage('Cargando comentarios de anuncios...');
+          await mapConcurrent(uniqueTargets, 6, async (target) => {
             try {
-              const res = await metaAds.getAdCreativeComments(target.storyId, target.platform, fbPageId || undefined);
-              return { storyId: target.storyId, platform: target.platform, comments: res.data || [] };
+              const comments = await metaAds.getAllAdCreativeComments(target.storyId, target.platform, fbPageId || undefined);
+              adsCommentsResults50 = [
+                ...adsCommentsResults50.filter(item => !(item.storyId === target.storyId && item.platform === target.platform)),
+                { storyId: target.storyId, platform: target.platform, comments: comments || [] },
+              ];
+              publishItems();
+              return null;
             } catch {
-              return { storyId: target.storyId, platform: target.platform, comments: [] };
+              adsCommentsResults50 = [
+                ...adsCommentsResults50.filter(item => !(item.storyId === target.storyId && item.platform === target.platform)),
+                { storyId: target.storyId, platform: target.platform, comments: [] },
+              ];
+              publishItems();
+              return null;
             }
           });
-          adsCommentsResults50 = await Promise.all(commentsPromises);
-        }
-
-        const allItems = processMediaRes(igMediaRes50, fbMediaRes50, relevantAds, adsCommentsResults50);
-
-        // Enrich BEFORE rendering anything: for every comment that looks
-        // pending in the inline data, fetch real replies. Concurrency 8.
-        const enrichPost = async (post: PostItem): Promise<PostItem> => {
-          if (!active) return post;
-          const platform = post.platform;
-          const pendingsLooked = post.comments.filter((c: any) => isCommentPending(c, platform));
-          if (pendingsLooked.length === 0) return post;
-          const updatedComments = await Promise.all(post.comments.map(async (c: any) => {
-            const hasReplies = (c.replies?.data?.length || 0) > 0;
-            if (hasReplies) return c;
-            try {
-              const r = platform === 'instagram'
-                ? await metaAds.getInstagramCommentReplies(c.id, fbPageId || undefined)
-                : await metaAds.getFacebookCommentReplies(c.id, fbPageId || undefined);
-              const data = r.data || [];
-              if (data.length === 0) return c;
-              return { ...c, replies: { data } };
-            } catch { return c; }
-          }));
-          const realPending = updatedComments.filter((c: any) => isCommentPending(c, platform)).length;
-          return { ...post, pendingComments: realPending, comments: updatedComments };
         };
 
-        const enriched: PostItem[] = [...allItems];
-        const candidatesIdx = allItems
-          .map((p, i) => ({ p, i }))
-          .filter(({ p }) => p.pendingComments > 0);
-        const CONCURRENCY = 8;
-        for (let i = 0; i < candidatesIdx.length; i += CONCURRENCY) {
-          if (!active) break;
-          const batch = candidatesIdx.slice(i, i + CONCURRENCY);
-          const results = await Promise.all(batch.map(({ p }) => enrichPost(p)));
-          results.forEach((newPost, k) => { enriched[batch[k].i] = newPost; });
-        }
+        const hydrateOrganicComments = async () => {
+          setLoadingMessage('Cargando todos los comentarios y respuestas...');
+          await Promise.all([
+            mapConcurrent(igMedia, 4, async (post: any, index) => {
+              const expected = Number(post.comments_count || post.comments?.summary?.total_count || 0);
+              if (expected <= 0) return null;
+              try {
+                const fullComments = await metaAds.getAllInstagramMediaComments(post.id, fbPageId || undefined);
+                igMedia[index] = { ...post, comments: { ...(post.comments || {}), data: fullComments || [] } };
+                publishItems();
+              } catch { /* keep embedded comments */ }
+              return null;
+            }),
+            mapConcurrent(fbMedia, 4, async (post: any, index) => {
+              const expected = Number(post.comments?.summary?.total_count || 0);
+              if (expected <= 0) return null;
+              try {
+                const fullComments = await metaAds.getAllFacebookPostComments(post.id);
+                fbMedia[index] = { ...post, comments: { ...(post.comments || {}), data: fullComments || [] } };
+                publishItems();
+              } catch { /* keep embedded comments */ }
+              return null;
+            }),
+          ]);
+        };
 
+        await Promise.all([hydrateAdsComments(), hydrateOrganicComments()]);
         if (!active) return;
-
-        // Single render with the final state — no intermediate flashes.
-        setPosts(enriched);
-        const countFinal = enriched.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
-        setPendingCommentsCount(countFinal);
-        if (clientId) { try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(countFinal)); } catch { /* ignore */ } }
-        try { sessionStorage.setItem(`comentarios_cache_${clientId}`, JSON.stringify({ posts: enriched })); } catch { /* quota exceeded */ }
+        setLoadingMessage('Publicaciones actualizadas.');
+        publishItems({ updateNavbarCount: true, persistCache: true });
+        setCommentsScanComplete(true);
 
       } catch (err) {
         console.error('Error loading comments feed:', err);
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setSyncingComments(false);
+        }
       }
     };
 
@@ -581,55 +852,80 @@ export default function ComentariosPage() {
     return () => { active = false; };
   }, [clientId, igId, fbPageId, igUsername, metaAccountId, refreshKey, isCommentPending]);
 
-  // Sync sidebar badge when load completes — update count directly instead of a full API refetch
-  // Note: badge is also updated inline inside load() at each step for responsiveness
+  // Sync sidebar badge only when we have a complete comments scan.
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !syncingComments && commentsScanComplete) {
       const count = posts.reduce((sum, p) => sum + (p.pendingComments || 0), 0);
       setPendingCommentsCount(count);
       if (clientId) {
         try { localStorage.setItem(`car_pending_comments_count_${clientId}`, String(count)); } catch { /* ignore */ }
       }
     }
-  }, [loading, posts, setPendingCommentsCount, clientId]);
+  }, [loading, syncingComments, commentsScanComplete, posts, setPendingCommentsCount, clientId]);
 
-  // Background resolver for ad thumbnails and details in ComentariosPage
+  // Resolve full ad creative details (playable video/carousel/etc.) via /api/meta-video.
+  // A thumbnail alone (almost always present on the ad creative) isn't enough to play media —
+  // this fetches the actual video/carousel source for a given post on demand.
+  const resolveAdDetails = useCallback(async (post: PostItem) => {
+    const ad = post.raw;
+    if (!ad) return;
+
+    setResolvingIds(prev => ({ ...prev, [post.id]: true }));
+
+    const params = new URLSearchParams();
+    if (ad.id) params.set('adId', ad.id);
+    if (ad.creative?.id) params.set('creativeId', ad.creative.id);
+    if (ad.creative?.video_id) params.set('videoId', ad.creative.video_id);
+    if (clientId) params.set('clientId', clientId);
+    params.set('v', '3');
+
+    try {
+      const res = await fetch(`/api/meta-video?${params}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setResolvedDetails(prev => ({ ...prev, [post.id]: data }));
+        let thumbnail: string | null = null;
+        if (data.type === 'carousel' && data.cards?.[0]?.url) thumbnail = data.cards[0].url;
+        else if ((data.type === 'video_source' || data.type === 'ad_preview') && data.picture) thumbnail = data.picture;
+        else if (data.type === 'image' && data.url) thumbnail = data.url;
+        if (thumbnail) {
+          setResolvedThumbnails(prev => ({ ...prev, [post.id]: thumbnail! }));
+        }
+      }
+    } catch (err) {
+      console.error("Error resolving ad thumbnail in ComentariosPage:", err);
+    } finally {
+      setResolvingIds(prev => { const next = { ...prev }; delete next[post.id]; return next; });
+    }
+  }, [clientId]);
+
+  // Background resolver for ad thumbnails in the list view — only for ads that don't already
+  // have one. Full creative media (video/carousel) for a specific post is resolved on open,
+  // see resolveAdDetails call in openPost().
   useEffect(() => {
     const adsToResolve = posts.filter(p => p.isAd && !p.thumbnail && !resolvedDetails[p.id] && !resolvingIds[p.id]);
     if (adsToResolve.length === 0) return;
+    adsToResolve.forEach(post => resolveAdDetails(post));
+  }, [posts, resolvedDetails, resolvingIds, resolveAdDetails]);
 
-    adsToResolve.forEach(async (post) => {
-      const ad = post.raw;
-      if (!ad) return;
-      
-      setResolvingIds(prev => ({ ...prev, [post.id]: true }));
-      
-      const params = new URLSearchParams();
-      if (ad.id) params.set('adId', ad.id);
-      if (ad.creative?.id) params.set('creativeId', ad.creative.id);
-      if (ad.creative?.video_id) params.set('videoId', ad.creative.video_id);
-      if (clientId) params.set('clientId', clientId);
-
-      try {
-        const res = await fetch(`/api/meta-video?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          setResolvedDetails(prev => ({ ...prev, [post.id]: data }));
-          let thumbnail: string | null = null;
-          if (data.type === 'carousel' && data.cards?.[0]?.url) thumbnail = data.cards[0].url;
-          else if ((data.type === 'video_source' || data.type === 'ad_preview') && data.picture) thumbnail = data.picture;
-          else if (data.type === 'image' && data.url) thumbnail = data.url;
-          if (thumbnail) {
-            setResolvedThumbnails(prev => ({ ...prev, [post.id]: thumbnail! }));
-          }
-        }
-      } catch (err) {
-        console.error("Error resolving ad thumbnail in ComentariosPage:", err);
-      } finally {
-        setResolvingIds(prev => { const next = { ...prev }; delete next[post.id]; return next; });
-      }
-    });
-  }, [posts, clientId, resolvedDetails, resolvingIds]);
+  // Follow Meta API pagination cursors to fetch all comment pages
+  const fetchAllCommentPages = async (
+    firstFn: () => Promise<any>,
+    nextFn: (after: string) => Promise<any>,
+    maxPages = 15
+  ): Promise<any[]> => {
+    const all: any[] = [];
+    let res = await firstFn();
+    all.push(...(res.data || []));
+    let page = 1;
+    while (res.paging?.next && res.paging?.cursors?.after && page < maxPages) {
+      res = await nextFn(res.paging.cursors.after);
+      if (!res.data?.length) break;
+      all.push(...res.data);
+      page++;
+    }
+    return all;
+  };
 
   // Open post slide-over — reload comments from API for freshness
   const openPost = async (post: PostItem) => {
@@ -641,7 +937,12 @@ export default function ComentariosPage() {
     setLikedIds({});
     setPlayingVideoId(null);
     setCommentFilter('pending');
-    setMobileTab('comments'); // always land on comments tab on mobile
+
+    // Resolve full creative media (video/carousel) immediately so it's playable in the panel,
+    // even though the list already had a static thumbnail for this ad.
+    if (post.isAd && !resolvedDetails[post.id] && !resolvingIds[post.id]) {
+      resolveAdDetails(post);
+    }
 
     // Always fetch fresh IG permalink and normalize to /p/ format (avoids reel player redirect)
     if (post.platform === 'instagram') {
@@ -671,6 +972,7 @@ export default function ComentariosPage() {
 
       const normalizeComment = (c: any, idx: number) => ({
         ...c,
+        _ignored: !!ignoredIds[c.id],
         username: resolveName(c, `Usuario ${idx + 1}`),
         text: c.text || c.message || '',
         timestamp: c.timestamp || c.created_time || new Date().toISOString(),
@@ -690,59 +992,24 @@ export default function ComentariosPage() {
           : { data: [] },
       });
 
-      // Helper: for each top-level comment, fetch its replies explicitly if the
-      // inline expansion came back empty. Meta sometimes drops nested replies
-      // depending on the token / permissions, which would make answered comments
-      // look pending.
-      const fillReplies = async (list: any[], platform: 'instagram' | 'facebook') => {
-        return Promise.all(list.map(async (c: any) => {
-          const hasReplies = (c.replies?.data?.length || 0) > 0;
-          if (hasReplies) return c;
-          try {
-            const r = platform === 'facebook'
-              ? await metaAds.getFacebookCommentReplies(c.id, fbPageId || undefined)
-              : await metaAds.getInstagramCommentReplies(c.id, fbPageId || undefined);
-            const data = r.data || [];
-            if (data.length === 0) return c;
-            return { ...c, replies: { data } };
-          } catch {
-            return c;
-          }
-        }));
-      };
-
       if (post.isAd) {
-        const res = await metaAds.getAdCreativeCommentsAll(post.id, post.platform, fbPageId || undefined);
-        const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
-        const withReplies = await fillReplies(filtered, post.platform);
-        const fresh = withReplies.map(normalizeComment);
+        const allData = await metaAds.getAllAdCreativeComments(post.id, post.platform, fbPageId || undefined);
+        const fresh = allData
+          .filter((c: any) => !isFromPage(c))
+          .map(normalizeComment);
         setComments(fresh);
-        const realPending = fresh.filter((c: any) => isCommentPending(c, post.platform)).length;
-        setPosts(prev => prev.map(p => p.id === post.id
-          ? { ...p, pendingComments: realPending, totalComments: fresh.length, comments: fresh }
-          : p));
       } else if (post.platform === 'instagram') {
-        const res = await metaAds.getInstagramMediaCommentsAll(post.id, fbPageId || undefined);
-        const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
-        const withReplies = await fillReplies(filtered, 'instagram');
-        const fresh = withReplies.map(normalizeComment);
+        const allData = await metaAds.getAllInstagramMediaComments(post.id, fbPageId || undefined);
+        const fresh = allData
+          .filter((c: any) => !isFromPage(c))
+          .map(normalizeComment);
         setComments(fresh);
-        const realPending = fresh.filter((c: any) => isCommentPending(c, 'instagram')).length;
-        setPosts(prev => prev.map(p => p.id === post.id
-          ? { ...p, pendingComments: realPending, totalComments: fresh.length, comments: fresh }
-          : p));
       } else {
-        const res = await metaAds.getFacebookPostCommentsAll(post.id);
-        const filtered = (res.data || []).filter((c: any) => !isFromPage(c));
-        const withReplies = await fillReplies(filtered, 'facebook');
-        const fresh = withReplies.map(normalizeComment);
+        const allData = await metaAds.getAllFacebookPostComments(post.id);
+        const fresh = allData
+          .filter((c: any) => !isFromPage(c))
+          .map(normalizeComment);
         setComments(fresh);
-
-        // Sync the card-level pending count with the real state we just discovered.
-        const realPending = fresh.filter((c: any) => isCommentPending(c, 'facebook')).length;
-        setPosts(prev => prev.map(p => p.id === post.id
-          ? { ...p, pendingComments: realPending, totalComments: fresh.length, comments: fresh }
-          : p));
 
         // Batch lookup names for FB users where from.name was null
         if (fbPageId) {
@@ -786,6 +1053,7 @@ export default function ComentariosPage() {
   // Generate AI draft for one comment
   const generateDraft = async (comment: any, replyTarget?: any) => {
     if (!selectedPost || !clientId) return;
+    if (!aiReady) { gate(() => generateDraft(comment, replyTarget)); return; }
     const target = replyTarget || comment;
     const text = target.text || target.message || '';
     // _forceLang comes from clicking a specific flag in the dropdown
@@ -816,7 +1084,10 @@ export default function ComentariosPage() {
           forceLang: lang,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'No se pudo generar el borrador.');
+      }
       const data = await res.json();
       if (data.draft) {
         let draftText = data.draft;
@@ -838,8 +1109,10 @@ export default function ComentariosPage() {
   // Bulk generate drafts for all pending
   const bulkGenerateDrafts = async () => {
     if (!selectedPost || !clientId) return;
-    setBulkLoading(true);
+    if (!aiReady) { gate(() => bulkGenerateDrafts()); return; }
     const pending = comments.filter(c => isCommentPending(c, selectedPost.platform));
+    if (pending.length === 0) return;
+    setBulkLoading(true);
     
     // Auto-open reply textareas for all pending comments so drafts can be seen loading/suggested
     setOpenReplies(prev => {
@@ -850,7 +1123,13 @@ export default function ComentariosPage() {
       return copy;
     });
 
-    await Promise.all(pending.map(c => generateDraft(c)));
+    await Promise.all(pending.map(c => {
+      const target = getLatestPendingTarget(c);
+      setReplyLangs(prev => ({ ...prev, [c.id]: bulkDraftLang }));
+      return target.id === c.id
+        ? generateDraft({ ...c, _forceLang: bulkDraftLang })
+        : generateDraft(c, { ...target, _forceLang: bulkDraftLang });
+    }));
     setBulkLoading(false);
   };
 
@@ -861,13 +1140,12 @@ export default function ComentariosPage() {
     if (!text || !selectedPost) return;
 
     const localId = `local_${Date.now()}`;
-    const wasPending = isCommentPending(comment, selectedPost.platform);
     const newReply = {
       id: localId,
       username: igUsername || 'Yo',
       text,
       timestamp: new Date().toISOString(),
-      from: { id: selectedPost.platform === 'instagram' ? (igId || fbPageId) : fbPageId, name: 'Yo' },
+      from: { id: fbPageId, name: 'Yo' },
       isSending: true,
     };
 
@@ -909,17 +1187,14 @@ export default function ComentariosPage() {
         return { ...c, replies: { data: updatedReplies } };
       }));
 
-      // Update post pending count only if this comment was actually pending
-      if (wasPending) {
-        setPosts(prev => prev.map(p => {
-          if (p.id !== selectedPost.id) return p;
-          return { ...p, pendingComments: Math.max(0, p.pendingComments - 1) };
-        }));
-      }
-      // Note: no car_comments_update dispatch — the local setPosts triggers the
-      // useEffect that calls setPendingCommentsCount() on the shared context,
-      // which updates the sidebar badge instantly. Dispatching the event would
-      // refetch from Meta API, which lags behind and overwrites our local count.
+      // Update post pending count
+      setPosts(prev => prev.map(p => {
+        if (p.id !== selectedPost.id) return p;
+        return { ...p, pendingComments: Math.max(0, p.pendingComments - 1) };
+      }));
+
+      // Dispatch comments update to refresh sidebar badge
+      window.dispatchEvent(new Event('car_comments_update'));
     } catch (err: any) {
       // 3. On error: remove the optimistic reply and restore text
       setComments(prev => prev.map(c => {
@@ -954,6 +1229,27 @@ export default function ComentariosPage() {
     }
   };
 
+  const toggleIgnore = (commentId: string) => {
+    if (!clientId || !selectedPost) return;
+    let nextIgnored = false;
+    setIgnoredIds(prev => {
+      nextIgnored = !prev[commentId];
+      const next = { ...prev, [commentId]: nextIgnored };
+      if (!nextIgnored) delete next[commentId];
+      try { localStorage.setItem(`car_ignored_comments_${clientId}`, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    setComments(prev => {
+      const nextComments = prev.map(c => c.id === commentId ? { ...c, _ignored: nextIgnored } : c);
+      const pendingCount = nextComments.filter(c => isCommentPending({ ...c, _ignored: c.id === commentId ? nextIgnored : c._ignored }, selectedPost.platform)).length;
+      setPosts(curr => curr.map(p => p.id === selectedPost.id ? { ...p, pendingComments: pendingCount, comments: nextComments } : p));
+      return nextComments;
+    });
+    setReplyTexts(prev => { const next = { ...prev }; delete next[commentId]; return next; });
+    setOpenReplies(prev => ({ ...prev, [commentId]: false }));
+    window.dispatchEvent(new Event('car_comments_update'));
+  };
+
   const platformCounts = useMemo(() => {
     let all = 0;
     let instagram = 0;
@@ -981,14 +1277,40 @@ export default function ComentariosPage() {
     else if (platformFilter === 'facebook') list = list.filter(p => p.platform === 'facebook' && !p.isAd);
     else if (platformFilter === 'ads') list = list.filter(p => p.isAd);
     if (statusFilter === 'pending') list = list.filter(p => p.pendingComments > 0);
-    // Sort by post date (matches the order the user sees on IG / Facebook).
+    // Sort pending posts by the latest unanswered customer message, not by already-handled activity.
     list = [...list].sort((a, b) => {
-      const ta = new Date(a.timestamp).getTime();
-      const tb = new Date(b.timestamp).getTime();
-      return sortOrder === 'newest' ? tb - ta : ta - tb;
+      const toTime = (value: any) => {
+        const time = new Date(value || 0).getTime();
+        return Number.isFinite(time) ? time : 0;
+      };
+      const latestPostActivityTs = (post: PostItem) => {
+        const commentTimes = post.comments.map((c: any) => toTime(c.timestamp || c.created_time || post.timestamp));
+        return Math.max(toTime(post.timestamp), ...commentTimes);
+      };
+      const latestPendingTs = (post: PostItem) => {
+        const pendingTimes = post.comments
+          .filter((c: any) => isCommentPending(c, post.platform))
+          .map((c: any) => {
+            const target = getLatestPendingTarget(c);
+            return toTime(target?.timestamp || target?.created_time || c.timestamp || c.created_time || post.timestamp);
+          });
+        return pendingTimes.length ? Math.max(...pendingTimes) : 0;
+      };
+
+      const pendingA = latestPendingTs(a);
+      const pendingB = latestPendingTs(b);
+      if (pendingA || pendingB) {
+        if (!pendingA) return 1;
+        if (!pendingB) return -1;
+        return sortOrder === 'newest' ? pendingB - pendingA : pendingA - pendingB;
+      }
+
+      const activityA = latestPostActivityTs(a);
+      const activityB = latestPostActivityTs(b);
+      return sortOrder === 'newest' ? activityB - activityA : activityA - activityB;
     });
     return list;
-  }, [posts, platformFilter, statusFilter, sortOrder]);
+  }, [posts, platformFilter, statusFilter, sortOrder, isCommentPending, getLatestPendingTarget]);
 
   const totalPending = platformCounts.all;
 
@@ -1026,8 +1348,9 @@ export default function ComentariosPage() {
   }
 
   return (
-    <CenteredPageLoader isLoading={loading}>
-    <div className="space-y-6 w-full pt-6 px-4 md:px-6 lg:px-8 animate-in fade-in duration-300">
+    <CenteredPageLoader isLoading={loading} message={loadingMessage}>
+    {AIGate}
+    <div className="space-y-5 md:space-y-6 w-full pt-3 md:pt-6 animate-in fade-in duration-300">
       {/* Header */}
       <div className="page-header pb-4 border-b border-zinc-200/60 dark:border-zinc-800/60">
         <div>
@@ -1036,7 +1359,9 @@ export default function ComentariosPage() {
             Comentarios
           </h1>
           <p className="page-subtitle mt-1">
-            {totalPending > 0
+            {syncingComments
+              ? `${loadingMessage} El total del navbar se mantiene estable hasta terminar.`
+              : totalPending > 0
               ? `${totalPending} comentarios pendientes de respuesta en ${posts.filter(p => p.pendingComments > 0).length} publicaciones`
               : 'Todos los comentarios están respondidos'}
           </p>
@@ -1085,32 +1410,14 @@ export default function ComentariosPage() {
           })}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Status filter */}
-          <div className="flex items-center rounded-full border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-0.5">
-            {(['pending', 'all'] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black transition-all ${
-                  statusFilter === s
-                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
-                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
-                }`}
-              >
-                {s === 'pending' ? 'Pendientes' : 'Todos'}
-              </button>
-            ))}
-          </div>
-          {/* Sort toggle */}
-          <button
-            onClick={() => setSortOrder(o => o === 'newest' ? 'oldest' : 'newest')}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all"
-          >
-            {sortOrder === 'newest' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />}
-            {sortOrder === 'newest' ? 'Más reciente' : 'Más antiguo'}
-          </button>
-        </div>
+        {/* Sort toggle */}
+        <button
+          onClick={() => setSortOrder(o => o === 'newest' ? 'oldest' : 'newest')}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-all"
+        >
+          {sortOrder === 'newest' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />}
+          {sortOrder === 'newest' ? 'Más reciente' : 'Más antiguo'}
+        </button>
       </div>
 
       {/* Errors */}
@@ -1133,7 +1440,19 @@ export default function ComentariosPage() {
 
 
       {/* Content */}
-      {loading ? null : filteredPosts.length === 0 ? (
+      {loading ? null : filteredPosts.length === 0 && syncingComments ? (
+        <div className="bg-white dark:bg-zinc-900 border border-violet-200/70 dark:border-violet-900/50 rounded-3xl p-16 text-center max-w-md mx-auto space-y-4 shadow-sm">
+          <div className="w-16 h-16 bg-violet-50 dark:bg-violet-950/25 rounded-full flex items-center justify-center mx-auto">
+            <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+          </div>
+          <h3 className="font-black text-zinc-800 dark:text-zinc-200 text-[18px]">
+            Buscando comentarios pendientes
+          </h3>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
+            {loadingMessage}
+          </p>
+        </div>
+      ) : filteredPosts.length === 0 ? (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-16 text-center max-w-md mx-auto space-y-4 shadow-sm">
           <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/20 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
@@ -1146,7 +1465,7 @@ export default function ComentariosPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 max-[380px]:grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
           {filteredPosts.map(post => (
             <button
               key={post.id}
@@ -1156,7 +1475,7 @@ export default function ComentariosPage() {
               {/* Thumbnail */}
               <div className="aspect-square w-full bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
                 {(() => {
-                  const thumb = post.thumbnail || resolvedThumbnails[post.id];
+                  const thumb = resolvedThumbnails[post.id] || post.thumbnail;
                   if (thumb) {
                     return <SmoothImage src={thumb} alt="" containerClassName="w-full h-full" className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-500" />;
                   }
@@ -1225,10 +1544,11 @@ export default function ComentariosPage() {
 
       {/* === SLIDE-OVER: Comments detail (same as RedesSocialesPage) === */}
       {selectedPost && (
-        <div className="fixed inset-0 z-[400] flex justify-end animate-in fade-in duration-200">
+        <PortalOverlay>
+        <div className="fixed inset-0 z-[900] flex min-h-[100dvh] w-screen justify-end animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedPost(null)} />
 
-          <div className="relative w-full md:max-w-5xl h-full bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right transition-spring duration-300 z-10">
+          <div className="relative w-full md:max-w-5xl h-[100dvh] max-h-[100dvh] bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right transition-spring duration-300 z-10">
 
             {/* Header */}
             <div className="px-4 md:px-6 py-3 md:py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between flex-shrink-0 gap-2">
@@ -1241,9 +1561,9 @@ export default function ComentariosPage() {
                   {selectedPost.platform === 'instagram' ? <Instagram className="w-4 h-4" /> : <span className="font-black text-sm">f</span>}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-black text-zinc-900 dark:text-white text-[13px] md:text-[15px] leading-tight truncate">
-                    {selectedPost.platform === 'instagram' ? 'Instagram' : 'Facebook'}
-                  </h3>
+                  <p className="text-[11px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                    {selectedPost.isAd ? 'Anuncio' : 'Publicación'}
+                  </p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-zinc-400 font-bold">{fmtDate(selectedPost.timestamp)}</span>
                     {comments.filter(c => isCommentPending(c, selectedPost.platform)).length > 0 && (
@@ -1255,17 +1575,6 @@ export default function ComentariosPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
-                {/* Bulk drafts — compact on mobile, full on desktop */}
-                <button
-                  onClick={bulkGenerateDrafts}
-                  disabled={bulkLoading || comments.filter(c => isCommentPending(c, selectedPost.platform)).length === 0}
-                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/20 dark:hover:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-xl text-[11px] font-black border border-violet-100/50 dark:border-violet-900/20 transition-all disabled:opacity-50"
-                  title="Generar borradores para todos los pendientes"
-                >
-                  {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  <span className="hidden md:inline">Generar borradores para todos ({comments.filter(c => isCommentPending(c, selectedPost.platform)).length})</span>
-                  <span className="md:hidden">{comments.filter(c => isCommentPending(c, selectedPost.platform)).length > 0 && <span className="text-[10px] font-black">{comments.filter(c => isCommentPending(c, selectedPost.platform)).length}</span>}</span>
-                </button>
                 {selectedPost.permalink && (
                   <a href={selectedPost.permalink} target="_blank" rel="noreferrer"
                     title={selectedPost.permalink}
@@ -1280,44 +1589,86 @@ export default function ComentariosPage() {
               </div>
             </div>
 
-            {/* Mobile tab bar */}
-            <div className="md:hidden flex border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex-shrink-0">
+            {/* Mobile detail tabs */}
+            <div className="grid grid-cols-3 md:hidden border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex-shrink-0 px-2 py-2 gap-1">
               <button
-                onClick={() => setMobileTab('post')}
-                className={`flex-1 py-2.5 text-[12px] font-black transition-colors ${
-                  mobileTab === 'post'
-                    ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
-                    : 'text-zinc-500 dark:text-zinc-400'
-                }`}
+                onClick={() => setMobileDetailTab('post')}
+                className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'post' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
               >
-                Publicación
+                <ImageIcon className="w-3.5 h-3.5" />
+                Posteo
               </button>
               <button
-                onClick={() => setMobileTab('comments')}
-                className={`flex-1 py-2.5 text-[12px] font-black transition-colors flex items-center justify-center gap-1.5 ${
-                  mobileTab === 'comments'
+                onClick={() => { setMobileDetailTab('comments'); handleTabChange('comments'); }}
+                className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'comments' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                Comentarios
+                {!loadingComments && comments.length > 0 && (
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-white/20 dark:bg-zinc-900/20">{getCommentThreadCount(comments)}</span>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  const md = resolvedDetails[selectedPost.id];
+                  const imageUrl = md?.type === 'video_source' ? (md.picture || selectedPost.thumbnail || selectedPost.mediaUrl) :
+                    md?.type === 'image' ? md.url :
+                    md?.type === 'carousel' ? (md.cards?.[0]?.url || selectedPost.thumbnail) :
+                    selectedPost.thumbnail || selectedPost.mediaUrl;
+                  const isVid = md?.type === 'video_source' || selectedPost.mediaType === 'VIDEO';
+                  setMobileDetailTab('analysis');
+                  handleTabChange('metrics', imageUrl, isVid, md?.source || selectedPost.mediaUrl);
+                }}
+                className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'analysis' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
+              >
+                <Brain className="w-3.5 h-3.5" />
+                Análisis
+              </button>
+            </div>
+
+            {/* Desktop modal tabs */}
+            <div className="hidden md:grid grid-cols-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex-shrink-0">
+              <button
+                onClick={() => handleTabChange('comments')}
+                className={`px-1 py-2.5 text-[10px] sm:text-[12px] font-black leading-tight transition-colors flex items-center justify-center gap-1.5 ${
+                  slideTab === 'comments'
                     ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
                     : 'text-zinc-500 dark:text-zinc-400'
                 }`}
               >
                 Comentarios
                 {!loadingComments && comments.length > 0 && (
-                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400">{comments.length}</span>
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400">{getCommentThreadCount(comments)}</span>
                 )}
               </button>
+              <button
+                onClick={() => {
+                  const md = resolvedDetails[selectedPost.id];
+                  const imageUrl = md?.type === 'video_source' ? (md.picture || selectedPost.thumbnail || selectedPost.mediaUrl) :
+                    md?.type === 'image' ? md.url :
+                    md?.type === 'carousel' ? (md.cards?.[0]?.url || selectedPost.thumbnail) :
+                    selectedPost.thumbnail || selectedPost.mediaUrl;
+                  const isVid = md?.type === 'video_source' || selectedPost.mediaType === 'VIDEO';
+                  handleTabChange('metrics', imageUrl, isVid, md?.source || selectedPost.mediaUrl);
+                }}
+                className={`px-1 py-2.5 text-[10px] sm:text-[12px] font-black leading-tight transition-colors ${
+                  slideTab === 'metrics'
+                    ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
+                    : 'text-zinc-500 dark:text-zinc-400'
+                }`}
+              >Análisis de creativos</button>
             </div>
 
-            {/* Body: post preview + comments */}
-            <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
 
-              {/* Left: Post media + caption — hidden on mobile when comments tab active */}
-              <div className={`${
-                mobileTab === 'comments' ? 'hidden md:flex' : 'flex'
-              } md:w-[300px] flex-shrink-0 flex-col border-r border-zinc-100 dark:border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-50/30 dark:bg-zinc-950/10`}>
+            {/* Body: post preview + comments */}
+            <div className="flex flex-1 min-h-0 overflow-y-auto md:overflow-hidden flex-col md:flex-row">
+
+              {/* Left: Post media — always visible */}
+              <div className={`${mobileDetailTab === 'post' ? 'flex' : 'hidden'} md:flex md:w-[280px] flex-shrink-0 flex-col border-b md:border-b-0 md:border-r border-zinc-100 dark:border-zinc-800 p-3 md:p-4 max-h-none overflow-y-auto space-y-4 bg-zinc-50/30 dark:bg-zinc-950/10`}>
                 {/* Media */}
                 {(() => {
                   const mediaData = resolvedDetails[selectedPost.id];
-                  const displayThumb = selectedPost.thumbnail || resolvedThumbnails[selectedPost.id] || '';
+                  const displayThumb = resolvedThumbnails[selectedPost.id] || selectedPost.thumbnail || '';
 
                   if (selectedPost.isAd && mediaData) {
                     if (mediaData.type === 'video_source') {
@@ -1336,15 +1687,27 @@ export default function ComentariosPage() {
                       );
                     }
                     if (mediaData.type === 'carousel' && mediaData.cards?.length > 0) {
-                      const firstCard = mediaData.cards[0];
+                      const card = mediaData.cards[panelCarouselIndex];
                       return (
-                        <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-100 dark:bg-zinc-900 w-full">
-                          <SmoothImage
-                            src={firstCard.url || displayThumb}
-                            alt=""
-                            containerClassName="w-full h-full"
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-black w-full aspect-square shrink-0 relative flex items-center justify-center">
+                          {card.isVideo && card.videoSrc ? (
+                            <video src={card.videoSrc} poster={card.url || undefined} controls preload="none" playsInline {...{ referrerPolicy: 'no-referrer' }} className="w-full h-full object-contain bg-black" />
+                          ) : card.url ? (
+                            <SmoothImage src={card.url} alt={card.name || `Slide ${panelCarouselIndex + 1}`} containerClassName="w-full h-full bg-zinc-950" className="object-contain" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-zinc-900"><ImageIcon className="w-8 h-8 text-zinc-600" /></div>
+                          )}
+                          {mediaData.cards.length > 1 && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex((panelCarouselIndex - 1 + mediaData.cards.length) % mediaData.cards.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex((panelCarouselIndex + 1) % mediaData.cards.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronRight className="w-3.5 h-3.5" /></button>
+                              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-full flex gap-1">
+                                {mediaData.cards.map((_: any, idx: number) => (
+                                  <button key={idx} onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex(idx); }} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === panelCarouselIndex ? 'bg-white scale-125' : 'bg-white/40'}`} />
+                                ))}
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     }
@@ -1366,12 +1729,52 @@ export default function ComentariosPage() {
                           <SmoothImage
                             src={mediaData.url}
                             alt=""
-                            containerClassName="w-full h-full"
-                            className="w-full h-full object-cover"
+                            containerClassName="w-full aspect-square bg-black"
+                            className="object-contain"
                           />
                         </div>
                       );
                     }
+                  }
+
+                  const socialCarousel = selectedPost.platform === 'instagram'
+                    ? ((selectedPost.raw?.children?.data || []) as any[])
+                        .map((child: any) => ({
+                          url: child.media_url || child.thumbnail_url || null,
+                          poster: child.thumbnail_url || child.media_url || null,
+                          type: child.media_type || 'IMAGE',
+                        }))
+                        .filter((child: any) => child.url || child.poster)
+                    : ((selectedPost.raw?.attachments?.data || []) as any[])
+                        .flatMap((att: any) => att.subattachments?.data?.length ? att.subattachments.data : [])
+                        .map((att: any) => ({
+                          url: att.media?.image?.src || att.media?.source || att.url || null,
+                          poster: att.media?.image?.src || null,
+                          type: String(att.type || '').toUpperCase().includes('VIDEO') ? 'VIDEO' : 'IMAGE',
+                        }))
+                        .filter((att: any) => att.url || att.poster);
+                  if (socialCarousel.length > 0) {
+                    const card = socialCarousel[panelCarouselIndex] || socialCarousel[0];
+                    return (
+                      <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-black w-full aspect-square shrink-0 relative flex items-center justify-center">
+                        {card.type === 'VIDEO' ? (
+                          <video src={card.url || undefined} poster={card.poster || undefined} controls preload="none" playsInline {...{ referrerPolicy: 'no-referrer' }} className="w-full h-full object-contain bg-black" />
+                        ) : (
+                          <SmoothImage src={card.url || card.poster || ''} alt="" containerClassName="w-full h-full bg-zinc-950" className="object-contain" />
+                        )}
+                        {socialCarousel.length > 1 && (
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex((panelCarouselIndex - 1 + socialCarousel.length) % socialCarousel.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex((panelCarouselIndex + 1) % socialCarousel.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronRight className="w-3.5 h-3.5" /></button>
+                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-full flex gap-1">
+                              {socialCarousel.map((_: any, idx: number) => (
+                                <button key={idx} onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex(idx); }} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === panelCarouselIndex ? 'bg-white scale-125' : 'bg-white/40'}`} />
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
                   }
 
                   if (displayThumb || selectedPost.mediaUrl) {
@@ -1379,10 +1782,10 @@ export default function ComentariosPage() {
                       <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm bg-zinc-100 dark:bg-zinc-900 w-full">
                         {selectedPost.mediaType === 'VIDEO' ? (
                           playingVideoId === selectedPost.id ? (
-                            <video src={selectedPost.mediaUrl || displayThumb || ''} controls autoPlay {...{ referrerPolicy: "no-referrer" }} className="w-full max-h-64 object-contain bg-black" />
+                            <video src={selectedPost.mediaUrl || displayThumb || ''} controls autoPlay {...{ referrerPolicy: "no-referrer" }} className="w-full max-h-[38dvh] md:max-h-64 object-contain bg-black" />
                           ) : (
                             <div className="relative cursor-pointer" onClick={() => setPlayingVideoId(selectedPost.id)}>
-                              <img src={displayThumb || ''} alt="" referrerPolicy="no-referrer" className="w-full max-h-64 object-cover" />
+                              <img src={displayThumb || ''} alt="" referrerPolicy="no-referrer" className="w-full max-h-[38dvh] md:max-h-64 object-contain bg-black" />
                               <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                                 <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
                                   <Play className="w-6 h-6 fill-zinc-900 text-zinc-900 ml-1" />
@@ -1391,7 +1794,7 @@ export default function ComentariosPage() {
                             </div>
                           )
                         ) : (
-                          <img src={displayThumb || selectedPost.mediaUrl || ''} alt="" referrerPolicy="no-referrer" className="w-full max-h-64 object-cover" loading="lazy" />
+                          <img src={displayThumb || selectedPost.mediaUrl || ''} alt="" referrerPolicy="no-referrer" className="w-full max-h-[38dvh] md:max-h-64 object-contain bg-black" loading="lazy" />
                         )}
                       </div>
                     );
@@ -1400,35 +1803,117 @@ export default function ComentariosPage() {
                   return null;
                 })()}
 
-                {/* Caption */}
-                {selectedPost.caption && (
-                  <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl">
-                    <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Descripción</p>
-                    <p className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">{selectedPost.caption}</p>
-                  </div>
-                )}
-
-                {/* Stats */}
-                <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
-                  <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Comentarios</p>
-                  <div className="flex items-center justify-between text-[12px] font-bold">
-                    <span className="text-zinc-600 dark:text-zinc-400">Total</span>
-                    <span className="text-zinc-900 dark:text-white">{comments.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[12px] font-bold">
-                    <span className="text-amber-600 dark:text-amber-400">Sin responder</span>
-                    <span className="text-amber-600 dark:text-amber-400">{comments.filter(c => isCommentPending(c, selectedPost.platform)).length}</span>
+                {/* Caption + stats: always below the media */}
+                <div className="space-y-3">
+                  {selectedPost.caption && (
+                    <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl">
+                      <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Descripción</p>
+                      <p className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">{selectedPost.caption}</p>
+                    </div>
+                  )}
+                  <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
+                    <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Comentarios</p>
+                    <div className="flex items-center justify-between text-[12px] font-bold">
+                      <span className="text-zinc-600 dark:text-zinc-400">Total</span>
+                      <span className="text-zinc-900 dark:text-white">{getCommentThreadCount(comments)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[12px] font-bold">
+                      <span className="text-amber-600 dark:text-amber-400">Sin responder</span>
+                      <span className="text-amber-600 dark:text-amber-400">{comments.filter(c => isCommentPending(c, selectedPost.platform)).length}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Right: Comments list — hidden on mobile when post tab active */}
-              <div className={`${
-                mobileTab === 'post' ? 'hidden md:flex' : 'flex'
-              } flex-1 overflow-y-auto flex-col`}>
-                {/* Filter toggle */}
+              {/* Right: comments | analysis */}
+              <div className={`${mobileDetailTab === 'post' ? 'hidden' : 'flex'} md:flex flex-1 min-h-[calc(100dvh-126px)] md:min-h-0 overflow-visible md:overflow-hidden flex-col`}>
+                {slideTab === 'metrics' ? (
+                  <div className="flex-1 overflow-visible md:overflow-y-auto px-4 pt-4 pb-24 md:px-5 md:pt-5 md:pb-12 scroll-pb-24 md:scroll-pb-12 space-y-5">
+                    {analyzingTribe ? (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-4">
+                        <div className="relative w-20 h-20">
+                          <div className="absolute inset-0 rounded-full border-4 border-violet-200 dark:border-violet-900" />
+                          <div className="absolute inset-0 rounded-full border-4 border-t-violet-600 animate-spin" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Brain className="w-7 h-7 text-violet-500 animate-pulse" />
+                          </div>
+                        </div>
+                        <p className="text-[13px] font-bold text-zinc-700 dark:text-zinc-350">Analizando creativo con IA...</p>
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Procesando el creativo real</p>
+                      </div>
+                    ) : analysisError ? (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3 text-center">
+                        <div className="w-14 h-14 rounded-full bg-amber-50 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center">
+                          <AlertCircle className="w-7 h-7 text-amber-500" />
+                        </div>
+                        <p className="text-[13px] font-black text-zinc-800 dark:text-zinc-200">No se pudo analizar con IA</p>
+                        <p className="max-w-sm text-[12px] text-zinc-500 dark:text-zinc-400">{analysisError}</p>
+                      </div>
+                    ) : !tribeResult ? (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3 text-center">
+                        <Brain className="w-8 h-8 text-violet-500" />
+                        <p className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Abrí el análisis para procesar este creativo con IA.</p>
+                      </div>
+                    ) : (() => {
+                      const metrics = tribeResult;
+                      const displayTimeline = timeline.length > 0
+                        ? timeline
+                        : genTimeline(metrics.attentionPct, metrics.emotionPct, metrics.cogLoad, metrics.score, analysisDurationSec);
+                      return (
+                        <div className="space-y-5 text-left animate-in fade-in duration-200">
+                          {/* Score global */}
+                          <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-zinc-800/60 rounded-2xl flex items-center gap-4">
+                            <div className={`w-16 h-16 rounded-full flex flex-col items-center justify-center shadow-lg font-black text-white shrink-0 ${scoreCls(metrics.score)}`}>
+                              <span className="text-[20px] leading-none">{metrics.score}</span>
+                              <span className="text-[8px] opacity-75">/100</span>
+                            </div>
+                            <div>
+                              <h4 className="text-[13.5px] font-black text-zinc-800 dark:text-zinc-150">{scoreLabel(metrics.score)}</h4>
+                              <p className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-1">
+                                Región dominante: <span className="font-bold text-violet-600 dark:text-violet-400">{metrics.highestRegion}</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Barras de Métricas */}
+                          <div className="p-5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-zinc-800/60 rounded-2xl space-y-4">
+                            <MetricBar label="Atención" value={metrics.attentionPct} color={metrics.attentionPct >= 75 ? 'bg-emerald-500' : metrics.attentionPct >= 60 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.attentionReason} />
+                            <MetricBar label="Emoción" value={metrics.emotionPct} color={metrics.emotionPct >= 70 ? 'bg-emerald-500' : metrics.emotionPct >= 50 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.emotionReason} />
+                            <MetricBar label="Carga Cognitiva" value={metrics.cogLoad} color={metrics.cogLoad <= 30 ? 'bg-emerald-500' : metrics.cogLoad <= 50 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.cogLoadReason} />
+                          </div>
+
+                          {/* Curva de Respuesta */}
+                          <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <p className="text-[11px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Curva de Respuesta ({formatDuration(analysisDurationSec)})</p>
+                              <div className="flex items-center gap-3 text-[9px] font-bold text-zinc-400">
+                                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded-full" />Atención</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-violet-500 inline-block rounded-full" />Emoción</span>
+                                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400 inline-block rounded-full" />Impacto</span>
+                              </div>
+                            </div>
+                            <div className="h-[140px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={displayTimeline} margin={{ left: -15, right: 4, top: 4, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" className="dark:[stroke:rgba(255,255,255,0.04)]" />
+                                  <XAxis dataKey="t" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={v => `${v}s`} />
+                                  <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} width={22} />
+                                  <Line type="monotone" dataKey="attn" name="Atención" stroke="#10b981" strokeWidth={2} dot={false} />
+                                  <Line type="monotone" dataKey="emot" name="Emoción" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                                  <Line type="monotone" dataKey="impact" name="Impacto" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                      <div className="flex flex-col flex-1 min-h-0 overflow-visible md:overflow-hidden">
+                    {/* Filter toggle */}
                 {!loadingComments && comments.length > 0 && (
-                  <div className="flex items-center gap-1 px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
+                  <div className="flex flex-wrap md:flex-nowrap items-center gap-1 px-4 md:px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
                     <button
                       onClick={() => setCommentFilter('pending')}
                       className={`flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] font-black transition-all ${
@@ -1460,12 +1945,34 @@ export default function ComentariosPage() {
                           ? 'bg-white/15 dark:bg-zinc-900/20 text-white dark:text-zinc-900'
                           : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
                       }`}>
-                        {comments.length}
+                        {getCommentThreadCount(comments)}
                       </span>
                     </button>
+                    {(() => {
+                      const suggestionsCount = comments.filter(c => isCommentPending(c, selectedPost!.platform)).length;
+                      return suggestionsCount > 0 && (
+                        <div className="ml-0 sm:ml-auto flex flex-wrap items-center gap-1.5">
+                          <button
+                            onClick={bulkGenerateDrafts}
+                            disabled={bulkLoading}
+                            className="flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-black transition-all shadow-sm shadow-violet-500/20 cursor-pointer"
+                          >
+                            {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                            <span>Sugerir con Ia ({suggestionsCount})</span>
+                          </button>
+                          <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
+                            {LANGS.map(l => (
+                              <button key={l.code} type="button" onClick={() => setBulkDraftLang(l.code)} className={`px-2 py-1 text-[10px] font-black rounded-md transition-all ${bulkDraftLang === l.code ? 'bg-white dark:bg-zinc-700 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
+                                {l.code.toUpperCase()}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
-                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                <div className="flex-1 overflow-visible md:overflow-y-auto px-4 pt-4 pb-24 md:px-5 md:pt-5 md:pb-12 scroll-pb-24 md:scroll-pb-12 space-y-4">
                 {loadingComments ? (
                   <AppleLoader variant="table" count={4} />
                 ) : comments.length === 0 ? (
@@ -1480,6 +1987,7 @@ export default function ComentariosPage() {
                       new Date(b.timestamp || b.created_time || 0).getTime() -
                       new Date(a.timestamp || a.created_time || 0).getTime()
                     ).map(comment => {
+                    const isIgnored = !!(comment._ignored || ignoredIds[comment.id]);
                     const isPending = isCommentPending(comment, selectedPost.platform);
                     const liked = !!likedIds[comment.id];
                     const replyOpen = !!openReplies[comment.id];
@@ -1504,12 +2012,16 @@ export default function ComentariosPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {isPending && (
+                              {isIgnored ? (
+                                <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 uppercase">
+                                  Ignorado
+                                </span>
+                              ) : isPending && (
                                 <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 uppercase">
                                   Pendiente
                                 </span>
                               )}
-                              {!isPending && (
+                              {!isIgnored && !isPending && (
                                 <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase">
                                   Respondido
                                 </span>
@@ -1585,8 +2097,8 @@ export default function ComentariosPage() {
 
                           {/* Action buttons */}
                           <div className="mt-3 ml-9 flex items-center gap-2">
-                            <button
-                              onClick={() => {
+	                            <button
+	                              onClick={() => {
                                 const nextOpen = !replyOpen;
                                 setOpenReplies(prev => ({ ...prev, [comment.id]: nextOpen }));
                                 if (nextOpen) {
@@ -1598,10 +2110,19 @@ export default function ComentariosPage() {
                                 }
                               }}
                               className="text-[11px] font-black text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 transition-colors"
-                            >
-                              {replyOpen ? 'Cancelar' : 'Responder'}
-                            </button>
-                          </div>
+	                            >
+	                              {replyOpen ? 'Cancelar' : 'Responder'}
+	                            </button>
+	                            <button
+	                              type="button"
+	                              onClick={() => toggleIgnore(comment.id)}
+	                              className={`text-[11px] font-black transition-colors ${isIgnored ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}
+	                              title={isIgnored ? 'Volver a marcar como pendiente si corresponde' : 'Ignorar comentario'}
+	                            >
+	                              <EyeOff className="w-3.5 h-3.5 inline mr-1" />
+	                              {isIgnored ? 'No ignorar' : 'Ignorar'}
+	                            </button>
+	                          </div>
 
                           {/* Reply box */}
                           {replyOpen && (
@@ -1704,9 +2225,12 @@ export default function ComentariosPage() {
                 )}
                 </div>
               </div>
+            )}
+            </div>
             </div>
           </div>
         </div>
+        </PortalOverlay>
       )}
     </div>
     </CenteredPageLoader>

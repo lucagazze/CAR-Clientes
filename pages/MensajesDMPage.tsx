@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useAIGate } from '../hooks/useAIGate';
 import {
   Instagram, Loader2, RefreshCw, AlertCircle, Inbox, Sparkles, Send,
   Search, MessageSquare, Clock, CheckCheck, ChevronsUp, Facebook, Check, X
@@ -39,6 +40,7 @@ type ConvItem = {
 };
 
 export default function MensajesDMPage() {
+  const { gate, isReady: aiReady, AIGate } = useAIGate();
   const { isViewingAs, viewAsProfile } = useViewAs();
   const { profile: authProfile, user, session } = useAuth();
   const profile      = isViewingAs ? viewAsProfile : authProfile;
@@ -579,6 +581,7 @@ export default function MensajesDMPage() {
   // ── AI draft ───────────────────────────────────────────────────
   const generateDraft = async () => {
     if (!selectedConv || !clientId) return;
+    if (!aiReady) { gate(() => generateDraft()); return; }
     setLoadingDraft(true);
     setReplyError(null);
     try {
@@ -603,7 +606,10 @@ export default function MensajesDMPage() {
           isDM: true,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'No se pudo generar el borrador.');
+      }
       const data = await res.json();
       if (data.draft) setReplyText(data.draft);
     } catch {
@@ -740,6 +746,7 @@ export default function MensajesDMPage() {
   // ── Render ─────────────────────────────────────────────────────
   return (
     <CenteredPageLoader isLoading={loading}>
+    {AIGate}
     <div className="flex flex-col h-full w-full max-w-none animate-in fade-in duration-300">
 
       {/* Header */}

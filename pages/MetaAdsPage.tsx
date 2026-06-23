@@ -1,10 +1,13 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import DOMPurify from 'dompurify';
+import { useAIGate } from '../hooks/useAIGate';
 import { metaAds, today, presetToRange, DatePreset } from '../services/metaAds';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 import { AppleLoader } from '../components/ui/AppleLoader';
+import { PortalOverlay } from '../components/ui/PortalOverlay';
 import SmoothImage from '../components/ui/SmoothImage';
 import { db } from '../services/db';
 import { supabase } from '../services/supabase';
@@ -12,7 +15,7 @@ import { supabase } from '../services/supabase';
 import {
   Layers, Film, X, Loader2, ImageIcon, ChevronLeft, ChevronRight, Calendar, ChevronDown,
   Instagram, MessageCircle, Heart, Send, Sparkles, ArrowUpRight, Play, Facebook,
-  Share2, Eye, MousePointerClick, Users,
+  Share2, Eye, MousePointerClick, Users, Brain, AlertTriangle, EyeOff
 } from 'lucide-react';
 
 // ── AutoResizeTextarea ────────────────────────────────────────────────────────
@@ -32,6 +35,81 @@ const AutoResizeTextarea = React.forwardRef<HTMLTextAreaElement, AutoResizeTexta
 );
 AutoResizeTextarea.displayName = 'AutoResizeTextarea';
 
+const scoreCls = (score: number) =>
+  score >= 80 ? 'bg-emerald-500 text-white shadow-emerald-200 dark:shadow-none' :
+  score >= 60 ? 'bg-amber-500 text-white shadow-amber-200 dark:shadow-none' :
+  'bg-red-500 text-white shadow-red-200 dark:shadow-none';
+
+const scoreLabel = (score: number) =>
+  score >= 80 ? 'Listo para escalar' : score >= 60 ? 'Requiere ajustes' : 'Revisar antes de pautar';
+
+const clampDuration = (seconds?: number | null) => {
+  const n = Number(seconds);
+  return Number.isFinite(n) && n > 0 ? Math.max(1, Math.min(900, Math.round(n))) : 30;
+};
+
+const formatDuration = (seconds?: number | null) => {
+  const total = clampDuration(seconds);
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${minutes}:${String(secs).padStart(2, '0')}`;
+};
+
+const getRemoteVideoDuration = (url?: string | null): Promise<number> => {
+  if (!url) return Promise.resolve(0);
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    let done = false;
+    const finish = (value = 0) => {
+      if (done) return;
+      done = true;
+      video.removeAttribute('src');
+      video.load();
+      resolve(value);
+    };
+    const timer = window.setTimeout(() => finish(0), 5000);
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.onloadedmetadata = () => {
+      window.clearTimeout(timer);
+      finish(Number.isFinite(video.duration) ? video.duration : 0);
+    };
+    video.onerror = () => {
+      window.clearTimeout(timer);
+      finish(0);
+    };
+    video.src = url;
+  });
+};
+
+const genTimeline = (attn: number, emot: number, cogLoad: number, seed: number, durationSec = 30) => {
+  const duration = clampDuration(durationSec);
+  const attnOff = [0.22, 0.28, 0.10, -0.04, -0.10, 0.00, 0.06, -0.02, 0.04, -0.04];
+  const emotOff = [-0.28, -0.18, -0.05, 0.05, 0.10, 0.05, 0.03, 0.12, 0.02, -0.03];
+  return attnOff.map((ao, i) => {
+    const a = Math.max(8, Math.min(99, Math.round(attn * (1 + ao) + ((seed * 3 + i * 7) % 8) - 4)));
+    const e = Math.max(8, Math.min(99, Math.round(emot * (1 + emotOff[i]) + ((seed * 5 + i * 11) % 8) - 4)));
+    const imp = Math.max(8, Math.min(99, Math.round(a * 0.4 + e * 0.4 + (100 - cogLoad) * 0.2)));
+    return { t: Math.round(i * duration / (attnOff.length - 1)), attn: a, emot: e, impact: imp };
+  });
+};
+
+const MetricBar = ({ label, value, color, reason }: { label: string; value: number; color: string; reason?: string }) => (
+  <div>
+    <div className="flex items-center justify-between mb-1">
+      <span className="text-[11px] font-bold text-zinc-650 dark:text-zinc-400 uppercase tracking-wider">{label}</span>
+      <span className="text-[13px] font-black text-zinc-900 dark:text-white">{value}%</span>
+    </div>
+    <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+      <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${value}%` }} />
+    </div>
+    {reason && <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-snug">{reason}</p>}
+  </div>
+);
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SelectedAd = {
   ad: any;
@@ -45,6 +123,7 @@ type SelectedAd = {
 };
 
 export default function MetaAdsPage() {
+  const { gate, isReady: aiReady, AIGate } = useAIGate();
   const { profile: authProfile, loading: authLoading, user } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
@@ -60,6 +139,7 @@ export default function MetaAdsPage() {
   const [adInsightsMap, setAdInsightsMap] = useState<Record<string, any>>({});
   const [campaignMap, setCampaignMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [resolvedThumbnails, setResolvedThumbnails] = useState<Record<string, string>>({});
   const [resolvedDetails, setResolvedDetails] = useState<Record<string, any>>({});
@@ -97,12 +177,103 @@ export default function MetaAdsPage() {
   const [replyErrors, setReplyErrors] = useState<Record<string, string | null>>({});
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({});
+  const [ignoredIds, setIgnoredIds] = useState<Record<string, boolean>>({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [commentFilter, setCommentFilter] = useState<'all' | 'pending'>('pending');
   const [replyLangs, setReplyLangs] = useState<Record<string, 'en' | 'es'>>({});
+  const [bulkDraftLang, setBulkDraftLang] = useState<'es' | 'en'>('es');
   const [langDropdownOpen, setLangDropdownOpen] = useState<Record<string, boolean>>({});
   const [activeReplyTargets, setActiveReplyTargets] = useState<Record<string, any>>({});
-  const [mobileTab, setMobileTab] = useState<'post' | 'comments' | 'stats'>('post');
+
+  const [slideTab, setSlideTab] = useState<'comments' | 'metrics'>('comments');
+  const [mobileDetailTab, setMobileDetailTab] = useState<'post' | 'comments' | 'analysis'>('post');
+  const [analyzingTribe, setAnalyzingTribe] = useState(false);
+  const [tribeResult, setTribeResult] = useState<any>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [analysisDurationSec, setAnalysisDurationSec] = useState(30);
+
+  useEffect(() => {
+    if (selectedAd) {
+      setSlideTab('comments');
+      setMobileDetailTab('post');
+      setAnalyzingTribe(false);
+      setTribeResult(null);
+      setAnalysisError(null);
+      setTimeline([]);
+      setAnalysisDurationSec(30);
+    }
+  }, [selectedAd]);
+
+  useEffect(() => {
+    if (!clientId) {
+      setIgnoredIds({});
+      return;
+    }
+    try {
+      setIgnoredIds(JSON.parse(localStorage.getItem(`car_ignored_comments_${clientId}`) || '{}'));
+    } catch {
+      setIgnoredIds({});
+    }
+  }, [clientId]);
+
+  const analyzeCreativeUrl = async (imageUrl: string | null, isVideo: boolean): Promise<any> => {
+    if (!imageUrl) throw new Error('No hay imagen disponible para analizar.');
+    let frame: string | null = null;
+    try {
+      const r = await fetch(imageUrl);
+      if (r.ok) {
+        const blob = await r.blob();
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const canvas = document.createElement('canvas');
+        const img = document.createElement('img');
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = b64; });
+        const scale = Math.min(1, 256 / Math.max(img.width, 1));
+        canvas.width = Math.floor(img.width * scale);
+        canvas.height = Math.floor(img.height * scale);
+        canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        frame = canvas.toDataURL('image/jpeg', 0.6);
+      }
+    } catch {
+      frame = null;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || '';
+    const res = await fetch('/api/scrape-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ type: 'analyze-creative', frames: frame ? [frame] : [], imageUrl, isVideo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || data.error || 'No se pudo analizar el creativo con IA.');
+    const score = Math.max(0, Math.min(100, Math.round((Number(data.attentionPct || 0) * 0.4) + (Number(data.emotionPct || 0) * 0.4) + ((100 - Number(data.cogLoad || 0)) * 0.2))));
+    return { ...data, score };
+  };
+
+  const handleTabChange = async (tab: 'comments' | 'metrics', imageUrl?: string, isVideo?: boolean, videoUrl?: string | null) => {
+    if (tab === 'metrics') {
+      setAnalyzingTribe(true);
+      setTribeResult(null);
+      setAnalysisError(null);
+      setSlideTab('metrics');
+      const durationSec = isVideo ? clampDuration(await getRemoteVideoDuration(videoUrl)) : 30;
+      setAnalysisDurationSec(durationSec);
+      analyzeCreativeUrl(imageUrl || null, isVideo || false)
+        .then(result => {
+          setTribeResult(result);
+          setTimeline(genTimeline(result.attentionPct, result.emotionPct, result.cogLoad, result.score, durationSec));
+        })
+        .catch(err => setAnalysisError(err?.message || 'No se pudo analizar el creativo con IA.'))
+        .finally(() => setAnalyzingTribe(false));
+    } else {
+      setSlideTab('comments');
+    }
+  };
   const [panelCarouselIndex, setPanelCarouselIndex] = useState(0);
   const [panelPlayingVideo, setPanelPlayingVideo] = useState(false);
   const [lifetimeInsights, setLifetimeInsights] = useState<any | null>(null);
@@ -156,6 +327,7 @@ export default function MetaAdsPage() {
   }, [igUsername, igId, fbPageId, metaAccountId]);
 
   const isCommentPending = useCallback((comment: any, _platform: 'instagram' | 'facebook') => {
+    if (comment?._ignored || ignoredIds[comment?.id]) return false;
     if (isFromPage(comment)) return false;
     const replies = comment.replies?.data || [];
     if (replies.length === 0) return true;
@@ -163,6 +335,19 @@ export default function MetaAdsPage() {
       new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
     );
     return !isFromPage(sorted[sorted.length - 1]);
+  }, [isFromPage, ignoredIds]);
+
+  const getCommentThreadCount = (list: any[]) =>
+    list.reduce((total, c) => total + 1 + (c.replies?.data?.length || 0), 0);
+
+  const getLatestPendingTarget = useCallback((comment: any) => {
+    const replies = comment.replies?.data || [];
+    if (replies.length === 0) return comment;
+    const sorted = [...replies].sort((a: any, b: any) =>
+      new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
+    );
+    const latest = sorted[sorted.length - 1];
+    return isFromPage(latest) ? comment : latest;
   }, [isFromPage]);
 
   // Switch platform tab and reset reply UI
@@ -255,22 +440,37 @@ export default function MetaAdsPage() {
       return;
     }
     setLoading(true);
+    setFetchError(null);
     setResolvedThumbnails({}); setResolvedDetails({}); setResolvingIds({});
     const tr = { since: since || activeSince, until: until || activeUntil };
     const adFields = 'ad_id,spend,impressions,reach,inline_link_click_ctr,inline_link_clicks,actions,cost_per_action_type,action_values,purchase_roas,video_30_sec_watched_actions,video_p100_watched_actions';
     Promise.all([
-      metaAds.getAccountAds(accountId).catch((err) => { console.error("Error fetching account ads:", err); return { data: [] }; }),
+      metaAds.getAccountAds(accountId).catch((err) => {
+        console.error("Error fetching account ads:", err);
+        setFetchError(err?.message || 'No se pudo conectar con la API de Meta.');
+        return { data: [] };
+      }),
       metaAds.getAdInsightsForAccount(accountId, adFields, tr).catch(() => []),
       metaAds.getCampaigns(accountId).catch(() => ({ data: [] })),
     ]).then(([adsRes, insightsRes, campsRes]) => {
-      setActiveAds((adsRes.data || []).filter((ad: any) => ad.status === 'ACTIVE'));
+      const spentAdIds = new Set(
+        (insightsRes || [])
+          .filter((i: any) => parseFloat(i.spend || '0') > 0)
+          .map((i: any) => i.ad_id)
+          .filter(Boolean)
+      );
+      const adsWithSpend = (adsRes.data || []).filter((ad: any) => spentAdIds.has(ad.id));
+      setActiveAds(adsWithSpend.length > 0 ? adsWithSpend : (adsRes.data || []));
       const byAdId: Record<string, any> = {};
       (insightsRes || []).forEach((i: any) => { if (i.ad_id) byAdId[i.ad_id] = i; });
       setAdInsightsMap(byAdId);
       const cMap: Record<string, string> = {};
       ((campsRes as any).data || []).forEach((c: any) => { if (c.id) cMap[c.id] = c.name; });
       setCampaignMap(cMap);
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch((err) => {
+      console.error(err);
+      setFetchError(err?.message || 'No se pudo conectar con la API de Meta.');
+    }).finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchAds(activeSince, activeUntil); }, [profile?.id, activeSince, activeUntil]);
@@ -282,9 +482,13 @@ export default function MetaAdsPage() {
     if (ad.creative?.id) params.set('creativeId', ad.creative.id);
     if (ad.creative?.video_id) params.set('videoId', ad.creative.video_id);
     if (clientId) params.set('clientId', clientId);
+    params.set('v', '3');
     try {
-      const res = await fetch(`/api/meta-video?${params}`);
-      if (!res.ok) throw new Error();
+      const res = await fetch(`/api/meta-video?${params}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'No se pudo resolver el creativo.');
+      }
       const data = await res.json();
       let thumbnail: string | null = null;
       if (data.type === 'carousel' && data.cards?.[0]?.url) thumbnail = data.cards[0].url;
@@ -345,7 +549,7 @@ export default function MetaAdsPage() {
     setActiveCommentPlatform(initialPlatform);
     setLoadingByPlatform({ instagram: !!igStoryId, facebook: !!fbStoryId });
     setOpenReplies({}); setReplyTexts({}); setReplyErrors({}); setLikedIds({});
-    setCommentFilter('pending'); setMobileTab('comments');
+    setCommentFilter('pending');
     setPanelCarouselIndex(0); setPanelPlayingVideo(false);
     setLifetimeInsights(null); setLoadingLifetime(true);
     metaAds.getAdLifetimeInsights(ad.id)
@@ -359,6 +563,7 @@ export default function MetaAdsPage() {
 
     const normalizeComment = (c: any, idx: number) => ({
       ...c,
+      _ignored: !!ignoredIds[c.id],
       username: resolveName(c, `Usuario ${idx + 1}`),
       text: c.text || c.message || '',
       timestamp: c.timestamp || c.created_time || new Date().toISOString(),
@@ -378,8 +583,8 @@ export default function MetaAdsPage() {
 
     const fetchForPlatform = async (storyId: string, platform: 'instagram' | 'facebook') => {
       try {
-        const res = await metaAds.getAdCreativeComments(storyId, platform, fbPageId || undefined);
-        const fresh = (res.data || []).filter((c: any) => !isFromPage(c)).map(normalizeComment);
+        const data = await metaAds.getAllAdCreativeComments(storyId, platform, fbPageId || undefined);
+        const fresh = (data || []).filter((c: any) => !isFromPage(c)).map(normalizeComment);
         setCommentsByPlatform(prev => ({ ...prev, [platform]: fresh }));
       } catch { /* keep empty */ } finally {
         setLoadingByPlatform(prev => ({ ...prev, [platform]: false }));
@@ -413,6 +618,7 @@ export default function MetaAdsPage() {
   // ── AI draft ─────────────────────────────────────────────────────────────────
   const generateDraft = async (comment: any, replyTarget?: any) => {
     if (!selectedAd || !clientId) return;
+    if (!aiReady) { gate(() => generateDraft(comment, replyTarget)); return; }
     const target = replyTarget || comment;
     const text = target.text || target.message || '';
     const lang: 'en' | 'es' = target._forceLang || replyLangs[comment.id] || detectLang(text);
@@ -432,7 +638,10 @@ export default function MetaAdsPage() {
           postPlatform: activeCommentPlatform, forceLang: lang,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'No se pudo generar el borrador.');
+      }
       const data = await res.json();
       if (data.draft) {
         let draftText = data.draft;
@@ -452,10 +661,18 @@ export default function MetaAdsPage() {
   // ── Bulk generate drafts ─────────────────────────────────────────────────────
   const bulkGenerateDrafts = async () => {
     if (!selectedAd || !clientId) return;
-    setBulkLoading(true);
+    if (!aiReady) { gate(() => bulkGenerateDrafts()); return; }
     const pending = comments.filter(c => isCommentPending(c, activeCommentPlatform));
+    if (pending.length === 0) return;
+    setBulkLoading(true);
     setOpenReplies(prev => { const copy = { ...prev }; pending.forEach(c => { copy[c.id] = true; }); return copy; });
-    await Promise.all(pending.map(c => generateDraft(c)));
+    await Promise.all(pending.map(c => {
+      const target = getLatestPendingTarget(c);
+      setReplyLangs(prev => ({ ...prev, [c.id]: bulkDraftLang }));
+      return target.id === c.id
+        ? generateDraft({ ...c, _forceLang: bulkDraftLang })
+        : generateDraft(c, { ...target, _forceLang: bulkDraftLang });
+    }));
     setBulkLoading(false);
   };
 
@@ -523,6 +740,24 @@ export default function MetaAdsPage() {
     } catch { /* silent */ }
   };
 
+  const toggleIgnore = (commentId: string) => {
+    if (!clientId) return;
+    let nextIgnored = false;
+    setIgnoredIds(prev => {
+      nextIgnored = !prev[commentId];
+      const next = { ...prev, [commentId]: nextIgnored };
+      if (!nextIgnored) delete next[commentId];
+      try { localStorage.setItem(`car_ignored_comments_${clientId}`, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    setCommentsByPlatform(prev => ({
+      ...prev,
+      [activeCommentPlatform]: prev[activeCommentPlatform].map(c => c.id === commentId ? { ...c, _ignored: nextIgnored } : c),
+    }));
+    setReplyTexts(prev => { const next = { ...prev }; delete next[commentId]; return next; });
+    setOpenReplies(prev => ({ ...prev, [commentId]: false }));
+  };
+
   // ── Misc helpers ─────────────────────────────────────────────────────────────
   const fmtN = (n: any) => { const v = parseInt(n); if (isNaN(v)) return '—'; if (v >= 1000) return `${(v / 1000).toFixed(1)}K`; return String(v); };
   const accountId = metaAccountId;
@@ -530,7 +765,8 @@ export default function MetaAdsPage() {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <CenteredPageLoader isLoading={loading || authLoading}>
-      <div className="w-full animate-fade-in pb-20 pt-6 px-2 md:px-4 lg:px-6">
+      {AIGate}
+      <div className="w-full animate-fade-in pb-20 pt-3 md:pt-6">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -544,34 +780,127 @@ export default function MetaAdsPage() {
             </div>
           </div>
 
-          {/* Date presets toggle chips */}
-          <div className="flex gap-1.5 flex-wrap" ref={datePickerRef}>
-            {[
-              { id: 'today', label: 'Hoy' },
-              { id: 'last_7d', label: 'Últimos 7 días' },
-              { id: 'last_14d', label: 'Últimos 14 días' },
-              { id: 'last_28d', label: 'Últimos 28 días' },
-            ].map(p => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  const r = presetToRange(p.id as any);
-                  setActivePreset(p.id as any);
-                  setActiveSince(r.since);
-                  setActiveUntil(r.until);
-                }}
-                className={`px-3.5 py-1.5 rounded-full text-[13px] md:text-[11px] font-bold transition-all relative flex items-center justify-center ${
-                  activePreset === p.id
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none'
-                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-650 dark:text-zinc-350 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                }`}
-              >
-                {p.id === activePreset && loading && activeAds.length > 0 ? (
-                  <Loader2 className="w-3.5 h-3.5 text-white animate-spin mr-1.5" />
-                ) : null}
-                {p.label}
-              </button>
-            ))}
+          {/* Date Picker (unifying design with CaptacionPage) */}
+          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-sm h-9 md:h-10 relative z-50" ref={datePickerRef}>
+            <button 
+              onClick={() => {
+                if (!showDatePicker) {
+                  setPendingPreset(activePreset);
+                  setPendingSince(activeSince);
+                  setPendingUntil(activeUntil);
+                }
+                setShowDatePicker(!showDatePicker);
+              }} 
+              className="flex items-center gap-1.5 px-3 h-7 md:h-8 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-full transition-all group text-[11px] md:text-[12.5px]"
+            >
+              {loading && activeAds.length > 0 ? (
+                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+              ) : (
+                <Calendar className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
+              )}
+              <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200 whitespace-nowrap">
+                {activePreset === 'custom' ? (activeSince === activeUntil ? fmtD(activeSince) : `${fmtD(activeSince)} - ${fmtD(activeUntil)}`) : PRESETS.find(p => p.id === activePreset)?.label || activePreset}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
+            </button>
+            {showDatePicker && (
+              <div className="absolute left-auto right-0 top-full mt-3 bg-white dark:bg-zinc-900 rounded-[20px] border border-black/[0.08] dark:border-white/[0.08] shadow-2xl z-50 flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200 w-[290px] sm:w-[320px] md:w-auto origin-top-right">
+                <div className="w-full md:w-[180px] border-b md:border-b-0 md:border-r border-zinc-50 dark:border-zinc-800 p-2 md:p-3 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible scrollbar-hide">
+                  {PRESETS.map(p => (
+                    <button 
+                      key={p.id} 
+                      onClick={() => { 
+                        const r = presetToRange(p.id as any); 
+                        setPendingPreset(p.id as any); 
+                        setPendingSince(r.since); 
+                        setPendingUntil(r.until); 
+                      }} 
+                      className={`flex-shrink-0 text-center md:text-left px-2.5 py-1 md:px-3 md:py-1.5 rounded-[10px] text-[12px] font-bold transition-all whitespace-nowrap ${pendingPreset === p.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="px-1.5 py-4 md:p-5 flex flex-col items-center md:items-stretch">
+                  <div className="flex flex-col md:flex-row gap-4 md:gap-8">
+                    <MiniCal 
+                      year={calYear} 
+                      month={calMonth} 
+                      since={pendingSince} 
+                      until={pendingUntil} 
+                      hovering={hovering} 
+                      onDay={(iso: string) => { 
+                        setPendingPreset('custom'); 
+                        if (!pendingSince || (pendingSince && pendingUntil)) { 
+                          setPendingSince(iso); 
+                          setPendingUntil(''); 
+                        } else { 
+                          if (iso < pendingSince) { 
+                            setPendingUntil(pendingSince); 
+                            setPendingSince(iso); 
+                          } else { 
+                            setPendingUntil(iso); 
+                          } 
+                        } 
+                      }} 
+                      onHover={setHovering} 
+                      onPrev={() => { 
+                        if (calMonth === 0) { 
+                          setCalYear(calYear - 1); 
+                          setCalMonth(11); 
+                        } else { 
+                          setCalMonth(calMonth - 1); 
+                        } 
+                      }} 
+                      onNext={() => { 
+                        if (calMonth === 11) { 
+                          setCalYear(calYear + 1); 
+                          setCalMonth(0); 
+                        } else { 
+                          setCalMonth(calMonth + 1); 
+                        } 
+                      }} 
+                    />
+                    <div className="hidden md:block">
+                      <MiniCal 
+                        year={calMonth === 11 ? calYear + 1 : calYear} 
+                        month={calMonth === 11 ? 0 : calMonth + 1} 
+                        since={pendingSince} 
+                        until={pendingUntil} 
+                        hovering={hovering} 
+                        onDay={(iso: string) => { 
+                          setPendingPreset('custom'); 
+                          if (!pendingSince || (pendingSince && pendingUntil)) { 
+                            setPendingSince(iso); 
+                            setPendingUntil(''); 
+                          } else { 
+                            if (iso < pendingSince) { 
+                              setPendingUntil(pendingSince); 
+                              setPendingSince(iso); 
+                            } else { 
+                              setPendingUntil(iso); 
+                            } 
+                          } 
+                        }} 
+                        onHover={setHovering} 
+                        onNext={() => { 
+                          if (calMonth === 11) { 
+                            setCalYear(calYear + 1); 
+                            setCalMonth(0); 
+                          } else { 
+                            setCalMonth(calMonth + 1); 
+                          } 
+                        }} 
+                      />
+                    </div>
+                  </div>
+                  <div className="w-full flex justify-end gap-2 mt-4 pt-4 border-t border-zinc-50 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                    <button onClick={() => setShowDatePicker(false)} className="px-4 h-9 rounded-xl text-[11px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-1.5">Cancelar</button>
+                    <button onClick={handleApplyDate} className="px-4 h-9 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90 flex items-center justify-center gap-1.5">Aplicar</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -599,20 +928,29 @@ export default function MetaAdsPage() {
           </div>
         )}
 
+        {/* Fetch error */}
+        {accountId && !loading && fetchError && (
+          <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><AlertTriangle className="w-7 h-7 text-red-500" /></div>
+            <p className="text-[15px] font-semibold text-red-600 dark:text-red-400">No se pudieron cargar los anuncios</p>
+            <p className="text-[13px] text-zinc-400 max-w-md">{fetchError}</p>
+            <button onClick={() => fetchAds(activeSince, activeUntil)} className="mt-2 px-4 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[12px] font-black shadow-sm hover:opacity-90 transition-all">Reintentar</button>
+          </div>
+        )}
+
         {/* No ads */}
-        {accountId && !loading && activeAds.length === 0 && (
+        {accountId && !loading && !fetchError && activeAds.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
             <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center"><Layers className="w-7 h-7 text-zinc-400" /></div>
             <p className="text-[15px] font-semibold text-zinc-500">No hay anuncios activos</p>
-            <p className="text-[13px] text-zinc-400">No se encontraron anuncios con estado ACTIVE en esta cuenta.</p>
+            <p className="text-[13px] text-zinc-400">No se encontraron anuncios activos ni anuncios con gasto en el período seleccionado.</p>
           </div>
         )}
 
         {/* Ads grid */}
         {accountId && activeAds.length > 0 && (() => {
-          const adsWithSpend = activeAds.filter(ad => parseFloat(adInsightsMap[ad.id]?.spend || 0) > 0);
           const grouped: Record<string, { campaignName: string; ads: any[] }> = {};
-          adsWithSpend.forEach(ad => {
+          activeAds.forEach(ad => {
             const cid = ad.campaign_id || 'other';
             const cname = campaignMap[cid] || 'Sin campaña';
             if (!grouped[cid]) grouped[cid] = { campaignName: cname, ads: [] };
@@ -634,10 +972,6 @@ export default function MetaAdsPage() {
             const spendB = b[1].ads.reduce((sum, ad) => sum + parseFloat(adInsightsMap[ad.id]?.spend || 0), 0);
             return spendB - spendA;
           });
-
-          if (sortedGroupedEntries.length === 0) return (
-            <p className="text-sm text-zinc-400 text-center py-16">Hay {activeAds.length} anuncios activos pero sin gasto registrado en el período seleccionado.</p>
-          );
 
           return (
             <div className={`space-y-10 transition-opacity duration-200 ${isDateReloading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
@@ -771,17 +1105,18 @@ export default function MetaAdsPage() {
           const hasBothPlatforms = !!(selectedAd.igStoryId && selectedAd.fbStoryId);
           const activePermalink = activeCommentPlatform === 'instagram' ? selectedAd.igPermalink : selectedAd.fbPermalink;
 
-          const igTotal = commentsByPlatform.instagram.length;
-          const fbTotal = commentsByPlatform.facebook.length;
+          const igTotal = getCommentThreadCount(commentsByPlatform.instagram);
+          const fbTotal = getCommentThreadCount(commentsByPlatform.facebook);
           const igPending = commentsByPlatform.instagram.filter(c => isCommentPending(c, 'instagram')).length;
           const fbPending = commentsByPlatform.facebook.filter(c => isCommentPending(c, 'facebook')).length;
           const ltTotalComments = igTotal + fbTotal;
 
           return (
-            <div className="fixed inset-0 z-[400] flex justify-end animate-in fade-in duration-200">
+            <PortalOverlay>
+            <div className="fixed inset-0 z-[900] flex min-h-[100dvh] w-screen justify-end animate-in fade-in duration-200">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedAd(null)} />
 
-              <div className="relative w-full md:max-w-5xl h-full bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 z-10">
+              <div className="relative w-full md:max-w-5xl h-[100dvh] max-h-[100dvh] bg-white dark:bg-[#0d0d11] border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 z-10">
 
                 {/* Header */}
                 <div className="px-4 md:px-6 py-3 md:py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between flex-shrink-0 gap-2">
@@ -790,7 +1125,7 @@ export default function MetaAdsPage() {
                       {activeCommentPlatform === 'instagram' ? <Instagram className="w-4 h-4" /> : <Facebook className="w-4 h-4" />}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-black text-zinc-900 dark:text-white text-[13px] md:text-[15px] leading-tight truncate">{selectedAd.name || 'Anuncio'}</h3>
+	                      <p className="text-[11px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Anuncio</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Anuncio activo</span>
                         {!loadingComments && pendingCount > 0 && (
@@ -800,15 +1135,6 @@ export default function MetaAdsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={bulkGenerateDrafts}
-                      disabled={bulkLoading || pendingCount === 0}
-                      className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/20 dark:hover:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-xl text-[11px] font-black border border-violet-100/50 dark:border-violet-900/20 transition-all disabled:opacity-50"
-                    >
-                      {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                      <span className="hidden md:inline">Generar borradores ({pendingCount})</span>
-                      <span className="md:hidden">{pendingCount > 0 && <span className="text-[10px] font-black">{pendingCount}</span>}</span>
-                    </button>
                     {activePermalink && (
                       <a href={activePermalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 p-1.5 md:px-3 md:py-1.5 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl text-[11px] text-zinc-600 dark:text-zinc-300 font-bold border border-zinc-200 dark:border-zinc-700 transition-all">
                         <ArrowUpRight className="w-3.5 h-3.5" />
@@ -819,77 +1145,73 @@ export default function MetaAdsPage() {
                   </div>
                 </div>
 
-                {/* Mobile tab bar */}
-                <div className="md:hidden flex border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex-shrink-0">
-                  <button onClick={() => setMobileTab('post')} className={`flex-1 py-2.5 text-[12px] font-black transition-colors ${mobileTab === 'post' ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500' : 'text-zinc-500 dark:text-zinc-400'}`}>Anuncio</button>
-                  <button onClick={() => setMobileTab('comments')} className={`flex-1 py-2.5 text-[12px] font-black transition-colors flex items-center justify-center gap-1.5 ${mobileTab === 'comments' ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
-                    Comentarios
-                    {!loadingComments && comments.length > 0 && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400">{comments.length}</span>}
-                  </button>
-                  <button onClick={() => setMobileTab('stats')} className={`flex-1 py-2.5 text-[12px] font-black transition-colors ${mobileTab === 'stats' ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500' : 'text-zinc-500 dark:text-zinc-400'}`}>Rendimiento</button>
-                </div>
+	                {/* Mobile detail tabs */}
+	                <div className="grid grid-cols-3 md:hidden border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex-shrink-0 px-2 py-2 gap-1">
+	                  <button
+	                    onClick={() => setMobileDetailTab('post')}
+	                    className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'post' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
+	                  >
+	                    <ImageIcon className="w-3.5 h-3.5" />
+	                    Posteo
+	                  </button>
+	                  <button
+	                    onClick={() => { setMobileDetailTab('comments'); handleTabChange('comments'); }}
+	                    className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'comments' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
+	                  >
+	                    <MessageCircle className="w-3.5 h-3.5" />
+	                    Comentarios
+	                    {!loadingComments && comments.length > 0 && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-white/20 dark:bg-zinc-900/20">{getCommentThreadCount(comments)}</span>}
+	                  </button>
+	                  <button
+	                    onClick={() => {
+	                      const md = resolvedDetails[selectedAd.adId];
+	                      const imageUrl = md?.type === 'video_source' ? (md.picture || thumbUrl) :
+	                        md?.type === 'image' ? md.url :
+	                        md?.type === 'carousel' ? (md.cards?.[0]?.url || thumbUrl) :
+	                        thumbUrl;
+	                      setMobileDetailTab('analysis');
+	                      handleTabChange('metrics', imageUrl, md?.type === 'video_source', md?.source);
+	                    }}
+	                    className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'analysis' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
+	                  >
+	                    <Brain className="w-3.5 h-3.5" />
+	                    Análisis
+	                  </button>
+	                </div>
 
-                {/* Rendimiento pane — mobile only, stats tab */}
-                {mobileTab === 'stats' && (
-                  <div className="flex-1 md:hidden overflow-y-auto p-5 space-y-4">
-                    {insights && (
-                      <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
-                        <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2">Rendimiento</p>
-                        {[
-                          { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
-                          { label: 'Compras', val: purchases > 0 ? String(purchases) : '—', highlight: purchases > 0 },
-                          { label: 'Leads', val: leads > 0 ? String(leads) : '—', highlight: leads > 0 },
-                          { label: 'Mensajes', val: msgs > 0 ? String(msgs) : '—', highlight: msgs > 0 },
-                          { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
-                          { label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : '—', highlight: adRoas > 1 },
-                          { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—' },
-                          { label: 'Alcance', val: fmtN(adReach) },
-                        ].map(({ label, val, highlight }: any) => (
-                          <div key={label} className="flex items-center justify-between text-[12px] font-bold">
-                            <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
-                            <span className={highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-white'}>{val}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
-                      <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Comentarios</p>
-                      {selectedAd.igStoryId && (
-                        <button onClick={() => { switchCommentPlatform('instagram'); setMobileTab('comments'); }} className={`w-full flex items-center justify-between text-[12px] font-bold rounded-lg px-2 py-1.5 transition-all ${activeCommentPlatform === 'instagram' ? 'bg-pink-50 dark:bg-pink-950/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
-                          <span className="flex items-center gap-1.5 text-pink-500"><Instagram className="w-3 h-3" /> Instagram</span>
-                          <span className="flex items-center gap-1.5">
-                            {loadingByPlatform.instagram ? <Loader2 className="w-3 h-3 animate-spin text-zinc-400" /> : <span className="text-zinc-900 dark:text-white">{igTotal}</span>}
-                            {igPending > 0 && <span className="text-[9px] font-black px-1 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{igPending} pend.</span>}
-                          </span>
-                        </button>
-                      )}
-                      {selectedAd.fbStoryId && (
-                        <button onClick={() => { switchCommentPlatform('facebook'); setMobileTab('comments'); }} className={`w-full flex items-center justify-between text-[12px] font-bold rounded-lg px-2 py-1.5 transition-all ${activeCommentPlatform === 'facebook' ? 'bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
-                          <span className="flex items-center gap-1.5 text-blue-500"><Facebook className="w-3 h-3" /> Facebook</span>
-                          <span className="flex items-center gap-1.5">
-                            {loadingByPlatform.facebook ? <Loader2 className="w-3 h-3 animate-spin text-zinc-400" /> : <span className="text-zinc-900 dark:text-white">{fbTotal}</span>}
-                            {fbPending > 0 && <span className="text-[9px] font-black px-1 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{fbPending} pend.</span>}
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
+	                {/* Desktop modal tabs */}
+	                <div className="hidden md:grid grid-cols-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex-shrink-0">
+	                  <button onClick={() => handleTabChange('comments')} className={`px-1 py-2.5 text-[10px] sm:text-[12px] font-black leading-tight transition-colors flex items-center justify-center gap-1.5 ${slideTab === 'comments' ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
+	                    Comentarios
+	                    {!loadingComments && comments.length > 0 && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400">{getCommentThreadCount(comments)}</span>}
+	                  </button>
+	                  <button
+	                    onClick={() => {
+	                      const md = resolvedDetails[selectedAd.adId];
+	                      const imageUrl = md?.type === 'video_source' ? (md.picture || thumbUrl) :
+	                        md?.type === 'image' ? md.url :
+	                        md?.type === 'carousel' ? (md.cards?.[0]?.url || thumbUrl) :
+	                        thumbUrl;
+	                      handleTabChange('metrics', imageUrl, md?.type === 'video_source', md?.source);
+	                    }}
+	                    className={`px-1 py-2.5 text-[10px] sm:text-[12px] font-black leading-tight transition-colors ${slideTab === 'metrics' ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500' : 'text-zinc-500 dark:text-zinc-400'}`}
+	                  >Análisis de creativos</button>
+	                </div>
 
                 {/* Body */}
-                <div className={`${mobileTab === 'stats' ? 'hidden md:grid' : 'flex-1 overflow-hidden grid'} grid-cols-1 md:grid-cols-2 h-full`}>
+                <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden grid grid-cols-1 md:grid-cols-5 auto-rows-max md:auto-rows-auto">
 
-                  {/* Left: creative + info (50%) */}
-                  <div className={`${mobileTab !== 'post' ? 'hidden md:flex' : 'flex'} flex-col border-r border-zinc-100 dark:border-zinc-800 p-5 overflow-y-auto space-y-4 bg-zinc-50/15 dark:bg-zinc-950/10 h-full`}>
+                  {/* Left: creative + info (40%) — always visible */}
+	                  <div className={`${mobileDetailTab === 'post' ? 'flex' : 'hidden'} md:flex md:col-span-2 flex-col border-b md:border-b-0 md:border-r border-zinc-100 dark:border-zinc-800 p-3 md:p-4 max-h-none overflow-y-auto space-y-3 bg-zinc-50/15 dark:bg-zinc-950/10 md:h-full`}>
 
-                    {/* Creative — mismo patrón que RedesSociales */}
+                    {/* Creative */}
                     {(!mediaData || resolvingIds[selectedAd.adId]) ? (
-                      <div className="rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 aspect-[4/5] w-full flex-shrink-0 flex flex-col items-center justify-center gap-2">
+                      <div className="rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 aspect-square w-full flex-shrink-0 flex flex-col items-center justify-center gap-2">
                         <Loader2 className="w-5 h-5 text-violet-500 animate-spin" />
                         <span className="text-[10px] text-zinc-400 font-bold">Cargando creativo...</span>
                       </div>
                     ) : mediaData.type === 'video_source' ? (
-                      <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm w-full aspect-[4/5] flex-shrink-0 relative flex items-center justify-center">
+                      <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm w-full aspect-square flex-shrink-0 relative flex items-center justify-center">
                         <video
                           src={mediaData.source || undefined}
                           poster={mediaData.picture || thumbUrl || undefined}
@@ -903,30 +1225,32 @@ export default function MetaAdsPage() {
                     ) : mediaData.type === 'carousel' && mediaData.cards?.length > 0 ? (() => {
                       const card = mediaData.cards[panelCarouselIndex];
                       return (
-                        <div className="rounded-2xl overflow-hidden border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm w-full">
-                          <div className="relative aspect-[4/5] bg-zinc-50 dark:bg-zinc-950">
-                            {card.isVideo && card.videoSrc ? (
-                              <video src={card.videoSrc} poster={card.url || undefined} controls preload="none" playsInline {...{ referrerPolicy: 'no-referrer' }} className="absolute inset-0 w-full h-full object-contain bg-black" />
-                            ) : card.url ? (
-                              <SmoothImage src={card.url} alt={card.name || `Slide ${panelCarouselIndex + 1}`} containerClassName="absolute inset-0 w-full h-full bg-zinc-950" className="object-contain" />
-                            ) : (
-                              <div className="absolute inset-0 flex items-center justify-center"><ImageIcon className="w-8 h-8 text-zinc-300 dark:text-zinc-600" /></div>
-                            )}
-                            {mediaData.cards.length > 1 && (
-                              <>
-                                <button onClick={() => { setPanelCarouselIndex((panelCarouselIndex - 1 + mediaData.cards.length) % mediaData.cards.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronLeft className="w-4 h-4" /></button>
-                                <button onClick={() => { setPanelCarouselIndex((panelCarouselIndex + 1) % mediaData.cards.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronRight className="w-4 h-4" /></button>
-                              </>
-                            )}
-                          </div>
+                        <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm w-full aspect-square flex-shrink-0 relative flex items-center justify-center">
+                          {card.isVideo && card.videoSrc ? (
+                            <video src={card.videoSrc} poster={card.url || undefined} controls preload="none" playsInline {...{ referrerPolicy: 'no-referrer' }} className="w-full h-full object-contain bg-black" />
+                          ) : card.url ? (
+                            <SmoothImage src={card.url} alt={card.name || `Slide ${panelCarouselIndex + 1}`} containerClassName="w-full h-full bg-zinc-950" className="object-contain" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-zinc-900"><ImageIcon className="w-8 h-8 text-zinc-300 dark:text-zinc-600" /></div>
+                          )}
                           {mediaData.cards.length > 1 && (
-                            <div className="flex justify-center gap-1.5 py-2.5 bg-zinc-50 dark:bg-zinc-950">
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex((panelCarouselIndex - 1 + mediaData.cards.length) % mediaData.cards.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronLeft className="w-4 h-4" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex((panelCarouselIndex + 1) % mediaData.cards.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronRight className="w-4 h-4" /></button>
+                            </>
+                          )}
+                          {mediaData.cards.length > 1 && (
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full flex gap-1.5">
                               {mediaData.cards.map((_: any, idx: number) => (
-                                <button key={idx} onClick={() => setPanelCarouselIndex(idx)} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === panelCarouselIndex ? 'bg-violet-500 scale-125' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+                                <button key={idx} onClick={(e) => { e.stopPropagation(); setPanelCarouselIndex(idx); }} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === panelCarouselIndex ? 'bg-white scale-125' : 'bg-white/40'}`} />
                               ))}
                             </div>
                           )}
-                          {card.name && <p className="px-3 pb-2.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 text-center truncate bg-zinc-50 dark:bg-zinc-950">{card.name}</p>}
+                          {card.name && (
+                            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full max-w-[80%]">
+                              <p className="text-[10px] font-black text-white truncate text-center">{card.name}</p>
+                            </div>
+                          )}
                         </div>
                       );
                     })() : mediaData.type === 'ad_preview' && mediaData.embed_html ? (() => {
@@ -939,7 +1263,7 @@ export default function MetaAdsPage() {
                       });
                       return <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 w-full" style={{ height: 400 }} dangerouslySetInnerHTML={{ __html: cleanHtml }} />;
                     })() : mediaData.type === 'image' || thumbUrl ? (
-                      <div className="rounded-2xl overflow-hidden bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm w-full aspect-[4/5] flex-shrink-0 relative flex items-center justify-center">
+                      <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200 dark:border-zinc-800 shadow-sm w-full aspect-square flex-shrink-0 relative flex items-center justify-center">
                         <SmoothImage
                           src={(mediaData.type === 'image' ? mediaData.url : thumbUrl) || ''}
                           alt={selectedAd.name}
@@ -948,82 +1272,139 @@ export default function MetaAdsPage() {
                         />
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 aspect-[4/5] w-full flex-shrink-0 flex flex-col items-center justify-center text-zinc-400 gap-2">
+                      <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 aspect-square w-full flex-shrink-0 flex flex-col items-center justify-center text-zinc-400 gap-2">
                         <ImageIcon className="w-8 h-8" />
                         <span className="text-[11px] font-bold">Sin preview disponible</span>
                       </div>
                     )}
 
-                    {/* Ad name */}
-                    <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl">
-                      <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Nombre</p>
-                      <p className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">{selectedAd.name}</p>
-                    </div>
-
-                    {/* Description/body */}
-                    {selectedAd.body && (
+                    {/* Ad name + description + performance — always below the creative */}
+                    <div className="space-y-3">
                       <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl">
-                        <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Descripción</p>
-                        <p className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium line-clamp-5">{selectedAd.body}</p>
+                        <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Nombre</p>
+                        <p className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium">{selectedAd.name}</p>
                       </div>
-                    )}
-
-                    {/* Performance — desktop only (mobile: Rendimiento tab) */}
-                    {insights && (
-                      <div className="hidden md:block p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
-                        <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2">Rendimiento</p>
-                        {[
-                          { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
-                          { label: 'Compras', val: purchases > 0 ? String(purchases) : '—', highlight: purchases > 0 },
-                          { label: 'Leads', val: leads > 0 ? String(leads) : '—', highlight: leads > 0 },
-                          { label: 'Mensajes', val: msgs > 0 ? String(msgs) : '—', highlight: msgs > 0 },
-                          { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
-                          { label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : '—', highlight: adRoas > 1 },
-                          { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—' },
-                          { label: 'Alcance', val: fmtN(adReach) },
-                        ].map(({ label, val, highlight }: any) => (
-                          <div key={label} className="flex items-center justify-between text-[12px] font-bold">
-                            <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
-                            <span className={highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-white'}>{val}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Comment counts per platform — desktop only (mobile: Rendimiento tab) */}
-                    <div className="hidden md:block p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
-                      <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Comentarios</p>
-                      {selectedAd.igStoryId && (
-                        <button onClick={() => switchCommentPlatform('instagram')} className={`w-full flex items-center justify-between text-[12px] font-bold rounded-lg px-2 py-1.5 transition-all ${activeCommentPlatform === 'instagram' ? 'bg-pink-50 dark:bg-pink-950/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
-                          <span className="flex items-center gap-1.5 text-pink-500"><Instagram className="w-3 h-3" /> Instagram</span>
-                          <span className="flex items-center gap-1.5">
-                            {loadingByPlatform.instagram ? <Loader2 className="w-3 h-3 animate-spin text-zinc-400" /> : (
-                              <span className="text-zinc-900 dark:text-white">{igTotal}</span>
-                            )}
-                            {igPending > 0 && <span className="text-[9px] font-black px-1 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{igPending} pend.</span>}
-                          </span>
-                        </button>
+                      {selectedAd.body && (
+                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl">
+                          <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-1">Descripción</p>
+                          <p className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium line-clamp-5">{selectedAd.body}</p>
+                        </div>
                       )}
-                      {selectedAd.fbStoryId && (
-                        <button onClick={() => switchCommentPlatform('facebook')} className={`w-full flex items-center justify-between text-[12px] font-bold rounded-lg px-2 py-1.5 transition-all ${activeCommentPlatform === 'facebook' ? 'bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
-                          <span className="flex items-center gap-1.5 text-blue-500"><Facebook className="w-3 h-3" /> Facebook</span>
-                          <span className="flex items-center gap-1.5">
-                            {loadingByPlatform.facebook ? <Loader2 className="w-3 h-3 animate-spin text-zinc-400" /> : (
-                              <span className="text-zinc-900 dark:text-white">{fbTotal}</span>
-                            )}
-                            {fbPending > 0 && <span className="text-[9px] font-black px-1 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{fbPending} pend.</span>}
-                          </span>
-                        </button>
+                      {insights && (
+                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800 rounded-xl space-y-1.5">
+                          <p className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2">Rendimiento</p>
+                          {[
+                            { label: 'Gasto', val: `$${adSpend.toFixed(0)}` },
+                            { label: 'Compras', val: purchases > 0 ? String(purchases) : '—', highlight: purchases > 0 },
+                            { label: 'Leads', val: leads > 0 ? String(leads) : '—', highlight: leads > 0 },
+                            { label: 'Mensajes', val: msgs > 0 ? String(msgs) : '—', highlight: msgs > 0 },
+                            { label: 'CPA', val: adCpa > 0 ? `$${adCpa.toFixed(0)}` : '—' },
+                            { label: 'ROAS', val: adRoas > 0 ? `${adRoas.toFixed(1)}` : '—', highlight: adRoas > 1 },
+                            { label: 'CTR', val: adCtr > 0 ? `${adCtr.toFixed(1)}%` : '—' },
+                            { label: 'Alcance', val: fmtN(adReach) },
+                          ].map(({ label, val, highlight }: any) => (
+                            <div key={label} className="flex items-center justify-between text-[12px] font-bold">
+                              <span className="text-zinc-500 dark:text-zinc-400">{label}</span>
+                              <span className={highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-900 dark:text-white'}>{val}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Right: Comments (50%) */}
-                  <div className={`${mobileTab === 'post' ? 'hidden md:flex' : 'flex'} overflow-y-auto flex-col`}>
+                  {/* Right: Comments (60%) */}
+	                  <div className={`${mobileDetailTab === 'post' ? 'hidden' : 'flex'} md:flex md:col-span-3 flex-col min-h-[calc(100dvh-126px)] md:min-h-0 overflow-visible md:overflow-hidden md:h-full`}>
+                    {slideTab === 'metrics' ? (
+                      <div className="flex-1 overflow-visible md:overflow-y-auto px-4 pt-4 pb-24 md:px-5 md:pt-5 md:pb-12 scroll-pb-24 md:scroll-pb-12 space-y-5">
+                        {analyzingTribe ? (
+                          <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-4">
+                            <div className="relative w-20 h-20">
+                              <div className="absolute inset-0 rounded-full border-4 border-violet-200 dark:border-violet-900" />
+                              <div className="absolute inset-0 rounded-full border-4 border-t-violet-600 animate-spin" />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <Brain className="w-7 h-7 text-violet-500 animate-pulse" />
+                              </div>
+                            </div>
+	                            <p className="text-[13px] font-bold text-zinc-700 dark:text-zinc-350">Analizando creativo con IA...</p>
+	                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Procesando respuesta visual</p>
+	                          </div>
+	                        ) : analysisError ? (
+	                          <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3 text-center">
+	                            <div className="w-14 h-14 rounded-full bg-amber-50 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center">
+	                              <AlertTriangle className="w-7 h-7 text-amber-500" />
+	                            </div>
+	                            <p className="text-[13px] font-black text-zinc-800 dark:text-zinc-200">No se pudo analizar con IA</p>
+	                            <p className="max-w-sm text-[12px] text-zinc-500 dark:text-zinc-400">{analysisError}</p>
+	                          </div>
+	                        ) : !tribeResult ? (
+	                          <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3 text-center">
+	                            <Brain className="w-8 h-8 text-violet-500" />
+	                            <p className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Abrí el análisis para procesar este creativo con IA.</p>
+	                          </div>
+	                        ) : (() => {
+	                          const metrics = tribeResult;
+                          return (
+                            <div className="space-y-5 text-left animate-in fade-in duration-200">
+                              {/* Score global */}
+                              <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-zinc-800/60 rounded-2xl flex items-center gap-4">
+                                <div className={`w-16 h-16 rounded-full flex flex-col items-center justify-center shadow-lg font-black text-white shrink-0 ${scoreCls(metrics.score)}`}>
+                                  <span className="text-[20px] leading-none">{metrics.score}</span>
+                                  <span className="text-[8px] opacity-75">/100</span>
+                                </div>
+                                <div>
+                                  <h4 className="text-[13.5px] font-black text-zinc-800 dark:text-zinc-150">{scoreLabel(metrics.score)}</h4>
+                                  <p className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-1">
+                                    Región dominante: <span className="font-bold text-violet-600 dark:text-violet-400">{metrics.highestRegion}</span>
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Barras de Métricas */}
+                              <div className="p-5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-zinc-800/60 rounded-2xl space-y-4">
+                                <MetricBar label="Atención" value={metrics.attentionPct} color={metrics.attentionPct >= 75 ? 'bg-emerald-500' : metrics.attentionPct >= 60 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.attentionReason} />
+                                <MetricBar label="Emoción" value={metrics.emotionPct} color={metrics.emotionPct >= 70 ? 'bg-emerald-500' : metrics.emotionPct >= 50 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.emotionReason} />
+                                <MetricBar label="Carga Cognitiva" value={metrics.cogLoad} color={metrics.cogLoad <= 30 ? 'bg-emerald-500' : metrics.cogLoad <= 50 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.cogLoadReason} />
+                              </div>
+
+                              {/* Curva de Respuesta */}
+                              {(() => {
+                                const displayTimeline = timeline.length > 0 ? timeline : genTimeline(metrics.attentionPct, metrics.emotionPct, metrics.cogLoad, metrics.score, analysisDurationSec);
+                                return (
+                                  <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                      <p className="text-[11px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Curva de Respuesta ({formatDuration(analysisDurationSec)})</p>
+                                      <div className="flex items-center gap-3 text-[9px] font-bold text-zinc-400">
+                                        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded-full" />Atención</span>
+                                        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-violet-500 inline-block rounded-full" />Emoción</span>
+                                        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400 inline-block rounded-full" />Impacto</span>
+                                      </div>
+                                    </div>
+                                    <div className="h-[140px]">
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={displayTimeline} margin={{ left: -15, right: 4, top: 4, bottom: 0 }}>
+                                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" className="dark:[stroke:rgba(255,255,255,0.04)]" />
+                                          <XAxis dataKey="t" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={v => `${v}s`} />
+                                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} width={22} />
+                                          <Line type="monotone" dataKey="attn" name="Atención" stroke="#10b981" strokeWidth={2} dot={false} />
+                                          <Line type="monotone" dataKey="emot" name="Emoción" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                                          <Line type="monotone" dataKey="impact" name="Impacto" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                                        </LineChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col flex-1 min-h-0 overflow-visible md:overflow-hidden">
 
                     {/* Platform switcher (right panel header) — only when both platforms */}
                     {hasBothPlatforms && (
-                      <div className="flex items-center gap-1.5 px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
+                      <div className="flex flex-wrap md:flex-nowrap items-center gap-1.5 px-4 md:px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
                         <button
                           onClick={() => switchCommentPlatform('instagram')}
                           className={`flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[9.5px] sm:text-[11px] font-black transition-all border ${activeCommentPlatform === 'instagram' ? 'bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400 border-pink-200/60 dark:border-pink-800/30' : 'text-zinc-500 dark:text-zinc-400 border-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
@@ -1051,19 +1432,38 @@ export default function MetaAdsPage() {
 
                     {/* Pending / all filter */}
                     {!loadingComments && comments.length > 0 && (
-                      <div className="flex items-center gap-1 px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
+                      <div className="flex flex-wrap md:flex-nowrap items-center gap-1 px-4 md:px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
                         <button onClick={() => setCommentFilter('pending')} className={`flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[9.5px] sm:text-[11px] font-black transition-all ${commentFilter === 'pending' ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
                           Sin responder
                           <span className={`text-[8px] sm:text-[9px] min-w-[14px] h-[14px] sm:min-w-[18px] sm:h-[18px] px-1 rounded-full font-black flex items-center justify-center ${commentFilter === 'pending' ? 'bg-white/15 dark:bg-zinc-900/20 text-white dark:text-zinc-900' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>{pendingCount}</span>
                         </button>
                         <button onClick={() => setCommentFilter('all')} className={`flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[9.5px] sm:text-[11px] font-black transition-all ${commentFilter === 'all' ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
                           Todos
-                          <span className={`text-[8px] sm:text-[9px] min-w-[14px] h-[14px] sm:min-w-[18px] sm:h-[18px] px-1 rounded-full font-black flex items-center justify-center ${commentFilter === 'all' ? 'bg-white/15 dark:bg-zinc-900/20 text-white dark:text-zinc-900' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>{comments.length}</span>
+                          <span className={`text-[8px] sm:text-[9px] min-w-[14px] h-[14px] sm:min-w-[18px] sm:h-[18px] px-1 rounded-full font-black flex items-center justify-center ${commentFilter === 'all' ? 'bg-white/15 dark:bg-zinc-900/20 text-white dark:text-zinc-900' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>{getCommentThreadCount(comments)}</span>
                         </button>
+                        {pendingCount > 0 && (
+                          <div className="ml-0 sm:ml-auto flex flex-wrap items-center gap-1.5">
+                            <button
+                              onClick={bulkGenerateDrafts}
+                              disabled={bulkLoading}
+                              className="flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-black transition-all shadow-sm shadow-violet-500/20 cursor-pointer"
+                            >
+                              {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                              <span>Sugerir con Ia ({pendingCount})</span>
+                            </button>
+                            <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
+                              {LANGS.map(l => (
+                                <button key={l.code} type="button" onClick={() => setBulkDraftLang(l.code)} className={`px-2 py-1 text-[10px] font-black rounded-md transition-all ${bulkDraftLang === l.code ? 'bg-white dark:bg-zinc-700 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
+                                  {l.code.toUpperCase()}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    <div className="flex-1 overflow-visible md:overflow-y-auto px-4 pt-4 pb-24 md:px-5 md:pt-5 md:pb-12 scroll-pb-24 md:scroll-pb-12 space-y-4">
                       {loadingComments ? (
                         <AppleLoader variant="table" count={4} />
                       ) : comments.length === 0 ? (
@@ -1079,8 +1479,9 @@ export default function MetaAdsPage() {
                           .filter(c => commentFilter === 'all' || isCommentPending(c, activeCommentPlatform))
                           .sort((a, b) => new Date(b.timestamp || b.created_time || 0).getTime() - new Date(a.timestamp || a.created_time || 0).getTime())
                           .map(comment => {
-                            const isPending = isCommentPending(comment, activeCommentPlatform);
-                            const liked = !!likedIds[comment.id];
+	                            const isPending = isCommentPending(comment, activeCommentPlatform);
+	                            const isIgnored = !!(comment._ignored || ignoredIds[comment.id]);
+	                            const liked = !!likedIds[comment.id];
                             const replyOpen = !!openReplies[comment.id];
                             const replies = comment.replies?.data || [];
                             return (
@@ -1097,9 +1498,11 @@ export default function MetaAdsPage() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-1.5">
-                                      {isPending ? (
-                                        <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 uppercase">Pendiente</span>
-                                      ) : (
+	                                      {isIgnored ? (
+	                                        <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 uppercase">Ignorado</span>
+	                                      ) : isPending ? (
+	                                        <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 uppercase">Pendiente</span>
+	                                      ) : (
                                         <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase">Respondido</span>
                                       )}
                                       <button onClick={() => toggleLike(comment.id)} className={`flex items-center gap-0.5 text-[11px] font-bold transition-colors ${liked ? 'text-red-500' : 'text-zinc-400 hover:text-red-500'}`}>
@@ -1140,11 +1543,15 @@ export default function MetaAdsPage() {
                                     </div>
                                   )}
 
-                                  <div className="mt-3 ml-9 flex items-center gap-2">
-                                    <button onClick={() => { const nextOpen = !replyOpen; setOpenReplies(prev => ({ ...prev, [comment.id]: nextOpen })); setActiveReplyTargets(prev => ({ ...prev, [comment.id]: null })); setReplyTexts(prev => ({ ...prev, [comment.id]: '' })); }} className="text-[11px] font-black text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 transition-colors">
-                                      {replyOpen ? 'Cancelar' : 'Responder'}
-                                    </button>
-                                  </div>
+	                                  <div className="mt-3 ml-9 flex items-center gap-2">
+	                                    <button onClick={() => { const nextOpen = !replyOpen; setOpenReplies(prev => ({ ...prev, [comment.id]: nextOpen })); setActiveReplyTargets(prev => ({ ...prev, [comment.id]: null })); setReplyTexts(prev => ({ ...prev, [comment.id]: '' })); }} className="text-[11px] font-black text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 transition-colors">
+	                                      {replyOpen ? 'Cancelar' : 'Responder'}
+	                                    </button>
+	                                    <button type="button" onClick={() => toggleIgnore(comment.id)} className={`text-[11px] font-black transition-colors ${isIgnored ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}>
+	                                      <EyeOff className="w-3.5 h-3.5 inline mr-1" />
+	                                      {isIgnored ? 'No ignorar' : 'Ignorar'}
+	                                    </button>
+	                                  </div>
 
                                   {replyOpen && (
                                     <div className="mt-3 ml-9 space-y-2 animate-in fade-in duration-200">
@@ -1200,10 +1607,13 @@ export default function MetaAdsPage() {
                           })
                       )}
                     </div>
+                    </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
+            </PortalOverlay>
           );
         })()}
 

@@ -9,9 +9,23 @@ interface AuthContextType {
   profile: ClientProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const clearSessionCacheByPrefix = (prefixes: string[]) => {
+  try {
+    const keys = Object.keys(sessionStorage);
+    for (const key of keys) {
+      if (prefixes.some((prefix) => key.startsWith(prefix))) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Safari private/session edge cases can block storage access.
+  }
+};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
@@ -27,7 +41,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const retries = 3;
       for (let i = 0; i < retries; i++) {
         try {
-          const p = await db.profile.getByUserId(userId, email);
+          let p = await db.profile.getByUserId(userId, email);
+
+          // SaaS: auto-create car_clients record if first login
+          if (!p) {
+            const ensureRes = await fetch('/api/oauth?action=ensure-profile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId, email }),
+            });
+            const ensureData = await ensureRes.json().catch(() => null);
+            p = await db.profile.getByUserId(userId, email);
+            if (ensureData?.created && p?.id) {
+              try { sessionStorage.setItem('ag_welcome_profile_id', p.id); } catch { /* ignore */ }
+            }
+          }
+
           setProfile(p);
           if (p) {
             db.activity.log(userId, p.id, 'session_start', {
@@ -79,13 +108,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const refreshProfile = async () => {
+    const currentUser = user;
+    if (!currentUser) return;
+    loadProfilePromiseRef.current = null;
+    await loadProfile(currentUser.id, currentUser.email ?? undefined);
+  };
+
   const signOut = async () => {
+    clearSessionCacheByPrefix(['dashboard_cache_', 'meta:', 'ec:', 'kl:']);
     localStorage.removeItem('view_as_client_id');
+    localStorage.removeItem('current_facebook_access_token');
+    localStorage.removeItem('active_fb_page_id');
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,10 +3,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
+import { ecommerce } from '../services/ecommerce';
 import { 
   ShoppingBag, Percent, CreditCard, Truck, FileText, Calendar, Plus, 
   Search, Trash2, Edit3, Save, AlertCircle, X, ChevronLeft, ChevronRight, 
-  Info, Coins, Sparkles, Loader2, Landmark, Check, HelpCircle
+  Info, Coins, Sparkles, Loader2, Landmark, Check, HelpCircle, Package
 } from 'lucide-react';
 import { AppleLoader } from '../components/ui/AppleLoader';
 
@@ -34,100 +35,19 @@ interface AdditionalCostItem {
   platform: string;
 }
 
-const MOCK_CATALOG: CatalogProduct[] = [
-  {
-    id: 'prod_1',
-    title: 'Remera Algodón Premium',
-    variants: [
-      { id: 'var_1_1', title: 'Talle S / Negro', price: 15000 },
-      { id: 'var_1_2', title: 'Talle M / Negro', price: 15000 },
-      { id: 'var_1_3', title: 'Talle L / Blanco', price: 15500 }
-    ]
-  },
-  {
-    id: 'prod_2',
-    title: 'Pantalón Cargo Black',
-    variants: [
-      { id: 'var_2_1', title: 'Talle 38', price: 32000 },
-      { id: 'var_2_2', title: 'Talle 40', price: 32000 },
-      { id: 'var_2_3', title: 'Talle 42', price: 34000 }
-    ]
-  },
-  {
-    id: 'prod_3',
-    title: 'Zapatillas Urban Run',
-    variants: [
-      { id: 'var_3_1', title: 'Talle 40', price: 58000 },
-      { id: 'var_3_2', title: 'Talle 41', price: 58000 },
-      { id: 'var_3_3', title: 'Talle 42', price: 58000 }
-    ]
-  },
-  {
-    id: 'prod_4',
-    title: 'Buzo Oversize Grey',
-    variants: [
-      { id: 'var_4_1', title: 'Talle Único', price: 28000 }
-    ]
-  },
-  {
-    id: 'prod_5',
-    title: 'Campera Bomber Leather',
-    variants: [
-      { id: 'var_5_1', title: 'Talle M', price: 75000 },
-      { id: 'var_5_2', title: 'Talle L', price: 75000 }
-    ]
-  },
-  {
-    id: 'prod_6',
-    title: 'Gorra Streetwear Cap',
-    variants: [
-      { id: 'var_6_1', title: 'Negro', price: 12000 },
-      { id: 'var_6_2', title: 'Beige', price: 12000 }
-    ]
-  },
-  {
-    id: 'prod_7',
-    title: 'Medias Element Pack x3',
-    variants: [
-      { id: 'var_7_1', title: 'Pack x3', price: 8000 }
-    ]
-  },
-  {
-    id: 'prod_8',
-    title: 'Bermuda Jean Denim',
-    variants: [
-      { id: 'var_8_1', title: 'Talle 40', price: 22000 },
-      { id: 'var_8_2', title: 'Talle 42', price: 22000 }
-    ]
-  }
-];
-
-const DEFAULT_VARIANT_COSTS: Record<string, { cost: number; packagingCost: number }> = {
-  'var_1_1': { cost: 4500, packagingCost: 350 },
-  'var_1_2': { cost: 4500, packagingCost: 350 },
-  'var_1_3': { cost: 4650, packagingCost: 350 },
-  'var_2_1': { cost: 9600, packagingCost: 350 },
-  'var_2_2': { cost: 9600, packagingCost: 350 },
-  'var_2_3': { cost: 10200, packagingCost: 350 },
-  'var_3_1': { cost: 17400, packagingCost: 350 },
-  'var_3_2': { cost: 17400, packagingCost: 350 },
-  'var_3_3': { cost: 17400, packagingCost: 350 },
-  'var_4_1': { cost: 8400, packagingCost: 350 },
-  'var_5_1': { cost: 22500, packagingCost: 500 },
-  'var_5_2': { cost: 22500, packagingCost: 500 },
-  'var_6_1': { cost: 3600, packagingCost: 200 },
-  'var_6_2': { cost: 3600, packagingCost: 200 },
-  'var_7_1': { cost: 2400, packagingCost: 150 },
-  'var_8_1': { cost: 6600, packagingCost: 300 },
-  'var_8_2': { cost: 6600, packagingCost: 300 }
-};
-
 export default function CostosPage() {
   const { profile: authProfile } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   const profileId = profile?.id || 'default';
   const { showToast } = useToast();
+  const detectedPlatform = useMemo(() => {
+    const p: any = profile;
+    if (p?.ecommerce_platform === 'shopify' && p.shopify_domain && p.shopify_access_token) return 'shopify';
+    if (p?.ecommerce_platform === 'wordpress' && p.wordpress_url && p.woo_consumer_key && p.woo_consumer_secret) return 'wordpress';
+    if (p?.ecommerce_platform === 'tiendanube' && p.tiendanube_store_id && p.tiendanube_access_token) return 'tiendanube';
+    return null;
+  }, [profile]);
 
   // Accordion Open/Close states
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
@@ -153,6 +73,8 @@ export default function CostosPage() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
   const [massPercentage, setMassPercentage] = useState('30');
+  const [massPackagingCost, setMassPackagingCost] = useState('350');
+  const [massScope, setMassScope] = useState<'filtered' | 'all'>('filtered');
 
   const [platformCommissions, setPlatformCommissions] = useState({
     shopify: 2.0,
@@ -183,68 +105,78 @@ export default function CostosPage() {
     otros: AdditionalCostItem[];
     campanas: AdditionalCostItem[];
   }>({
-    equipo: [
-      { id: 'eq_1', name: 'aa', startDate: '2025-09-10', endDate: '2025-09-25', cost: 213, dailyCost: 13.3, currency: 'LOCAL', adSpend: false, platform: 'Meta' }
-    ],
-    otros: [
-      { id: 'ot_1', name: 'Revenue', startDate: '2025-10-14', endDate: '2025-10-14', cost: 1000, dailyCost: 1000.0, currency: 'USD', adSpend: false, platform: '-' }
-    ],
-    campanas: [
-      { id: 'ca_1', name: 'adspend', startDate: '2025-11-04', endDate: '2025-11-04', cost: 1000, dailyCost: 1000.0, currency: 'USD', adSpend: true, platform: '-' }
-    ]
+    equipo: [],
+    otros: [],
+    campanas: []
   });
 
-  // Shopify/Tiendanube Product Catalog Fetching
+  const mapShopifyProducts = (products: any[]): CatalogProduct[] => products.map((p: any) => ({
+    id: String(p.id),
+    title: p.title || p.name || 'Producto',
+    variants: (p.variants && p.variants.length > 0 ? p.variants : [p]).map((v: any) => ({
+      id: String(v.id || p.id),
+      title: v.title && v.title !== 'Default Title' ? v.title : 'Único',
+      price: parseFloat(v.price || p.price || 0) || 0
+    }))
+  }));
+
+  const mapWooProducts = (products: any[]): CatalogProduct[] => products.map((p: any) => {
+    const variations = Array.isArray(p.variations) && p.variations.length > 0
+      ? p.variations.map((id: any, idx: number) => ({
+          id: String(id),
+          title: `Variante ${idx + 1}`,
+          price: parseFloat(p.price || p.regular_price || 0) || 0
+        }))
+      : [{
+          id: String(p.id),
+          title: 'Único',
+          price: parseFloat(p.price || p.regular_price || 0) || 0
+        }];
+    return { id: String(p.id), title: p.name || p.title || 'Producto', variants: variations };
+  });
+
+  const mapTiendaNubeProducts = (products: any[]): CatalogProduct[] => products.map((p: any) => {
+    const title = typeof p.name === 'string' ? p.name : (p.name?.es || p.name?.pt || p.name?.en || 'Producto');
+    const variants = Array.isArray(p.variants) && p.variants.length > 0 ? p.variants : [p];
+    return {
+      id: String(p.id),
+      title,
+      variants: variants.map((v: any) => ({
+        id: String(v.id || p.id),
+        title: [v.values?.[0]?.es || v.values?.[0]?.pt || v.values?.[0]?.en, v.values?.[1]?.es || v.values?.[1]?.pt || v.values?.[1]?.en].filter(Boolean).join(' / ') || 'Único',
+        price: parseFloat(v.price || p.price || 0) || 0
+      }))
+    };
+  });
+
+  // Connected store product catalog fetching
   const loadProductCatalog = useCallback(async () => {
-    const isShopify = profile?.ecommerce_platform === 'shopify' && profile?.shopify_domain && profile?.shopify_access_token;
-    if (!isShopify) {
-      setCatalogProducts(MOCK_CATALOG);
+    if (!profile || !detectedPlatform) {
+      setCatalogProducts([]);
       return;
     }
 
     setLoadingProducts(true);
     try {
-      const shopifyDomain = profile?.shopify_domain || '';
-      const cleanDomain = shopifyDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      const url = `/api/shopify/products.json?limit=100`;
-      const response = await fetch(url, {
-        headers: {
-          'x-shopify-domain': cleanDomain,
-          'x-shopify-access-token': profile?.shopify_access_token || ''
-        } as Record<string, string>
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const apiProds = data?.products || [];
-        const mapped: CatalogProduct[] = apiProds.map((p: any) => {
-          const variants = p.variants && p.variants.length > 0
-            ? p.variants.map((v: any) => ({
-                id: String(v.id),
-                title: v.title,
-                price: parseFloat(v.price) || 0
-              }))
-            : [{
-                id: String(p.id),
-                title: 'Único',
-                price: parseFloat(p.price) || 0
-              }];
-          return {
-            id: String(p.id),
-            title: p.title,
-            variants
-          };
-        });
-        setCatalogProducts(mapped);
-      } else {
-        setCatalogProducts(MOCK_CATALOG);
+      const p: any = profile;
+      if (detectedPlatform === 'shopify') {
+        const products = await ecommerce.getProducts(p.shopify_domain, p.shopify_access_token);
+        setCatalogProducts(mapShopifyProducts(products));
+      } else if (detectedPlatform === 'wordpress') {
+        const products = await ecommerce.getWooCommerceProducts(p.wordpress_url, p.woo_consumer_key, p.woo_consumer_secret);
+        setCatalogProducts(mapWooProducts(products));
+      } else if (detectedPlatform === 'tiendanube') {
+        const products = await ecommerce.getTiendaNubeProducts(p.tiendanube_store_id, p.tiendanube_access_token);
+        setCatalogProducts(mapTiendaNubeProducts(products));
       }
     } catch (err) {
-      console.error('Error fetching shopify products:', err);
-      setCatalogProducts(MOCK_CATALOG);
+      console.error('Error fetching products:', err);
+      setCatalogProducts([]);
+      showToast('No se pudo cargar el catálogo de productos conectado.', 'error');
     } finally {
       setLoadingProducts(false);
     }
-  }, [profile?.shopify_domain, profile?.shopify_access_token, profile?.ecommerce_platform]);
+  }, [profile, detectedPlatform]);
 
   // Load from localStorage and Supabase
   useEffect(() => {
@@ -253,13 +185,8 @@ export default function CostosPage() {
     const fetchCosts = async () => {
       setLoadingProducts(true);
       try {
-        // Fetch variant costs
-        const { data: varData, error: varError } = await supabase
-          .from('car_variant_costs')
-          .select('variant_id, cost, packaging_cost, updated_at')
-          .eq('client_id', profileId);
-          
-        if (varError) throw varError;
+        const costsData = await callCostsApi('costs-load');
+        const varData = costsData.variantCosts || [];
         
         let maxTime: Date | null = null;
         const varCostsMap: Record<string, { cost: number; packagingCost: number; lastUpdated?: string }> = {};
@@ -277,16 +204,10 @@ export default function CostosPage() {
           });
           setVariantCosts(varCostsMap);
         } else {
-          setVariantCosts(DEFAULT_VARIANT_COSTS);
+          setVariantCosts({});
         }
 
-        // Fetch additional costs
-        const { data: addData, error: addError } = await supabase
-          .from('car_additional_costs')
-          .select('id, category, name, start_date, end_date, cost, daily_cost, currency, ad_spend, platform, updated_at')
-          .eq('client_id', profileId);
-          
-        if (addError) throw addError;
+        const addData = costsData.additionalCosts || [];
         
         if (addData) {
           const equipoList: AdditionalCostItem[] = [];
@@ -336,7 +257,7 @@ export default function CostosPage() {
       } catch (err) {
         console.error('Error fetching costs from Supabase:', err);
         showToast('Error al cargar costos de la base de datos.', 'error');
-        setVariantCosts(DEFAULT_VARIANT_COSTS);
+        setVariantCosts({});
       } finally {
         setLoadingProducts(false);
       }
@@ -372,6 +293,21 @@ export default function CostosPage() {
     } catch (e) { /* ignore quota full */ }
   };
 
+  const callCostsApi = async (action: string, payload: Record<string, any> = {}) => {
+    if (!profileId || profileId === 'default') throw new Error('Cliente no disponible.');
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error('La sesión expiró. Volvé a iniciar sesión.');
+    const res = await fetch(`/api/oauth?action=${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ clientId: profileId, ...payload })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se pudo guardar en la base de datos.');
+    return data;
+  };
+
   useEffect(() => {
     loadProductCatalog();
   }, [loadProductCatalog]);
@@ -385,18 +321,14 @@ export default function CostosPage() {
     setVariantCosts(updated);
 
     try {
-      const { error } = await supabase
-        .from('car_variant_costs')
-        .upsert({
-          client_id: profileId,
+      await callCostsApi('costs-upsert-variants', {
+        row: {
           variant_id: variantId,
           cost,
           packaging_cost: packagingCost,
           updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'client_id,variant_id'
-        });
-      if (error) throw error;
+        }
+      });
       setLastUpdatedTime(new Date().toLocaleString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
         day: '2-digit',
@@ -422,8 +354,9 @@ export default function CostosPage() {
     const upsertRows: any[] = [];
     const nowStr = new Date().toISOString();
     const nowShort = nowStr.split('T')[0];
+    const targetProducts = massScope === 'filtered' ? filteredCatalog : catalogProducts;
 
-    catalogProducts.forEach(prod => {
+    targetProducts.forEach(prod => {
       prod.variants.forEach(variant => {
         const calculatedCost = Math.round(variant.price * (pct / 100));
         const currentPackaging = updated[variant.id]?.packagingCost ?? 350;
@@ -447,13 +380,8 @@ export default function CostosPage() {
     setVariantCosts(updated);
 
     try {
-      const { error } = await supabase
-        .from('car_variant_costs')
-        .upsert(upsertRows, {
-          onConflict: 'client_id,variant_id'
-        });
-      if (error) throw error;
-      showToast(`Se aplicó el costo del ${pct}% de forma masiva a todos los productos.`, 'success');
+      await callCostsApi('costs-upsert-variants', { rows: upsertRows });
+      showToast(`Se aplicó costo ${pct}% a ${upsertRows.length} variantes.`, 'success');
       setLastUpdatedTime(new Date().toLocaleString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
         day: '2-digit',
@@ -465,6 +393,89 @@ export default function CostosPage() {
     } catch (err) {
       console.error('Error mass saving variant costs to Supabase:', err);
       showToast('Error al guardar costos masivos en la base de datos.', 'error');
+    }
+  };
+
+  const handleApplyMassPackaging = async () => {
+    const packaging = parseFloat(massPackagingCost);
+    if (isNaN(packaging) || packaging < 0) {
+      showToast('Ingresá un costo de caja válido.', 'warning');
+      return;
+    }
+
+    const updated = { ...variantCosts };
+    const upsertRows: any[] = [];
+    const nowStr = new Date().toISOString();
+    const nowShort = nowStr.split('T')[0];
+    const targetProducts = massScope === 'filtered' ? filteredCatalog : catalogProducts;
+
+    targetProducts.forEach(prod => {
+      prod.variants.forEach(variant => {
+        const currentCost = updated[variant.id]?.cost ?? 0;
+        updated[variant.id] = {
+          cost: currentCost,
+          packagingCost: packaging,
+          lastUpdated: nowShort
+        };
+        upsertRows.push({
+          client_id: profileId,
+          variant_id: variant.id,
+          cost: currentCost,
+          packaging_cost: packaging,
+          updated_at: nowStr
+        });
+      });
+    });
+
+    if (upsertRows.length === 0) {
+      showToast('No hay productos para actualizar.', 'warning');
+      return;
+    }
+
+    setVariantCosts(updated);
+    try {
+      await callCostsApi('costs-upsert-variants', { rows: upsertRows });
+      showToast(`Se aplicó caja $${packaging.toLocaleString('es-AR')} a ${upsertRows.length} variantes.`, 'success');
+      setLastUpdatedTime(new Date().toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }));
+    } catch (err) {
+      console.error('Error mass saving packaging costs:', err);
+      showToast('Error al guardar cajas masivas en la base de datos.', 'error');
+    }
+  };
+
+  const handleClearMassCosts = async () => {
+    const targetProducts = massScope === 'filtered' ? filteredCatalog : catalogProducts;
+    const variantIds = targetProducts.flatMap(prod => prod.variants.map(v => v.id));
+    if (variantIds.length === 0) {
+      showToast('No hay productos para limpiar.', 'warning');
+      return;
+    }
+
+    const updated = { ...variantCosts };
+    variantIds.forEach(id => delete updated[id]);
+    setVariantCosts(updated);
+
+    try {
+      await callCostsApi('costs-delete-variants', { variantIds });
+      showToast(`Se limpiaron costos de ${variantIds.length} variantes.`, 'info');
+      setLastUpdatedTime(new Date().toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }));
+    } catch (err) {
+      console.error('Error clearing variant costs:', err);
+      showToast('Error al limpiar costos en la base de datos.', 'error');
     }
   };
 
@@ -657,44 +668,24 @@ export default function CostosPage() {
 
     try {
       let savedItem: AdditionalCostItem;
+      const { row: savedRow } = await callCostsApi('costs-save-additional', {
+        row: editingCostItem ? { ...dbRow, id: editingCostItem.id } : dbRow
+      });
+      if (!savedRow) throw new Error('No se recibió el costo guardado.');
+      savedItem = {
+        id: savedRow.id,
+        name: savedRow.name,
+        startDate: savedRow.start_date,
+        endDate: savedRow.end_date,
+        cost: parseFloat(savedRow.cost),
+        dailyCost: parseFloat(savedRow.daily_cost),
+        currency: savedRow.currency,
+        adSpend: savedRow.ad_spend,
+        platform: savedRow.platform
+      };
       if (editingCostItem) {
-        // Update
-        const { data, error } = await supabase
-          .from('car_additional_costs')
-          .update(dbRow)
-          .eq('id', editingCostItem.id)
-          .select();
-        if (error) throw error;
-        savedItem = {
-          id: data[0].id,
-          name: data[0].name,
-          startDate: data[0].start_date,
-          endDate: data[0].end_date,
-          cost: parseFloat(data[0].cost),
-          dailyCost: parseFloat(data[0].daily_cost),
-          currency: data[0].currency,
-          adSpend: data[0].ad_spend,
-          platform: data[0].platform
-        };
         showToast('Costo adicional actualizado.', 'success');
       } else {
-        // Insert
-        const { data, error } = await supabase
-          .from('car_additional_costs')
-          .insert(dbRow)
-          .select();
-        if (error) throw error;
-        savedItem = {
-          id: data[0].id,
-          name: data[0].name,
-          startDate: data[0].start_date,
-          endDate: data[0].end_date,
-          cost: parseFloat(data[0].cost),
-          dailyCost: parseFloat(data[0].daily_cost),
-          currency: data[0].currency,
-          adSpend: data[0].ad_spend,
-          platform: data[0].platform
-        };
         showToast('Costo adicional agregado con éxito.', 'success');
       }
       setLastUpdatedTime(new Date().toLocaleString('es-AR', {
@@ -728,11 +719,7 @@ export default function CostosPage() {
   // Delete cost row
   const handleDeleteCostItem = async (id: string, type: 'equipo' | 'otros' | 'campanas') => {
     try {
-      const { error } = await supabase
-        .from('car_additional_costs')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await callCostsApi('costs-delete-additional', { id });
 
       const updatedList = additionalCosts[type].filter(item => item.id !== id);
       setAdditionalCosts(prev => ({
@@ -767,7 +754,7 @@ export default function CostosPage() {
   };
 
   return (
-    <div className="w-full px-4 md:px-6 animate-fade-in pb-20 text-zinc-900 dark:text-zinc-100">
+    <div className="w-full animate-fade-in pb-20 text-zinc-900 dark:text-zinc-100">
       
       <div className="page-header mb-8">
         <div>
@@ -786,6 +773,16 @@ export default function CostosPage() {
         )}
       </div>
 
+      {!detectedPlatform ? (
+        <div className="rounded-[16px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#111113] p-10 text-center">
+          <ShoppingBag className="w-10 h-10 mx-auto mb-4 text-zinc-350 dark:text-zinc-600" />
+          <h2 className="text-[16px] font-black text-zinc-900 dark:text-white mb-2">Conectá una tienda para cargar costos</h2>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
+            Cuando tengas Shopify, WooCommerce o Tiendanube conectado, acá van a aparecer tus productos para asignar costo unitario, embalaje, envíos y costos adicionales.
+          </p>
+        </div>
+      ) : (
+      <>
       {/* Accordions Stack */}
       <div className="space-y-4">
         
@@ -815,39 +812,102 @@ export default function CostosPage() {
             <div className="p-6 border-t border-zinc-100 dark:border-white/[0.03] space-y-6">
               
               {/* Edición Masiva & Search Toolbar */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+              <div className="grid grid-cols-1 gap-4">
                 {/* Search bar */}
-                <div className="relative">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                  <input 
-                    type="text"
-                    placeholder="Filtrar productos por nombre..."
-                    value={catalogSearch}
-                    onChange={e => setCatalogSearch(e.target.value)}
-                    className="apple-input pl-10"
-                  />
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-center">
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <input 
+                      type="text"
+                      placeholder="Filtrar productos por nombre..."
+                      value={catalogSearch}
+                      onChange={e => setCatalogSearch(e.target.value)}
+                      className="apple-input pl-10"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 justify-start lg:justify-end">
+                    <div className="inline-flex h-9 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setMassScope('filtered')}
+                        className={`px-3 rounded-lg text-[11px] font-black transition-all ${massScope === 'filtered' ? 'bg-white dark:bg-zinc-750 text-zinc-950 dark:text-white shadow-sm' : 'text-zinc-500'}`}
+                      >
+                        Filtrados
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMassScope('all')}
+                        className={`px-3 rounded-lg text-[11px] font-black transition-all ${massScope === 'all' ? 'bg-white dark:bg-zinc-750 text-zinc-950 dark:text-white shadow-sm' : 'text-zinc-500'}`}
+                      >
+                        Todos
+                      </button>
+                    </div>
+                    <span className="text-[11px] font-bold text-zinc-400">
+                      {(massScope === 'filtered' ? filteredCatalog : catalogProducts).reduce((sum, p) => sum + p.variants.length, 0)} variantes
+                    </span>
+                  </div>
                 </div>
 
-                {/* Mass percentage edit */}
-                <div className="flex items-center gap-2 justify-end bg-zinc-50 dark:bg-white/[0.02] p-2 px-3 rounded-xl border border-zinc-100 dark:border-white/[0.04]">
-                  <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
-                  <span className="text-[11.5px] font-bold text-zinc-650 dark:text-zinc-300">Costo Masivo:</span>
-                  <div className="relative">
-                    <input 
-                      type="number"
-                      placeholder="30"
-                      value={massPercentage}
-                      onChange={e => setMassPercentage(e.target.value)}
-                      className="w-16 h-8 px-2 pr-5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[12px] font-black text-center text-zinc-900 dark:text-white outline-none focus:border-zinc-400 dark:focus:border-zinc-650 transition-colors"
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">%</span>
+                <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] gap-3">
+                  <div className="flex flex-wrap items-center gap-2 bg-zinc-50 dark:bg-white/[0.02] p-2 px-3 rounded-xl border border-zinc-100 dark:border-white/[0.04]">
+                    <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                    <span className="text-[11.5px] font-bold text-zinc-650 dark:text-zinc-300">Costo unitario</span>
+                    <div className="relative">
+                      <input 
+                        type="number"
+                        placeholder="30"
+                        value={massPercentage}
+                        onChange={e => setMassPercentage(e.target.value)}
+                        className="w-16 h-8 px-2 pr-5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[12px] font-black text-center text-zinc-900 dark:text-white outline-none focus:border-zinc-400 dark:focus:border-zinc-650 transition-colors"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">%</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-400">del precio</span>
+                    <button
+                      onClick={handleApplyMassEdit}
+                      className="h-8 px-3 bg-violet-600 hover:bg-violet-750 text-white rounded-lg text-[11.5px] font-bold shadow-md transition-all active:scale-[0.98]"
+                    >
+                      Aplicar
+                    </button>
                   </div>
-                  <span className="text-[10px] text-zinc-400">del precio</span>
+
+                  <div className="flex flex-wrap items-center gap-2 bg-zinc-50 dark:bg-white/[0.02] p-2 px-3 rounded-xl border border-zinc-100 dark:border-white/[0.04]">
+                    <Package className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span className="text-[11.5px] font-bold text-zinc-650 dark:text-zinc-300">Caja / embalaje</span>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[11px]">$</span>
+                      <input 
+                        type="number"
+                        placeholder="350"
+                        value={massPackagingCost}
+                        onChange={e => setMassPackagingCost(e.target.value)}
+                        className="w-20 h-8 pl-6 pr-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[12px] font-black text-center text-zinc-900 dark:text-white outline-none focus:border-zinc-400 dark:focus:border-zinc-650 transition-colors"
+                      />
+                    </div>
+                    {[0, 350, 500].map(v => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setMassPackagingCost(String(v))}
+                        className="h-7 px-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[10px] font-black text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                      >
+                        ${v}
+                      </button>
+                    ))}
+                    <button
+                      onClick={handleApplyMassPackaging}
+                      className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11.5px] font-bold shadow-md transition-all active:scale-[0.98]"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+
                   <button
-                    onClick={handleApplyMassEdit}
-                    className="h-8 px-3 bg-violet-600 hover:bg-violet-750 text-white rounded-lg text-[11.5px] font-bold shadow-md transition-all active:scale-[0.98]"
+                    type="button"
+                    onClick={handleClearMassCosts}
+                    className="h-full min-h-11 px-4 rounded-xl border border-rose-200/70 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 text-[11px] font-black uppercase tracking-wider hover:bg-rose-100 dark:hover:bg-rose-500/15 transition-colors"
                   >
-                    Aplicar a todos
+                    Limpiar alcance
                   </button>
                 </div>
               </div>
@@ -1013,7 +1073,7 @@ export default function CostosPage() {
                 {/* Tiendanube */}
                 <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/[0.04]">
                   <div className="flex items-center gap-2 mb-3">
-                    <img src="/assets/tiendanube.webp" alt="Tiendanube" className="w-6 h-6 object-contain shrink-0" />
+                    <img src="/assets/tiendanubeoscuro.png" alt="Tiendanube" className="w-6 h-6 object-contain shrink-0" />
                     <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">Tiendanube Fee</span>
                   </div>
                   <div className="flex gap-2">
@@ -1032,7 +1092,7 @@ export default function CostosPage() {
                 {/* Mercado Libre */}
                 <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/[0.04]">
                   <div className="flex items-center gap-2 mb-3">
-                    <img src="/assets/mercadolibre.webp" alt="Mercado Libre" className="w-6 h-6 object-contain shrink-0" />
+                    <img src="/assets/logomercadolibre.png" alt="Mercado Libre" className="w-6 h-6 object-contain shrink-0" />
                     <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">MercadoLibre Fee</span>
                   </div>
                   <div className="flex gap-2">
@@ -1209,7 +1269,7 @@ export default function CostosPage() {
                   {/* Mercado Pago */}
                   <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-100 dark:border-white/[0.04] bg-white dark:bg-zinc-900/30">
                     <div className="flex items-center gap-3">
-                      <img src="/assets/mercadolibre.webp" alt="Mercado Pago" className="w-8 h-8 object-contain shrink-0" />
+                      <img src="/assets/logomercadolibre.png" alt="Mercado Pago" className="w-8 h-8 object-contain shrink-0" />
                       <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200">mercado pago</span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -1617,7 +1677,7 @@ export default function CostosPage() {
                                 </div>
                               ) : item.platform === 'TikTok' ? (
                                 <div className="flex items-center gap-1.5">
-                                  <img src="/assets/tiktok-icon.webp" alt="TikTok" className="w-4 h-4 object-contain shrink-0" />
+                                  <img src="/assets/logotiktok.png" alt="TikTok" className="w-6 h-6 -my-1 -mx-0.5 object-contain shrink-0" />
                                   <span className="text-zinc-650 dark:text-zinc-350">TikTok</span>
                                 </div>
                               ) : (
@@ -1744,7 +1804,7 @@ export default function CostosPage() {
                                 </div>
                               ) : item.platform === 'TikTok' ? (
                                 <div className="flex items-center gap-1.5">
-                                  <img src="/assets/tiktok-icon.webp" alt="TikTok" className="w-4 h-4 object-contain shrink-0" />
+                                  <img src="/assets/logotiktok.png" alt="TikTok" className="w-6 h-6 -my-1 -mx-0.5 object-contain shrink-0" />
                                   <span className="text-zinc-650 dark:text-zinc-350">TikTok</span>
                                 </div>
                               ) : (
@@ -1831,6 +1891,8 @@ export default function CostosPage() {
         </div>
 
       </div>
+      </>
+      )}
 
       {/* Modal Dialog for Adding/Editing Additional Cost Items */}
       {showAddModal && (

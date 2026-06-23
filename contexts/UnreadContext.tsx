@@ -15,6 +15,7 @@ interface UnreadContextType {
   setPendingCommentsCount: React.Dispatch<React.SetStateAction<number>>;
   commentsLoading: boolean;
   unreadLoading: boolean;
+  chatwootAvailable: boolean | null;
   /** Unfulfilled orders count (badge on Pedidos in sidebar) */
   pendingOrdersCount: number;
   ordersLoading: boolean;
@@ -29,6 +30,7 @@ const UnreadContext = createContext<UnreadContextType>({
   setPendingCommentsCount: () => {},
   commentsLoading: false,
   unreadLoading: false,
+  chatwootAvailable: null,
   pendingOrdersCount: 0,
   ordersLoading: false,
   refresh: () => {},
@@ -51,6 +53,11 @@ const getManuallyUnreadSet = (profileId?: string): Set<number> => {
 
 const POLL_INTERVAL_MS = 5_000; // poll every 5 seconds
 
+const isChatwootConfigured = (profile: any) => {
+  const status = profile?.connection_statuses?.chatwoot;
+  return !!(profile?.chatwoot_url && profile?.chatwoot_token && (status === 'ok' || status === 'connected'));
+};
+
 export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile: authProfile } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
@@ -64,6 +71,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [unreadLoading, setUnreadLoading] = useState(true);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [chatwootAvailable, setChatwootAvailable] = useState<boolean | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isFirstCommentsFetch = useRef(true);
@@ -82,11 +90,13 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isFirstUnreadFetch.current = true;
       setCommentsLoading(true);
       setUnreadLoading(true);
+      setChatwootAvailable(isChatwootConfigured(profile) ? null : false);
     } else {
       setUnreadCount(0);
       setPendingCommentsCount(0);
       setCommentsLoading(false);
       setUnreadLoading(false);
+      setChatwootAvailable(false);
     }
     document.title = 'Portal C.A.R | Algoritmia';
   }, [profile?.id]);
@@ -103,8 +113,10 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     const url = profile?.chatwoot_url;
     const token = profile?.chatwoot_token;
-    if (!url || !token) {
+    if (!isChatwootConfigured(profile)) {
       setUnreadLoading(false);
+      setUnreadCount(0);
+      setChatwootAvailable(false);
       return;
     }
 
@@ -116,6 +128,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       // 1. Fetch page 1 of open conversations to get total count
       const firstPage = await chatwoot.getConversationsPage(url, token, 'open', 1);
+      setChatwootAvailable(true);
       const allCount = firstPage.meta?.all_count ?? 0;
       const firstPayload = firstPage.payload || [];
 
@@ -178,13 +191,15 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     } catch (err) {
       console.error('[UnreadContext] Error fetching count:', err);
+      setUnreadCount(0);
+      setChatwootAvailable(false);
     } finally {
       if (isFirst) {
         setUnreadLoading(false);
         isFirstUnreadFetch.current = false;
       }
     }
-  }, [profile?.id, profile?.chatwoot_url, profile?.chatwoot_token]);
+  }, [profile]);
 
   // Keep a ref to the latest fetchCount function to prevent connection churn in WebSocket
   const fetchCountRef = useRef(fetchCount);
@@ -225,7 +240,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const url = profile?.chatwoot_url;
     const token = profile?.chatwoot_token;
-    if (!url || !token) return;
+    if (!isChatwootConfigured(profile)) return;
 
     let ws: WebSocket | null = null;
     let pingInterval: any = null;
@@ -293,16 +308,17 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       clearTimeout(reconnectTimeout);
       ws?.close();
     };
-  }, [profile?.chatwoot_url, profile?.chatwoot_token]);
+  }, [profile]);
 
   // Fallback Polling (polls at regular interval in case WebSocket misses an event)
   useEffect(() => {
     const url = profile?.chatwoot_url;
     const token = profile?.chatwoot_token;
-    if (!url || !token) {
+    if (!isChatwootConfigured(profile)) {
       if (timerRef.current) clearInterval(timerRef.current);
       // No Chatwoot = no badge, clean title
       setUnreadCount(0);
+      setChatwootAvailable(false);
       return;
     }
 
@@ -315,7 +331,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [profile?.chatwoot_url, profile?.chatwoot_token]);
+  }, [profile]);
 
   // Trigger fetchCount immediately when navigating away from /mensajeria
   // to sync the count on other pages without waiting for the next poll.
@@ -370,6 +386,14 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     try {
       let total = 0;
+      let ignoredComments: Record<string, boolean> = {};
+      if (profile?.id) {
+        try {
+          ignoredComments = JSON.parse(localStorage.getItem(`car_ignored_comments_${profile.id}`) || '{}');
+        } catch {
+          ignoredComments = {};
+        }
+      }
 
       // 1. Fetch Instagram media posts with comments and replies inline
       let igPosts: any[] = [];
@@ -377,8 +401,8 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
           const res = await metaAds.getInstagramMedia(igId, 50, undefined, fbPageId);
           igPosts = res?.data || res || [];
-        } catch (e) {
-          console.error('Error fetching IG media for unread count:', e);
+        } catch {
+          igPosts = [];
         }
       }
 
@@ -388,82 +412,49 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
           const res = await metaAds.getFacebookPageFeed(fbPageId, 50);
           fbPosts = res?.data || res || [];
-        } catch (e) {
-          console.error('Error fetching FB feed for unread count:', e);
+        } catch {
+          fbPosts = [];
         }
       }
 
-      // Pending = page has NEVER replied to the thread. Any reply from us
-      // (even followed by a "gracias" from the user) counts as answered.
-      const fromIsPage = (entry: any, isIg: boolean) => {
-        if (!entry) return false;
-        if (isIg) {
-          if (entry.username && igUsername && entry.username.toLowerCase() === igUsername.toLowerCase()) return true;
-          if (igId && entry.from?.id && String(entry.from.id) === String(igId)) return true;
-          return false;
-        }
-        return entry.from?.id === fbPageId;
-      };
+      // Helper to check if a comment is pending
       const isCommentPendingLocal = (comment: any, isIg: boolean) => {
-        if (fromIsPage(comment, isIg)) return false;
+        if (ignoredComments[comment?.id]) return false;
+        const isFromPage = isIg 
+          ? (comment.username && igUsername && comment.username.toLowerCase() === igUsername.toLowerCase()) 
+          : comment.from?.id === fbPageId;
+        if (isFromPage) return false;
+
         const replies = comment.replies?.data || [];
         if (replies.length === 0) return true;
-        return !replies.some((r: any) => fromIsPage(r, isIg));
+
+        const sorted = [...replies].sort((a, b) =>
+          new Date(a.timestamp || a.created_time).getTime() - new Date(b.timestamp || b.created_time).getTime()
+        );
+        const latest = sorted[sorted.length - 1];
+        const latestIsMe = isIg
+          ? (latest.username && igUsername && latest.username.toLowerCase() === igUsername.toLowerCase())
+          : latest.from?.id === fbPageId;
+        return !latestIsMe;
       };
 
-      // Build the list of comments that LOOK pending from the inline data.
-      // We'll then verify each by fetching real replies — the inline expansion
-      // routinely returns empty replies even when the page did reply.
-      type Suspect = { commentId: string; isIg: boolean };
-      const suspects: Suspect[] = [];
-      const commentsById: Record<string, any> = {};
-
+      // Count pending comments in Instagram posts
       igPosts.forEach((post: any) => {
         const rawComments = post.comments?.data || [];
-        rawComments.forEach((c: any) => {
-          const isFromPage = c.username && igUsername && c.username.toLowerCase() === igUsername.toLowerCase();
-          if (isFromPage) return;
-          commentsById[c.id] = c;
-          if (isCommentPendingLocal(c, true)) suspects.push({ commentId: c.id, isIg: true });
-        });
+        const userComments = rawComments.filter((c: any) => 
+          c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true
+        );
+        const pending = userComments.filter((c: any) => isCommentPendingLocal(c, true));
+        total += pending.length;
       });
+
+      // Count pending comments in Facebook posts
       fbPosts.forEach((post: any) => {
         const rawComments = post.comments?.data || [];
-        rawComments.forEach((c: any) => {
-          if (c.from?.id === fbPageId) return;
-          commentsById[c.id] = c;
-          if (isCommentPendingLocal(c, false)) suspects.push({ commentId: c.id, isIg: false });
-        });
+        const userComments = rawComments.filter((c: any) => c.from?.id !== fbPageId);
+        const pending = userComments.filter((c: any) => isCommentPendingLocal(c, false));
+        total += pending.length;
       });
-
-      // Verify each suspect by fetching real replies. Throttled to 8 in parallel.
-      const verifyOne = async ({ commentId, isIg }: Suspect): Promise<boolean> => {
-        try {
-          const r = isIg
-            ? await metaAds.getInstagramCommentReplies(commentId, fbPageId)
-            : await metaAds.getFacebookCommentReplies(commentId, fbPageId);
-          const replies = r.data || [];
-          if (replies.length === 0) return true; // really pending
-          // Any reply from page → already answered
-          return !replies.some((rep: any) => {
-            if (isIg) {
-              if (rep.username && igUsername && rep.username.toLowerCase() === igUsername.toLowerCase()) return true;
-              if (igId && rep.from?.id && String(rep.from.id) === String(igId)) return true;
-              return false;
-            }
-            return rep.from?.id === fbPageId;
-          });
-        } catch {
-          return true; // assume pending on failure
-        }
-      };
-
-      const CONCURRENCY = 8;
-      for (let i = 0; i < suspects.length; i += CONCURRENCY) {
-        const batch = suspects.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(batch.map(verifyOne));
-        results.forEach(stillPending => { if (stillPending) total += 1; });
-      }
 
       // 3. Fetch Ads comments if metaAccountId is present
       if (metaAccountId) {
@@ -502,26 +493,19 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               }
             });
             const results = await Promise.all(commentsPromises);
-            const adSuspects: Suspect[] = [];
             results.forEach(({ target, comments: rawComments }) => {
               const isIgAd = target.platform === 'instagram';
               const userComments = rawComments.filter((c: any) => {
-                return isIgAd
-                  ? (c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true)
+                return isIgAd 
+                  ? (c.username && igUsername ? c.username.toLowerCase() !== igUsername.toLowerCase() : true) 
                   : c.from?.id !== fbPageId;
               });
-              userComments.forEach((c: any) => {
-                if (isCommentPendingLocal(c, isIgAd)) adSuspects.push({ commentId: c.id, isIg: isIgAd });
-              });
+              const pending = userComments.filter((c: any) => isCommentPendingLocal(c, isIgAd));
+              total += pending.length;
             });
-            for (let i = 0; i < adSuspects.length; i += CONCURRENCY) {
-              const batch = adSuspects.slice(i, i + CONCURRENCY);
-              const verdicts = await Promise.all(batch.map(verifyOne));
-              verdicts.forEach(stillPending => { if (stillPending) total += 1; });
-            }
           }
-        } catch (e) {
-          console.error('Error fetching Ads for unread count:', e);
+        } catch {
+          // Keep the global badge quiet when Meta is unavailable.
         }
       }
 
@@ -551,11 +535,11 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [fetchCommentsCount]);
 
-  // Poll comments every 60 seconds (prevents Meta API rate limit exhaustion)
+  // Poll comments every 5 seconds
   useEffect(() => {
     if (!profile?.id) return;
     fetchCommentsCount();
-    const interval = setInterval(fetchCommentsCount, 60_000);
+    const interval = setInterval(fetchCommentsCount, 5_000);
     return () => clearInterval(interval);
   }, [profile?.id, fetchCommentsCount]);
 
@@ -592,12 +576,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else if (isTN) {
         count = await ecommerce.getTiendaNubeUnfulfilledCount(tnStoreId, tnToken);
       }
-      setPendingOrdersCount(prev => {
-        if (prev > 0 && count > prev) {
-          window.dispatchEvent(new CustomEvent('car_new_order_event', { detail: count - prev }));
-        }
-        return count;
-      });
+      setPendingOrdersCount(count);
     } catch {
       // silent
     } finally {
@@ -641,7 +620,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [profile?.id]);
 
   return (
-    <UnreadContext.Provider value={{ unreadCount, setUnreadCount, pendingCommentsCount, setPendingCommentsCount, commentsLoading, unreadLoading, pendingOrdersCount, ordersLoading, refresh: fetchCount, markRead }}>
+    <UnreadContext.Provider value={{ unreadCount, setUnreadCount, pendingCommentsCount, setPendingCommentsCount, commentsLoading, unreadLoading, chatwootAvailable, pendingOrdersCount, ordersLoading, refresh: fetchCount, markRead }}>
       {children}
     </UnreadContext.Provider>
   );

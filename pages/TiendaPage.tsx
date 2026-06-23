@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
 import { ShoppingBag, DollarSign, Package, Calendar, ChevronDown, Receipt, Tag, TrendingUp, CheckCircle, Clock, BarChart2, Download, X, Search, AlertCircle, XCircle, Loader2, RefreshCw, Users, ChevronRight, MapPin, Building } from 'lucide-react';
@@ -113,6 +114,7 @@ const TotalBadge: React.FC<{ score: number }> = ({ score }) => {
 export default function TiendaPage() {
   const { profile: authProfile } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
+  const { darkMode } = useTheme();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   
   const detectedPlatform = useMemo(() => {
@@ -132,6 +134,7 @@ export default function TiendaPage() {
   const [data, setData] = useState<any>(null);
   const [prevData, setPrevData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const isDateReloading = loading && !!data;
   const [expandedMetric, setExpandedMetric] = useState<string | null>('s-revenue');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
@@ -183,7 +186,7 @@ export default function TiendaPage() {
         return;
       }
 
-      if (!cancelled) setLoading(true);
+      if (!cancelled) { setLoading(true); setFetchError(null); }
       const range = activePreset === 'custom' ? { since: activeSince, until: activeUntil } : presetToRange(activePreset);
       const prevRange = getPrevPeriod(range.since, range.until);
       try {
@@ -194,8 +197,9 @@ export default function TiendaPage() {
         if (cancelled) return;
         setData(res);
         setPrevData(prevRes);
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        if (!cancelled) setFetchError(err?.message || 'No se pudo cargar la información de tu tienda.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -270,7 +274,7 @@ export default function TiendaPage() {
               {detectedPlatform === 'shopify' ? (
                 <img src="/assets/shopify-bag.webp" alt="Shopify" className="w-8 h-8 object-contain" />
               ) : detectedPlatform === 'tiendanube' ? (
-                <img src="/assets/tiendanube.webp" alt="Tiendanube" className="w-8 h-8 object-contain" />
+                <img src={darkMode ? "/assets/tiendanube.webp" : "/assets/tiendanubeoscuro.png"} alt="Tiendanube" className="w-8 h-8 object-contain" />
               ) : detectedPlatform === 'wordpress' ? (
                 <img src="/assets/logowordpress.webp" alt="WooCommerce" className="w-8 h-8 object-contain" />
               ) : (
@@ -551,6 +555,13 @@ export default function TiendaPage() {
             )}
             </div>
           </div>
+      ) : fetchError ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center"><AlertCircle className="w-7 h-7 text-red-500" /></div>
+          <p className="text-[15px] font-semibold text-red-600 dark:text-red-400">No se pudieron cargar los datos de la tienda</p>
+          <p className="text-[13px] text-zinc-400 max-w-md">{fetchError}</p>
+          <button onClick={() => setRefreshKey(k => k + 1)} className="mt-2 px-4 py-1.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[12px] font-black shadow-sm hover:opacity-90 transition-all">Reintentar</button>
+        </div>
       ) : null}
 
 
@@ -626,7 +637,7 @@ export default function TiendaPage() {
                   </span>
                   {selectedOrder.shipping_address ? (
                     <div className="text-[12px] text-zinc-650 dark:text-zinc-400 leading-relaxed font-medium">
-                      <p className="font-bold text-zinc-850 dark:text-zinc-200">
+                      <p className="font-bold text-zinc-800 dark:text-zinc-200">
                         {selectedOrder.shipping_address.name || `${selectedOrder.shipping_address.first_name || ''} ${selectedOrder.shipping_address.last_name || ''}`}
                       </p>
                       <p>{selectedOrder.shipping_address.address1}</p>
@@ -694,7 +705,7 @@ export default function TiendaPage() {
                 <span className="text-[10px] font-black text-pink-650 dark:text-pink-400 uppercase tracking-wider block">
                   Productos Solicitados
                 </span>
-                <div className="border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-850">
+                <div className="border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800">
                   {selectedOrder.line_items?.map((item: any, idx: number) => (
                     <div key={idx} className="p-4 flex items-center justify-between text-[13px] font-medium text-zinc-700 dark:text-zinc-350">
                       <div className="min-w-0 pr-3">
@@ -751,7 +762,7 @@ export default function TiendaPage() {
                     <span>${selectedOrder.total_tax?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between text-[15px] font-bold text-zinc-900 dark:text-white pt-2 border-t border-dashed border-zinc-100 dark:border-zinc-850">
+                <div className="flex items-center justify-between text-[15px] font-bold text-zinc-900 dark:text-white pt-2 border-t border-dashed border-zinc-100 dark:border-zinc-800">
                   <span>Total Facturado</span>
                   <span className="text-[18px] text-pink-600 dark:text-pink-400 font-black">
                     ${selectedOrder.total_price?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}

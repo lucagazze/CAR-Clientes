@@ -52,7 +52,8 @@ import {
   Send,
   Clock,
   Loader2,
-  User
+  User,
+  Coins
 } from "lucide-react";
 import {
   AreaChart,
@@ -74,6 +75,50 @@ const RED = "#ef4444";
 const PINK = "#ec4899";
 
 const MAIN_COLOR = "#3b82f6"; // Default Blue for Captación
+const DASHBOARD_CACHE_VERSION = "v2";
+const DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type DashboardCachePayload = {
+  currentStore?: any;
+  prevStore?: any;
+  currentMeta?: any;
+  prevMeta?: any;
+  metaDaily?: any[];
+  prevMetaDaily?: any[];
+  currentKlaviyo?: any;
+  prevKlaviyo?: any;
+};
+
+const readDashboardCache = (cacheKey: string): DashboardCachePayload | null => {
+  try {
+    const raw = sessionStorage.getItem(cacheKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+
+    // Legacy cache objects had no timestamp and could leave Safari with an
+    // incomplete dashboard for a full browser session.
+    if (!parsed?.timestamp || Date.now() - Number(parsed.timestamp) > DASHBOARD_CACHE_TTL_MS) {
+      sessionStorage.removeItem(cacheKey);
+      return null;
+    }
+
+    return parsed.data || null;
+  } catch (e) {
+    sessionStorage.removeItem(cacheKey);
+    console.error("Error parsing dashboard cache:", e);
+    return null;
+  }
+};
+
+const writeDashboardCacheValue = (cacheKey: string, key: keyof DashboardCachePayload, data: any) => {
+  try {
+    const existing = readDashboardCache(cacheKey) || {};
+    const nextData = { ...existing, [key]: data };
+    sessionStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: nextData }));
+  } catch {
+    // Storage can be unavailable on some Safari modes; data still renders live.
+  }
+};
 
 const ensureMetaToken = async (): Promise<void> => {
   if (localStorage.getItem("meta_ads_token")) return;
@@ -332,6 +377,8 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
       : 0;
 
   const maxVal = Math.max(...data.map((d: any) => d.val), 0);
+  const minVal = nonZero.length > 0 ? Math.min(...nonZero) : 0;
+  const yMin = minVal > 0 ? Math.max(0, minVal * 0.75) : 0;
 
   const trend = prevAvg > 0 ? ((avg - prevAvg) / prevAvg) * 100 : 0;
   const chartColor = color || (trend > 5 ? GREEN : trend < -5 ? RED : BLUE);
@@ -462,22 +509,21 @@ const MetricDetailChartComponent = ({ label, data = [], prevData = [], color }: 
               interval="preserveStartEnd"
             />
             <YAxis
-              domain={[0, maxVal > 0 ? maxVal * 1.2 : "auto"]}
+              domain={[yMin, maxVal > 0 ? maxVal * 1.1 : "auto"]}
               ticks={
                 maxVal > 0
                   ? Array.from(
                       new Set([
-                        0,
                         Math.round(avg),
                         Math.round(prevAvg),
                         Math.round(maxVal),
                       ]),
                     )
-                      .filter((v) => v >= 0)
+                      .filter((v) => v > 0)
                       .sort((a, b) => a - b)
                   : undefined
               }
-              tickFormatter={(v) => (v === 0 ? "" : fmtVal(v))}
+              tickFormatter={(v) => fmtVal(v)}
               tick={{ fontSize: 9, fill: "#9ca3af" }}
               axisLine={false}
               tickLine={false}
@@ -895,6 +941,30 @@ export default function DashboardPage() {
     return platform || null;
   }, [profile]);
 
+  const savePlatformErrorToDB = async (platformKey: string, errorMessage: string) => {
+    if (!profile?.id) return;
+    try {
+      const { data: clientRow } = await supabase
+        .from('car_clients')
+        .select('connection_statuses')
+        .eq('id', profile.id)
+        .single();
+      
+      const currentStatuses = clientRow?.connection_statuses || {};
+      const updatedStatuses = { 
+        ...currentStatuses, 
+        [platformKey]: `error: ${errorMessage}` 
+      };
+      
+      await supabase
+        .from('car_clients')
+        .update({ connection_statuses: updatedStatuses })
+        .eq('id', profile.id);
+    } catch (err) {
+      console.error(`Error saving platform error for ${platformKey} to DB:`, err);
+    }
+  };
+
   const [links, setLinks] = useState<any[]>([]);
   const [metaDaily, setMetaDaily] = useState<any[]>([]);
   const [prevMetaDaily, setPrevMetaDaily] = useState<any[]>([]);
@@ -938,6 +1008,7 @@ export default function DashboardPage() {
   const [atencPrevSeriesAll, setAtencPrevSeriesAll] = useState<Record<string, any[]>>({});
   const [currentStore, setCurrentStore] = useState<any>(null);
   const [prevStore, setPrevStore] = useState<any>(null);
+  const [costSummary, setCostSummary] = useState({ current: 0, previous: 0 });
   const [productImages, setProductImages] = useState<Record<string, string>>({});
   const [fetchingStore, setFetchingStore] = useState(true);
   const [shopifyError, setShopifyError] = useState<string | null>(null);
@@ -959,6 +1030,12 @@ export default function DashboardPage() {
   const [selectedMetaGoal, setSelectedMetaGoal] = useState<'purchases' | 'leads' | 'messages'>('purchases');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [fulfillingOrder, setFulfillingOrder] = useState(false);
+  const chatwootStatus = (profile as any)?.connection_statuses?.chatwoot;
+  const hasChatwoot = !!(
+    (profile as any)?.chatwoot_url &&
+    (profile as any)?.chatwoot_token &&
+    (chatwootStatus === 'ok' || chatwootStatus === 'connected')
+  );
 
   const toggleFulfillment = async () => {
     if (!selectedOrder || fulfillingOrder) return;
@@ -1044,29 +1121,24 @@ export default function DashboardPage() {
   // Stale-While-Revalidate Caching for Dashboard metrics
   useEffect(() => {
     if (!profile?.id) return;
-    const cacheKey = `dashboard_cache_${profile.id}_${activePreset}_${activeSince}_${activeUntil}`;
-    const cachedData = sessionStorage.getItem(cacheKey);
-    if (cachedData) {
-      try {
-        const parsed = JSON.parse(cachedData);
-        if (parsed.currentStore) setCurrentStore(parsed.currentStore);
-        if (parsed.prevStore) setPrevStore(parsed.prevStore);
-        if (parsed.currentMeta) setCurrentMeta(parsed.currentMeta);
-        if (parsed.prevMeta) setPrevMeta(parsed.prevMeta);
-        if (parsed.metaDaily) setMetaDaily(parsed.metaDaily);
-        if (parsed.prevMetaDaily) setPrevMetaDaily(parsed.prevMetaDaily);
-        if (parsed.currentKlaviyo) setCurrentKlaviyo(parsed.currentKlaviyo);
-        if (parsed.prevKlaviyo) setPrevKlaviyo(parsed.prevKlaviyo);
-      } catch (e) {
-        console.error("Error parsing dashboard cache:", e);
-      }
-    }
+    const cacheKey = `dashboard_cache_${DASHBOARD_CACHE_VERSION}_${profile.id}_${activePreset}_${activeSince}_${activeUntil}`;
+    const cachedData = readDashboardCache(cacheKey);
+    if (!cachedData) return;
+    if (cachedData.currentStore) setCurrentStore(cachedData.currentStore);
+    if (cachedData.prevStore) setPrevStore(cachedData.prevStore);
+    if (cachedData.currentMeta) setCurrentMeta(cachedData.currentMeta);
+    if (cachedData.prevMeta) setPrevMeta(cachedData.prevMeta);
+    if (cachedData.metaDaily) setMetaDaily(cachedData.metaDaily);
+    if (cachedData.prevMetaDaily) setPrevMetaDaily(cachedData.prevMetaDaily);
+    if (cachedData.currentKlaviyo) setCurrentKlaviyo(cachedData.currentKlaviyo);
+    if (cachedData.prevKlaviyo) setPrevKlaviyo(cachedData.prevKlaviyo);
   }, [profile?.id, activePreset, activeSince, activeUntil]);
 
   // Reset all data states when client profile changes to prevent stale data leakage
   useEffect(() => {
     setCurrentStore(null);
     setPrevStore(null);
+    setCostSummary({ current: 0, previous: 0 });
     setProductImages({});
     setCurrentMeta(null);
     setPrevMeta(null);
@@ -1084,6 +1156,41 @@ export default function DashboardPage() {
     setHistorical90d([]);
   }, [profile?.id]);
 
+  // Pre-load error states from profile connection_statuses when they change
+  useEffect(() => {
+    const statuses = profile?.connection_statuses || {};
+    const prof: any = profile;
+    const hasStoreConfig = detectedPlatform && (
+      (detectedPlatform === 'shopify' && prof?.shopify_domain && prof?.shopify_access_token) ||
+      (detectedPlatform === 'wordpress' && prof?.wordpress_url && prof?.woo_consumer_key && prof?.woo_consumer_secret) ||
+      (detectedPlatform === 'tiendanube' && prof?.tiendanube_store_id && prof?.tiendanube_access_token)
+    );
+    
+    // Shopify Error
+    const shopifyVal = statuses.shopify;
+    if (!hasStoreConfig && typeof shopifyVal === 'string' && shopifyVal.startsWith('error')) {
+      setShopifyError(shopifyVal.replace(/^error:\s*/, '') || 'Error de conexión');
+    } else {
+      setShopifyError(null);
+    }
+
+    // Meta Error
+    const metaVal = statuses.meta;
+    if (typeof metaVal === 'string' && metaVal.startsWith('error')) {
+      setMetaError(metaVal.replace(/^error:\s*/, '') || 'Error de conexión');
+    } else {
+      setMetaError(null);
+    }
+
+    // Klaviyo Error
+    const klaviyoVal = statuses.klaviyo;
+    if (typeof klaviyoVal === 'string' && klaviyoVal.startsWith('error')) {
+      setKlaviyoError(klaviyoVal.replace(/^error:\s*/, '') || 'Error de conexión');
+    } else {
+      setKlaviyoError(null);
+    }
+  }, [profile?.connection_statuses, detectedPlatform, profile]);
+
   useEffect(() => {
     if (detectedPlatform === 'shopify' && (profile as any)?.shopify_domain && (profile as any)?.shopify_access_token) {
       ecommerce.getProducts((profile as any).shopify_domain, (profile as any).shopify_access_token)
@@ -1096,17 +1203,8 @@ export default function DashboardPage() {
           setProductImages(map);
         })
         .catch(e => console.error("Error loading products for images:", e));
-    } else if (detectedPlatform === 'wordpress' && (profile as any)?.wordpress_url && (profile as any)?.woo_consumer_key && (profile as any)?.woo_consumer_secret) {
-      ecommerce.getWooCommerceProducts((profile as any).wordpress_url, (profile as any).woo_consumer_key, (profile as any).woo_consumer_secret)
-        .then(prods => {
-          const map: Record<string, string> = {};
-          for (const p of prods) {
-            const src = typeof p.image === 'string' ? p.image : p.image?.src;
-            if (src) map[String(p.id)] = src;
-          }
-          setProductImages(map);
-        })
-        .catch(e => console.error("Error loading WooCommerce products for images:", e));
+    } else if (detectedPlatform === 'wordpress') {
+      setProductImages({});
     } else if (detectedPlatform === 'tiendanube' && (profile as any)?.tiendanube_store_id && (profile as any)?.tiendanube_access_token) {
       ecommerce.getTiendaNubeProducts((profile as any).tiendanube_store_id, (profile as any).tiendanube_access_token)
         .then(prods => {
@@ -1141,17 +1239,17 @@ export default function DashboardPage() {
 
     const updateCache = (key: string, data: any) => {
       if (!profile?.id) return;
-      try {
-        const cacheKey = `dashboard_cache_${profile.id}_${p}_${s}_${u}`;
-        const currentCache = JSON.parse(sessionStorage.getItem(cacheKey) || '{}');
-        currentCache[key] = data;
-        sessionStorage.setItem(cacheKey, JSON.stringify(currentCache));
-      } catch (e) {}
+      const cacheKey = `dashboard_cache_${DASHBOARD_CACHE_VERSION}_${profile.id}_${p}_${s}_${u}`;
+      writeDashboardCacheValue(cacheKey, key as keyof DashboardCachePayload, data);
     };
 
+    const statuses = profile?.connection_statuses || {};
+    const dbMetaError = typeof statuses.meta === 'string' && statuses.meta.startsWith('error');
+    const dbKlaviyoError = typeof statuses.klaviyo === 'string' && statuses.klaviyo.startsWith('error');
+
     setShopifyError(null);
-    setMetaError(null);
-    setKlaviyoError(null);
+    if (!dbMetaError) setMetaError(null);
+    if (!dbKlaviyoError) setKlaviyoError(null);
 
     try {
       const range = p === "custom" ? { since: s, until: u } : presetToRange(p);
@@ -1200,7 +1298,9 @@ export default function DashboardPage() {
         } catch (err: any) {
           console.error("Store Fetch Error:", err);
           if (myFetchId === fetchIdRef.current) {
-            setShopifyError(err?.message || "Error al conectar con Shopify");
+            const errMsg = err?.message || "Error al conectar con Shopify";
+            setShopifyError(errMsg);
+            savePlatformErrorToDB("shopify", errMsg);
           }
         } finally {
           if (myFetchId === fetchIdRef.current) setFetchingStore(false);
@@ -1208,7 +1308,8 @@ export default function DashboardPage() {
       };
 
       const fetchMeta = async () => {
-        if (!profile?.meta_account_id) {
+        const isMetaInError = typeof statuses.meta === 'string' && statuses.meta.startsWith('error');
+        if (!profile?.meta_account_id || isMetaInError) {
           setFetchingMeta(false);
           return;
         }
@@ -1330,7 +1431,9 @@ export default function DashboardPage() {
           if (err.name !== "AbortError") {
             console.error("Meta Fetch Error:", err);
             if (myFetchId === fetchIdRef.current) {
-              setMetaError(err?.message || "Error al conectar con Meta Ads");
+              const errMsg = err?.message || "Error al conectar con Meta Ads";
+              setMetaError(errMsg);
+              savePlatformErrorToDB("meta", errMsg);
             }
           }
         } finally {
@@ -1339,7 +1442,8 @@ export default function DashboardPage() {
       };
 
       const fetchKlaviyo = async () => {
-        if (!profile?.klaviyo_api_key) {
+        const isKlaviyoInError = typeof statuses.klaviyo === 'string' && statuses.klaviyo.startsWith('error');
+        if (!profile?.klaviyo_api_key || isKlaviyoInError) {
           setFetchingKlaviyo(false);
           return;
         }
@@ -1369,7 +1473,9 @@ export default function DashboardPage() {
         } catch (err: any) {
           console.error("Klaviyo Fetch Error:", err);
           if (myFetchId === fetchIdRef.current) {
-            setKlaviyoError(err?.message || "Error al conectar con Klaviyo");
+            const errMsg = err?.message || "Error al conectar con Klaviyo";
+            setKlaviyoError(errMsg);
+            savePlatformErrorToDB("klaviyo", errMsg);
           }
         } finally {
           if (myFetchId === fetchIdRef.current) setFetchingKlaviyo(false);
@@ -1400,8 +1506,59 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let mounted = true;
+    const calcCostForRange = (items: any[], since: string, until: string) => {
+      const start = new Date(`${since}T00:00:00-03:00`);
+      const end = new Date(`${until}T23:59:59-03:00`);
+      return items.reduce((sum, item) => {
+        const itemStart = new Date(`${item.start_date}T00:00:00-03:00`);
+        const itemEnd = new Date(`${item.end_date}T23:59:59-03:00`);
+        const overlapStart = new Date(Math.max(start.getTime(), itemStart.getTime()));
+        const overlapEnd = new Date(Math.min(end.getTime(), itemEnd.getTime()));
+        if (overlapEnd < overlapStart) return sum;
+        const overlapDays = Math.max(1, Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1);
+        const totalDays = Math.max(1, Math.floor((itemEnd.getTime() - itemStart.getTime()) / 86400000) + 1);
+        const daily = Number(item.daily_cost || 0) || (Number(item.cost || 0) / totalDays);
+        return sum + daily * overlapDays;
+      }, 0);
+    };
+
+    const loadCostSummary = async () => {
+      if (!profile?.id) {
+        setCostSummary({ current: 0, previous: 0 });
+        return;
+      }
+      const range = activePreset === "custom" ? { since: activeSince, until: activeUntil } : presetToRange(activePreset);
+      const prevRange = getPrevPeriod(range.since, range.until);
+      const { data, error } = await supabase
+        .from('car_additional_costs')
+        .select('start_date,end_date,cost,daily_cost')
+        .eq('client_id', profile.id);
+      if (error) {
+        console.error('Dashboard cost summary error:', error);
+        if (mounted) setCostSummary({ current: 0, previous: 0 });
+        return;
+      }
+      if (mounted) {
+        const items = data || [];
+        setCostSummary({
+          current: calcCostForRange(items, range.since, range.until),
+          previous: calcCostForRange(items, prevRange.since, prevRange.until)
+        });
+      }
+    };
+
+    loadCostSummary();
+    return () => { mounted = false; };
+  }, [profile?.id, activePreset, activeSince, activeUntil, refreshKey]);
+
+  useEffect(() => {
+    let mounted = true;
     const fetch90d = async () => {
       const prof: any = profile;
+      if (detectedPlatform === 'wordpress') {
+        if (mounted) setFetching90d(false);
+        return;
+      }
       const hasStoreConfig = detectedPlatform && (
         (detectedPlatform === 'shopify' && prof.shopify_domain && prof.shopify_access_token) ||
         (detectedPlatform === 'wordpress' && prof.wordpress_url && prof.woo_consumer_key && prof.woo_consumer_secret) ||
@@ -1439,7 +1596,17 @@ export default function DashboardPage() {
     let mounted = true;
     const fetchChatwoot = async () => {
       const prof: any = profile;
-      if (!prof?.chatwoot_url || !prof?.chatwoot_token) return;
+      if (!hasChatwoot) {
+        setFetchingChatwoot(false);
+        setChatwootSummary(null);
+        setPrevChatwootSummary(null);
+        setActiveAtencMetric(null);
+        setAtencChartData([]);
+        setAtencPrevChartData([]);
+        setAtencSeriesAll({});
+        setAtencPrevSeriesAll({});
+        return;
+      }
       setFetchingChatwoot(true);
       try {
         const untilSecs = Math.floor(new Date(`${activeUntil}T23:59:59Z`).getTime() / 1000);
@@ -1460,7 +1627,7 @@ export default function DashboardPage() {
     };
     if (profile?.id) fetchChatwoot();
     return () => { mounted = false; };
-  }, [profile?.id, activeSince, activeUntil, refreshKey]);
+  }, [profile?.id, hasChatwoot, activeSince, activeUntil, refreshKey]);
 
   // Pre-fetch ALL Atención sparklines when summary loads
   useEffect(() => {
@@ -1469,7 +1636,7 @@ export default function DashboardPage() {
     const ATENC_KEYS = ['conversations_count', 'incoming_messages_count', 'outgoing_messages_count', 'avg_first_response_time'];
     const fetchAll = async () => {
       const prof: any = profile;
-      if (!prof?.chatwoot_url || !prof?.chatwoot_token) return;
+      if (!hasChatwoot) return;
       const untilSecs = Math.floor(new Date(`${activeUntil}T23:59:59Z`).getTime() / 1000);
       const sinceSecs = Math.floor(new Date(`${activeSince}T00:00:00Z`).getTime() / 1000);
       const prevRange = getPrevPeriod(activeSince, activeUntil);
@@ -1514,7 +1681,7 @@ export default function DashboardPage() {
     };
     fetchAll();
     return () => { mounted = false; };
-  }, [chatwootSummary, profile?.id, activeSince, activeUntil]);
+  }, [chatwootSummary, profile?.id, hasChatwoot, activeSince, activeUntil]);
 
   // Fetch Atención chart when a metric is clicked
   useEffect(() => {
@@ -1522,7 +1689,7 @@ export default function DashboardPage() {
     let mounted = true;
     const fetchAtencChart = async () => {
       const prof: any = profile;
-      if (!prof?.chatwoot_url || !prof?.chatwoot_token) return;
+      if (!hasChatwoot) return;
       setLoadingAtencChart(true);
       try {
         const untilSecs = Math.floor(new Date(`${activeUntil}T23:59:59Z`).getTime() / 1000);
@@ -1562,7 +1729,7 @@ export default function DashboardPage() {
     };
     fetchAtencChart();
     return () => { mounted = false; };
-  }, [activeAtencMetric, profile?.id, activeSince, activeUntil]);
+  }, [activeAtencMetric, profile?.id, hasChatwoot, activeSince, activeUntil]);
 
   const handleApply = () => {
     setActivePreset(pendingPreset);
@@ -1604,6 +1771,14 @@ export default function DashboardPage() {
       val: spend > 0 ? d.revenue / spend : 0
     };
   }) : [];
+
+  const currentSpend = currentMeta?.spend || 0;
+  const prevSpend = prevMeta?.spend || 0;
+  const currentNetRevenue = Math.max(0, (currentStore?.revenue || 0) - costSummary.current - currentSpend);
+  const prevNetRevenue = Math.max(0, (prevStore?.revenue || 0) - costSummary.previous - prevSpend);
+  const realRoas = currentSpend > 0 ? currentNetRevenue / currentSpend : 0;
+  const prevRealRoas = prevSpend > 0 ? prevNetRevenue / prevSpend : 0;
+  const showProfitMetrics = !!currentStore && (costSummary.current > 0 || currentSpend > 0);
 
   const prevMerDaily = (prevStore && prevStore.daily) ? prevStore.daily.map((d: any, idx: number) => {
     const metaDay = prevMetaDaily?.[idx];
@@ -1914,14 +2089,14 @@ export default function DashboardPage() {
 
       <div className="space-y-6">
         {/* Shopify Section */}
-        {detectedPlatform && (
+        {detectedPlatform && !shopifyError && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 {detectedPlatform === 'shopify' ? (
                   <img src="/assets/shopify-bag.webp" alt="Shopify" className="w-5 h-5 object-contain shrink-0" />
                 ) : detectedPlatform === 'tiendanube' ? (
-                  <img src="/assets/tiendanube.webp" alt="Tiendanube" className="w-5 h-5 object-contain shrink-0" />
+                  <img src={darkMode ? "/assets/tiendanube.webp" : "/assets/tiendanubeoscuro.png"} alt="Tiendanube" className="w-5 h-5 object-contain shrink-0" />
                 ) : detectedPlatform === 'wordpress' ? (
                   <img src="/assets/logowordpress.webp" alt="WooCommerce" className="w-5 h-5 object-contain shrink-0" />
                 ) : (
@@ -1942,7 +2117,7 @@ export default function DashboardPage() {
               key={`store-${activeSince}-${activeUntil}`}
               loading={fetchingStore}
               color={PINK}
-              labels={showMER ? ['Ticket Promedio', 'Pedidos', 'Ingresos', 'M.E.R. (Eficiencia)'] : ['Ticket Promedio', 'Pedidos', 'Ingresos']}
+              labels={showProfitMetrics ? ['Ticket Promedio', 'Pedidos', 'Ingresos', 'Facturación neta', 'ROAS real'] : (showMER ? ['Ticket Promedio', 'Pedidos', 'Ingresos', 'M.E.R. (Eficiencia)'] : ['Ticket Promedio', 'Pedidos', 'Ingresos'])}
               duration={500}
             >
               {currentStore ? (
@@ -2026,6 +2201,36 @@ export default function DashboardPage() {
                     }
                     info="Ingresos representa la facturación bruta total de la tienda online (ventas totales) antes de descontar costos de pauta, envíos o devoluciones."
                   />
+                  {showProfitMetrics && (
+                    <>
+                      <ShopifyMetric
+                        icon={Coins}
+                        label="Facturación neta"
+                        value={`$ ${currentNetRevenue.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`}
+                        change={getKlaviyoChange(currentNetRevenue, prevNetRevenue)}
+                        trend={currentNetRevenue >= prevNetRevenue ? "up" : "down"}
+                        data={currentStore?.daily?.map((d: any) => ({ val: d.revenue, date: d.date }))}
+                        color={PINK}
+                        loading={fetchingStore || fetchingMeta}
+                        active={expandedMetric === "s-net-revenue"}
+                        onClick={() => setExpandedMetric(expandedMetric === "s-net-revenue" ? null : "s-net-revenue")}
+                        info="Facturación neta descuenta de la facturación bruta los costos adicionales cargados en Costos y la inversión publicitaria del período. Los costos unitarios por producto quedan guardados para análisis de margen."
+                      />
+                      <ShopifyMetric
+                        icon={Zap}
+                        label="ROAS real"
+                        value={currentSpend > 0 ? `${realRoas.toFixed(2)}x` : "—"}
+                        change={prevRealRoas > 0 ? getKlaviyoChange(realRoas, prevRealRoas) : undefined}
+                        trend={realRoas >= prevRealRoas ? "up" : "down"}
+                        data={currentStore?.daily?.map((d: any) => ({ val: currentSpend > 0 ? d.revenue / currentSpend : 0, date: d.date }))}
+                        color={PINK}
+                        loading={fetchingStore || fetchingMeta}
+                        active={expandedMetric === "s-real-roas"}
+                        onClick={() => setExpandedMetric(expandedMetric === "s-real-roas" ? null : "s-real-roas")}
+                        info="ROAS real usa la facturación neta estimada dividida por la inversión publicitaria. Incluye costos adicionales cargados y pauta del período."
+                      />
+                    </>
+                  )}
                   {showMER && (
                     <ShopifyMetric
                       icon={Zap}
@@ -2051,6 +2256,10 @@ export default function DashboardPage() {
                     label={
                       expandedMetric === "mer-efficiency"
                         ? "M.E.R. (Eficiencia)"
+                        : expandedMetric === "s-net-revenue"
+                          ? "Facturación neta"
+                          : expandedMetric === "s-real-roas"
+                            ? "ROAS real"
                         : expandedMetric === "s-revenue"
                           ? "Ingresos"
                           : expandedMetric === "s-orders"
@@ -2065,6 +2274,10 @@ export default function DashboardPage() {
                     data={
                       expandedMetric === "mer-efficiency"
                         ? merDaily
+                        : expandedMetric === "s-net-revenue"
+                          ? currentStore?.daily?.map((d: any) => ({ val: d.revenue, date: d.date }))
+                        : expandedMetric === "s-real-roas"
+                          ? currentStore?.daily?.map((d: any) => ({ val: currentSpend > 0 ? d.revenue / currentSpend : 0, date: d.date }))
                         : expandedMetric === "s-revenue"
                           ? currentStore?.daily?.map((d: any) => ({
                               val: d.revenue,
@@ -2093,6 +2306,10 @@ export default function DashboardPage() {
                     prevData={
                       expandedMetric === "mer-efficiency"
                         ? prevMerDaily
+                        : expandedMetric === "s-net-revenue"
+                          ? prevStore?.daily?.map((d: any) => ({ val: d.revenue, date: d.date }))
+                        : expandedMetric === "s-real-roas"
+                          ? prevStore?.daily?.map((d: any) => ({ val: prevSpend > 0 ? d.revenue / prevSpend : 0, date: d.date }))
                         : expandedMetric === "s-revenue"
                           ? prevStore?.daily?.map((d: any) => ({
                               val: d.revenue,
@@ -2127,7 +2344,7 @@ export default function DashboardPage() {
         )}
 
         {/* Meta Ads Section */}
-        {profile?.meta_account_id && (
+        {profile?.meta_account_id && !metaError && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -2359,7 +2576,7 @@ export default function DashboardPage() {
         )}
 
         {/* Email Marketing Section */}
-        {profile?.klaviyo_api_key && (
+        {profile?.klaviyo_api_key && !klaviyoError && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -2584,7 +2801,7 @@ export default function DashboardPage() {
         )}
 
         {/* ATENCIÓN (Chatwoot) */}
-        {(profile as any)?.chatwoot_token && (
+        {hasChatwoot && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-violet-500 shrink-0" />
@@ -2675,8 +2892,8 @@ export default function DashboardPage() {
             </h2>
             {fetching90d ? (
               <div className="h-[300px] flex items-center justify-center animate-pulse bg-zinc-50 dark:bg-zinc-800/50 rounded-xl" />
-            ) : historical90d.length > 0 ? (
-              <HistoricalRevenueChart data={historical90d} color={PINK} />
+            ) : (historical90d.length > 0 || currentStore?.daily?.length > 0) ? (
+              <HistoricalRevenueChart data={historical90d.length > 0 ? historical90d : currentStore.daily} color={PINK} />
             ) : (
               <div className="h-[300px] flex flex-col items-center justify-center text-zinc-400 gap-4">
                 <BarChart2 className="w-10 h-10 opacity-20" />
@@ -2953,7 +3170,7 @@ export default function DashboardPage() {
                   </span>
                   {selectedOrder.shipping_address ? (
                     <div className="text-[12px] text-zinc-650 dark:text-zinc-400 leading-relaxed font-medium">
-                      <p className="font-bold text-zinc-850 dark:text-zinc-200">
+                      <p className="font-bold text-zinc-800 dark:text-zinc-200">
                         {selectedOrder.shipping_address.name || `${selectedOrder.shipping_address.first_name || ''} ${selectedOrder.shipping_address.last_name || ''}`}
                       </p>
                       <p>{selectedOrder.shipping_address.address1}</p>
@@ -2982,7 +3199,7 @@ export default function DashboardPage() {
                       : selectedOrder.financial_status === 'authorized'
                         ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-500/15"
                         : selectedOrder.financial_status === 'refunded'
-                          ? "bg-zinc-150 text-zinc-600 dark:bg-zinc-850 dark:text-zinc-550 border border-zinc-600/15"
+                          ? "bg-zinc-150 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-550 border border-zinc-600/15"
                           : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-500/15"
                   }`}>
                     {selectedOrder.financial_status === 'paid' 
@@ -3031,7 +3248,7 @@ export default function DashboardPage() {
                 <span className="text-[10px] font-black text-pink-650 dark:text-pink-400 uppercase tracking-wider block">
                   Productos Solicitados
                 </span>
-                <div className="border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-850">
+                <div className="border border-zinc-100 dark:border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800">
                   {selectedOrder.line_items?.map((item: any, idx: number) => {
                     const img = item._wc_image || productImages[String(item.product_id)];
                     return (
@@ -3098,7 +3315,7 @@ export default function DashboardPage() {
                     <span>${selectedOrder.total_tax?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between text-[15px] font-bold text-zinc-900 dark:text-white pt-2 border-t border-dashed border-zinc-100 dark:border-zinc-850">
+                <div className="flex items-center justify-between text-[15px] font-bold text-zinc-900 dark:text-white pt-2 border-t border-dashed border-zinc-100 dark:border-zinc-800">
                   <span>Total Facturado</span>
                   <span className="text-[18px] text-pink-600 dark:text-pink-400 font-black">
                     ${selectedOrder.total_price?.toLocaleString('es-AR', { maximumFractionDigits: 0 })}

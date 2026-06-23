@@ -12,7 +12,11 @@ export const initMetaToken = async (): Promise<void> => {
   } catch { /* silently ignore */ }
 };
 
-const getToken = () => (import.meta as any).env.VITE_META_ADS_TOKEN || localStorage.getItem('meta_ads_token') || '';
+const getToken = () =>
+  localStorage.getItem('current_facebook_access_token') ||
+  (import.meta as any).env.VITE_META_ADS_TOKEN ||
+  localStorage.getItem('meta_ads_token') ||
+  '';
 
 // ─── sessionStorage result cache — survives page refreshes, cleared on tab close ───
 const META_PREFIX = 'meta:';
@@ -37,6 +41,48 @@ function metaSetCache(key: string, data: any) {
   try {
     sessionStorage.setItem(META_PREFIX + key, JSON.stringify({ data, timestamp: Date.now() }));
   } catch { /* silently skip if storage full */ }
+}
+
+let activeClientCache: { userId: string; viewAsClientId: string; clientId: string; expiresAt: number } | null = null;
+
+async function getActiveClientId(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) return '';
+  const viewAsClientId = (() => {
+    try {
+      return localStorage.getItem('view_as_client_id') || '';
+    } catch {
+      return '';
+    }
+  })();
+  if (activeClientCache && activeClientCache.userId === userId && activeClientCache.viewAsClientId === viewAsClientId && activeClientCache.expiresAt > Date.now()) {
+    return activeClientCache.clientId;
+  }
+
+  if (viewAsClientId) {
+    activeClientCache = { userId, viewAsClientId, clientId: viewAsClientId, expiresAt: Date.now() + 30 * 1000 };
+    return viewAsClientId;
+  }
+
+  const { data: direct } = await supabase
+    .from('car_clients')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  let clientId = direct?.id || '';
+
+  if (!clientId) {
+    const { data: link } = await supabase
+      .from('car_business_accounts')
+      .select('business_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    clientId = link?.business_id || '';
+  }
+
+  activeClientCache = { userId, viewAsClientId, clientId, expiresAt: Date.now() + 5 * 60 * 1000 };
+  return clientId;
 }
 
 export const META_AD_ACCOUNT = 'act_2136106490563351';
@@ -168,12 +214,16 @@ const pageTokensCache: Record<string, string> = {};
 
 const getPageAccessToken = async (pageId: string): Promise<string> => {
   try {
-    // 1. In-memory cache (fastest — set by setClientPageToken or previous lookup)
+    // 1. In-memory or localStorage cache (fastest)
     if (pageTokensCache[pageId]) return pageTokensCache[pageId];
+    const localSaved = localStorage.getItem(`fb_pat_${pageId}`);
+    if (localSaved) {
+      pageTokensCache[pageId] = localSaved;
+      return localSaved;
+    }
 
-    // 2. Fallback: try /me/accounts with the agency token
-    //    This only works for pages the agency token has direct admin access to (i.e. Algoritmia's own pages)
-    const userToken = (import.meta as any).env.VITE_META_ADS_TOKEN || localStorage.getItem('meta_ads_token') || '';
+    // 2. Fallback: try /me/accounts with the active user token
+    const userToken = getToken();
     if (!userToken) return '';
 
     const cacheKey = `${pageId}_${userToken.slice(-10)}`;
@@ -189,14 +239,45 @@ const getPageAccessToken = async (pageId: string): Promise<string> => {
       pageTokensCache[cacheKey] = page.access_token;
       return page.access_token;
     }
+
+    // 3. Fallback: derive the token directly from the Page node. /me/accounts only works for
+    // personal user-login tokens — a System User token (Business Settings) doesn't have
+    // "accounts" in that sense, but if the Page is assigned to it as an asset, asking the Page
+    // node itself for `access_token` returns a usable Page token.
+    const directUrl = new URL(`${BASE}/${pageId}`);
+    directUrl.searchParams.set('fields', 'access_token');
+    directUrl.searchParams.set('access_token', userToken);
+    const directRes = await fetch(directUrl.toString()).then(r => r.json());
+    if (directRes?.access_token) {
+      pageTokensCache[cacheKey] = directRes.access_token;
+      return directRes.access_token;
+    }
   } catch (e) {
     console.error('Error getting page access token:', e);
   }
-  return (import.meta as any).env.VITE_META_ADS_TOKEN || localStorage.getItem('meta_ads_token') || '';
+  return getToken();
 };
 
 
 const apiGet = async (endpoint: string, params: Record<string, string> = {}): Promise<any> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    const url = new URL('/api/meta-video', window.location.origin);
+    url.searchParams.set('action', 'graph');
+    url.searchParams.set('path', endpoint);
+    const clientId = await getActiveClientId();
+    if (clientId) url.searchParams.set('clientId', clientId);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const json = await res.json();
+    if (json?.error) {
+      throw new Error(json.error || `Meta API error ${res.status}`);
+    }
+    return json;
+  }
+
   const url = new URL(`${BASE}/${endpoint}`);
   url.searchParams.set('access_token', getToken());
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -209,6 +290,9 @@ const apiGet = async (endpoint: string, params: Record<string, string> = {}): Pr
 };
 
 const apiGetPage = async (pageId: string, endpoint: string, params: Record<string, string> = {}): Promise<any> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) return apiGet(endpoint, params);
+
   const token = await getPageAccessToken(pageId);
   const url = new URL(`${BASE}/${endpoint}`);
   url.searchParams.set('access_token', token);
@@ -278,6 +362,9 @@ const getActivePageId = (): string => {
 };
 
 const apiGetPageActive = async (endpoint: string, params: Record<string, string> = {}): Promise<any> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) return apiGet(endpoint, params);
+
   const activePageId = getActivePageId();
   const token = activePageId ? await getPageAccessToken(activePageId) : getToken();
   const url = new URL(`${BASE}/${endpoint}`);
@@ -328,6 +415,88 @@ const apiDeletePageActive = async (endpoint: string, params: Record<string, stri
   return json;
 };
 
+const collectPaginatedData = async (firstPage: any): Promise<any[]> => {
+  const all = [...(firstPage?.data || [])];
+  let nextUrl: string | null = firstPage?.paging?.next || null;
+  while (nextUrl) {
+    try {
+      const res = await fetch(nextUrl);
+      const json = await res.json();
+      if (json?.error) throw new Error(json.error.message || 'Meta API error');
+      if (json?.data) all.push(...json.data);
+      nextUrl = json?.paging?.next || null;
+    } catch {
+      break;
+    }
+  }
+  return all;
+};
+
+const collectComments = async (
+  fetchPage: (after?: string) => Promise<any>,
+  maxPages = 50
+): Promise<any[]> => {
+  const all: any[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const res = await fetchPage(after);
+    all.push(...(res?.data || []));
+    const nextAfter = res?.paging?.cursors?.after;
+    if (!res?.paging?.next || !nextAfter || nextAfter === after) break;
+    after = nextAfter;
+  }
+  return all;
+};
+
+const replyFieldsFor = (platform: 'instagram' | 'facebook') =>
+  platform === 'instagram'
+    ? 'id,text,message,timestamp,created_time,from{id,name},username,like_count'
+    : 'id,message,text,created_time,timestamp,from{id,name},username,like_count,attachment{media{image{src}},type,url}';
+
+const getCommentRepliesPage = (
+  commentId: string,
+  platform: 'instagram' | 'facebook',
+  pageId?: string,
+  after?: string
+) => {
+  const params: Record<string, string> = {
+    fields: replyFieldsFor(platform),
+    limit: '100',
+  };
+  if (after) params.after = after;
+  const endpoint = platform === 'instagram' ? `${commentId}/replies` : `${commentId}/comments`;
+  if (pageId) return apiGetPage(pageId, endpoint, params);
+  return apiGetPageActive(endpoint, params);
+};
+
+const hydrateCommentsWithAllReplies = async (
+  comments: any[],
+  platform: 'instagram' | 'facebook',
+  pageId?: string
+): Promise<any[]> => {
+  const hydrated: any[] = [];
+  const chunkSize = 8;
+  for (let i = 0; i < comments.length; i += chunkSize) {
+    const chunk = comments.slice(i, i + chunkSize);
+    const results = await Promise.all(chunk.map(async (comment) => {
+      try {
+        const fullReplies = await collectComments(
+          (after?: string) => getCommentRepliesPage(comment.id, platform, pageId, after),
+          50
+        );
+        const byId: Record<string, any> = {};
+        (comment.replies?.data || []).forEach((reply: any) => { if (reply?.id) byId[reply.id] = reply; });
+        fullReplies.forEach((reply: any) => { if (reply?.id) byId[reply.id] = reply; });
+        return { ...comment, replies: { data: Object.values(byId) } };
+      } catch {
+        return { ...comment, replies: comment.replies || { data: [] } };
+      }
+    }));
+    hydrated.push(...results);
+  }
+  return hydrated;
+};
+
 export const metaAds = {
   // ── ALL AD ACCOUNTS (paginado) ─────────────────────────────
   getAllAdAccounts: async () => {
@@ -358,17 +527,11 @@ export const metaAds = {
     }),
 
   // ── CAMPAIGNS ─────────────────────────────────────────────
-  getCampaigns: async (accountId = META_AD_ACCOUNT) => {
-    const cacheKey = `campaigns:${accountId}`;
-    const cached = metaGetCached(cacheKey);
-    if (cached) return cached;
-    const res = await apiGet(`${accountId}/campaigns`, {
+  getCampaigns: (accountId = META_AD_ACCOUNT) =>
+    apiGet(`${accountId}/campaigns`, {
       fields: 'id,name,status,objective,buying_type,daily_budget,lifetime_budget,start_time,stop_time,bid_strategy',
       limit: '100',
-    });
-    metaSetCache(cacheKey, res);
-    return res;
-  },
+    }),
 
   // ── CHECK if account has spend in the last 15 days ────────
   hasRecentSpend: async (accountId: string): Promise<boolean> => {
@@ -394,21 +557,17 @@ export const metaAds = {
   // ── ADS with creative thumbnails ──────────────────────────
   getAds: (adsetId: string) =>
     apiGet(`${adsetId}/ads`, {
-      fields: 'id,name,status,preview_shareable_link,creative{id,name,thumbnail_url,image_url,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_story_id,instagram_permalink_url}',
+      fields: 'id,name,status,preview_shareable_link,creative{id,name,thumbnail_url,image_url,image_hash,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_story_id,instagram_permalink_url}',
       limit: '50',
     }),
 
   // ── ALL ADS FOR ACCOUNT ──────────────────────────────────
   getAccountAds: async (accountId = META_AD_ACCOUNT) => {
-    const cacheKey = `ads:${accountId}`;
-    const cached = metaGetCached(cacheKey);
-    if (cached) return cached;
-    const res = await apiGet(`${accountId}/ads`, {
-      fields: 'id,name,status,campaign_id,preview_shareable_link,creative{id,name,body,title,thumbnail_url,image_url,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_permalink_url}',
+    const first = await apiGet(`${accountId}/ads`, {
+      fields: 'id,name,status,effective_status,configured_status,campaign_id,preview_shareable_link,creative{id,name,body,title,thumbnail_url,image_url,image_hash,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_permalink_url}',
       limit: '150',
     });
-    metaSetCache(cacheKey, res);
-    return res;
+    return { ...first, data: await collectPaginatedData(first) };
   },
 
   // ── AD-LEVEL INSIGHTS for a specific adset ────────────────
@@ -424,18 +583,13 @@ export const metaAds = {
 
   // ── AD-LEVEL INSIGHTS FOR ACCOUNT ────────────────────────
   getAdInsightsForAccount: async (accountId: string, fields: string, timeRange: TimeRange): Promise<any[]> => {
-    const cacheKey = `adinsights:${accountId}:${fields}:${JSON.stringify(timeRange)}`;
-    const cached = metaGetCached(cacheKey);
-    if (cached) return cached;
     const res = await apiGet(`${accountId}/insights`, {
       fields,
       level: 'ad',
       time_range: JSON.stringify(timeRange),
       limit: '150',
     });
-    const data = res?.data || [];
-    metaSetCache(cacheKey, data);
-    return data;
+    return collectPaginatedData(res);
   },
 
   // ── LIFETIME INSIGHTS FOR A SINGLE AD ───────────────────
@@ -457,13 +611,12 @@ export const metaAds = {
     const cached = metaGetCached(cacheKey);
     if (cached) return cached;
 
-    let url = `${BASE}/${accountId}/insights?fields=${fieldsStr}&access_token=${getToken()}&limit=500`;
-    if (range) url += `&time_range={"since":"${range.since}","until":"${range.until || range.since}"}`;
-    else if (preset) url += `&date_preset=${preset}`;
-    if (timeIncrement) url += `&time_increment=${timeIncrement}`;
+    const params: Record<string, string> = { fields: fieldsStr, limit: '500' };
+    if (range) params.time_range = JSON.stringify({ since: range.since, until: range.until || range.since });
+    else if (preset) params.date_preset = preset;
+    if (timeIncrement) params.time_increment = String(timeIncrement);
 
-    const res = await fetch(url, { signal });
-    const data = await res.json();
+    const data = await apiGet(`${accountId}/insights`, params);
     
     if (data.error) throw data.error;
     
@@ -624,7 +777,7 @@ export const metaAds = {
 
   getInstagramMedia: (igId: string, limit = 8, after?: string, fbPageId?: string) => {
     const params: Record<string, string> = {
-      fields: 'id,caption,media_type,timestamp,like_count,comments_count,permalink,thumbnail_url,media_url,comments.limit(50){id,text,timestamp,username,like_count,replies{id,text,timestamp,username}}',
+      fields: 'id,caption,media_type,timestamp,like_count,comments_count,permalink,thumbnail_url,media_url,children{media_url,media_type,thumbnail_url,permalink},comments.limit(100){id,text,timestamp,username,like_count,replies.limit(100){id,text,timestamp,username,from}}',
       limit: String(limit),
     };
     if (after) params.after = after;
@@ -633,19 +786,30 @@ export const metaAds = {
       : apiGetPageActive(`${igId}/media`, params);
   },
 
+  getAllInstagramMedia: async (igId: string, fbPageId?: string) => {
+    const first = await metaAds.getInstagramMedia(igId, 100, undefined, fbPageId);
+    return { ...first, data: await collectPaginatedData(first) };
+  },
+
   getInstagramMediaPermalink: (mediaId: string, fbPageId?: string) =>
     fbPageId
       ? apiGetPage(fbPageId, mediaId, { fields: 'permalink,shortcode' })
       : apiGetPageActive(mediaId, { fields: 'permalink,shortcode' }),
 
-  getInstagramMediaComments: (mediaId: string, fbPageId?: string) => {
-    const params = {
+  getInstagramMediaComments: (mediaId: string, fbPageId?: string, after?: string) => {
+    const params: Record<string, string> = {
       fields: 'id,text,timestamp,username,like_count,replies.limit(100){id,text,timestamp,username,from}',
       limit: '100',
     };
+    if (after) params.after = after;
     return fbPageId
       ? apiGetPage(fbPageId, `${mediaId}/comments`, params)
       : apiGetPageActive(`${mediaId}/comments`, params);
+  },
+
+  getAllInstagramMediaComments: async (mediaId: string, fbPageId?: string) => {
+    const comments = await collectComments((after?: string) => metaAds.getInstagramMediaComments(mediaId, fbPageId, after));
+    return hydrateCommentsWithAllReplies(comments, 'instagram', fbPageId);
   },
 
   replyToInstagramComment: async (commentId: string, message: string, fbPageId?: string) => {
@@ -678,123 +842,35 @@ export const metaAds = {
 
   getFacebookPageFeed: (pageId: string, limit = 8, after?: string) => {
     const params: Record<string, string> = {
-      fields: 'id,message,created_time,full_picture,permalink_url,likes.summary(true),comments.limit(50){id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies{id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}},attachments{media,type}',
+      fields: 'id,message,created_time,full_picture,permalink_url,likes.summary(true),comments.summary(true).limit(100){id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies.limit(100){id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}},attachments{media,type,url,target,subattachments{media,type,url,target}}',
       limit: String(limit),
     };
     if (after) params.after = after;
     return apiGetPage(pageId, `${pageId}/feed`, params);
   },
 
-  getFacebookPostComments: (postId: string) => {
+  getAllFacebookPageFeed: async (pageId: string) => {
+    const first = await metaAds.getFacebookPageFeed(pageId, 100);
+    return { ...first, data: await collectPaginatedData(first) };
+  },
+
+  getFacebookPostComments: (postId: string, after?: string) => {
     // Extract page ID from FB post ID format "{pageId}_{uniqueId}" to ensure page token is used.
     // Page Access Token is required for from.name — user token silently drops names (privacy).
     const pageId = postId.includes('_') ? postId.split('_')[0] : '';
     const fields = 'id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies.limit(100){id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}';
-    const params = { fields, limit: '100' };
+    const params: Record<string, string> = { fields, limit: '100' };
+    if (after) params.after = after;
     if (pageId) {
       return apiGetPage(pageId, `${postId}/comments`, params);
     }
     return apiGetPageActive(`${postId}/comments`, params);
   },
 
-  // Fetch replies for a single FB comment. Replies are children of the comment in Graph API.
-  // We follow paging.next to ensure we get every reply.
-  getFacebookCommentReplies: async (commentId: string, fbPageId?: string): Promise<{ data: any[] }> => {
-    const fields = 'id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url}';
-    const params = { fields, limit: '100' };
-    const fetchFirst = fbPageId
-      ? apiGetPage(fbPageId, `${commentId}/comments`, params)
-      : apiGetPageActive(`${commentId}/comments`, params);
-    const all: any[] = [];
-    let res: any = await fetchFirst;
-    while (res) {
-      if (Array.isArray(res.data)) all.push(...res.data);
-      const nextUrl = res?.paging?.next;
-      if (!nextUrl) break;
-      try {
-        const r = await fetch(nextUrl);
-        res = await r.json();
-        if (res?.error) break;
-      } catch { break; }
-      if (all.length > 500) break;
-    }
-    return { data: all };
-  },
-
-  // Same for Instagram — replies to an IG comment.
-  getInstagramCommentReplies: async (commentId: string, fbPageId?: string): Promise<{ data: any[] }> => {
-    const fields = 'id,text,timestamp,username,like_count,from';
-    const params = { fields, limit: '100' };
-    const fetchFirst = fbPageId
-      ? apiGetPage(fbPageId, `${commentId}/replies`, params)
-      : apiGetPageActive(`${commentId}/replies`, params);
-    const all: any[] = [];
-    let res: any = await fetchFirst;
-    while (res) {
-      if (Array.isArray(res.data)) all.push(...res.data);
-      const nextUrl = res?.paging?.next;
-      if (!nextUrl) break;
-      try {
-        const r = await fetch(nextUrl);
-        res = await r.json();
-        if (res?.error) break;
-      } catch { break; }
-      if (all.length > 500) break;
-    }
-    return { data: all };
-  },
-
-  // Fetches every comment by following paging.next until exhausted.
-  // Use this in detail views where the user expects to see the full thread.
-  getFacebookPostCommentsAll: async (postId: string): Promise<{ data: any[] }> => {
-    const all: any[] = [];
-    let res: any = await metaAds.getFacebookPostComments(postId);
-    while (res) {
-      if (Array.isArray(res.data)) all.push(...res.data);
-      const nextUrl = res?.paging?.next;
-      if (!nextUrl) break;
-      try {
-        const r = await fetch(nextUrl);
-        res = await r.json();
-        if (res?.error) break;
-      } catch { break; }
-      if (all.length > 2000) break; // safety cap
-    }
-    return { data: all };
-  },
-
-  getInstagramMediaCommentsAll: async (mediaId: string, fbPageId?: string): Promise<{ data: any[] }> => {
-    const all: any[] = [];
-    let res: any = await metaAds.getInstagramMediaComments(mediaId, fbPageId);
-    while (res) {
-      if (Array.isArray(res.data)) all.push(...res.data);
-      const nextUrl = res?.paging?.next;
-      if (!nextUrl) break;
-      try {
-        const r = await fetch(nextUrl);
-        res = await r.json();
-        if (res?.error) break;
-      } catch { break; }
-      if (all.length > 2000) break;
-    }
-    return { data: all };
-  },
-
-  getAdCreativeCommentsAll: async (storyId: string, platform: 'instagram' | 'facebook' = 'instagram', pageId?: string): Promise<{ data: any[] }> => {
-    const all: any[] = [];
-    let res: any = await metaAds.getAdCreativeComments(storyId, platform, pageId);
-    while (res) {
-      if (Array.isArray(res.data)) all.push(...res.data);
-      const nextUrl = res?.paging?.next;
-      if (!nextUrl) break;
-      try {
-        const r = await fetch(nextUrl);
-        res = await r.json();
-        if (res?.error) break;
-      } catch { break; }
-      if (all.length > 2000) break;
-    }
-    return { data: all };
+  getAllFacebookPostComments: async (postId: string) => {
+    const pageId = postId.includes('_') ? postId.split('_')[0] : undefined;
+    const comments = await collectComments((after?: string) => metaAds.getFacebookPostComments(postId, after));
+    return hydrateCommentsWithAllReplies(comments, 'facebook', pageId);
   },
 
   replyToFacebookComment: async (commentId: string, message: string) => {
@@ -838,26 +914,58 @@ export const metaAds = {
 
   // Facebook Messenger conversations — full fields including last message preview.
   // cursor: paging.cursors.after from a previous response (for pagination)
-  getPageConversations: (pageId: string, platform: 'messenger' | 'instagram' = 'messenger', cursor?: string, limit = 15) => {
-    const params: Record<string, string> = {
-      fields: 'id,participants,unread_count,updated_time,messages.limit(1){id,message,from,created_time}',
-      platform,
-      limit: String(limit),
+  getPageConversations: async (pageId: string, platform: 'messenger' | 'instagram' = 'messenger', cursor?: string, limit = 10): Promise<any> => {
+    const fetchWithLimit = async (currentLimit: number): Promise<any> => {
+      const params: Record<string, string> = {
+        fields: 'id,participants,unread_count,updated_time,messages.limit(1){id,message,from,created_time}',
+        platform,
+        limit: String(currentLimit),
+      };
+      if (cursor) params.after = cursor;
+      try {
+        return await apiGetPage(pageId, `${pageId}/conversations`, params);
+      } catch (err: any) {
+        const msg = String(err.message || '').toLowerCase();
+        if (
+          (msg.includes('reduce the amount of data') || msg.includes('timeout') || msg.includes('unexpected error') || msg.includes('500')) &&
+          currentLimit > 1
+        ) {
+          const nextLimit = Math.max(1, Math.floor(currentLimit / 2));
+          console.warn(`getPageConversations failed with limit ${currentLimit}. Retrying with limit ${nextLimit}...`);
+          return await fetchWithLimit(nextLimit);
+        }
+        throw err;
+      }
     };
-    if (cursor) params.after = cursor;
-    return apiGetPage(pageId, `${pageId}/conversations`, params);
+    return fetchWithLimit(limit);
   },
 
   // Instagram Direct conversations — minimal fields only (IG rejects nested message fields).
   // cursor: paging.cursors.after from a previous response (for pagination)
-  getInstagramConversations: (fbPageId: string, igUserId: string, cursor?: string, limit = 15) => {
-    const params: Record<string, string> = {
-      fields: 'id,participants,unread_count,updated_time',
-      platform: 'instagram',
-      limit: String(limit),
+  getInstagramConversations: async (fbPageId: string, igUserId: string, cursor?: string, limit = 10): Promise<any> => {
+    const fetchWithLimit = async (currentLimit: number): Promise<any> => {
+      const params: Record<string, string> = {
+        fields: 'id,participants,unread_count,updated_time',
+        platform: 'instagram',
+        limit: String(currentLimit),
+      };
+      if (cursor) params.after = cursor;
+      try {
+        return await apiGetPage(fbPageId, `${fbPageId}/conversations`, params);
+      } catch (err: any) {
+        const msg = String(err.message || '').toLowerCase();
+        if (
+          (msg.includes('reduce the amount of data') || msg.includes('timeout') || msg.includes('unexpected error') || msg.includes('500')) &&
+          currentLimit > 1
+        ) {
+          const nextLimit = Math.max(1, Math.floor(currentLimit / 2));
+          console.warn(`getInstagramConversations failed with limit ${currentLimit}. Retrying with limit ${nextLimit}...`);
+          return await fetchWithLimit(nextLimit);
+        }
+        throw err;
+      }
     };
-    if (cursor) params.after = cursor;
-    return apiGetPage(fbPageId, `${fbPageId}/conversations`, params);
+    return fetchWithLimit(limit);
   },
 
   // Fetch up to 15 messages for AI draft context (accepts optional pageId to avoid localStorage lookup)
@@ -898,16 +1006,23 @@ export const metaAds = {
       ? apiGetPage(pageId, fbPostId, { fields: 'instagram_story{id}' })
       : apiGetPageActive(fbPostId, { fields: 'instagram_story{id}' }),
 
-  getAdCreativeComments: (storyId: string, platform: 'instagram' | 'facebook' = 'instagram', pageId?: string) => {
-    const params = {
+  getAdCreativeComments: (storyId: string, platform: 'instagram' | 'facebook' = 'instagram', pageId?: string, after?: string) => {
+    const params: Record<string, string> = {
       fields: platform === 'instagram'
-        ? 'id,text,message,timestamp,created_time,from{id,name},username,like_count,replies{id,text,message,from{id,name},username,timestamp,created_time}'
-        : 'id,message,created_time,from{id,name},like_count,replies{id,message,from{id,name},created_time}',
+        ? 'id,text,message,timestamp,created_time,from{id,name},username,like_count,replies.limit(100){id,text,message,from{id,name},username,timestamp,created_time}'
+        : 'id,message,created_time,from{id,name},like_count,replies.limit(100){id,message,from{id,name},created_time}',
       limit: '100',
     };
-    return pageId 
+    if (after) params.after = after;
+    return pageId
       ? apiGetPage(pageId, `${storyId}/comments`, params)
       : apiGetPageActive(`${storyId}/comments`, params);
+  },
+
+  getAllAdCreativeComments: async (storyId: string, platform: 'instagram' | 'facebook' = 'instagram', pageId?: string) => {
+    const resolvedPageId = pageId || (platform === 'facebook' && storyId.includes('_') ? storyId.split('_')[0] : undefined);
+    const comments = await collectComments((after?: string) => metaAds.getAdCreativeComments(storyId, platform, pageId, after));
+    return hydrateCommentsWithAllReplies(comments, platform, resolvedPageId);
   },
 
   getFacebookUserName: (userId: string, pageId: string) =>

@@ -1,5 +1,7 @@
 import { supabase, supabaseAdmin } from './supabase';
 
+const dbClient = () => (typeof (supabaseAdmin as any)?.from === 'function' ? (supabaseAdmin as any) : supabase);
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface ClientProfile {
   id: string;
@@ -12,6 +14,7 @@ export interface ClientProfile {
   chatwoot_url?: string;
   meta_account_id?: string;
   meta_pixel_id?: string;
+  facebook_access_token?: string;
   klaviyo_api_key?: string;
   klaviyo_list_id?: string;
   ecommerce_platform?: string;
@@ -25,12 +28,27 @@ export interface ClientProfile {
   fb_page_id?: string;
   fb_page_name?: string;
   fb_page_access_token?: string;
+  ig_business_id?: string;
+  ig_username?: string;
   business_description?: string;
   custom_instructions?: string;
   website_url?: string;
   scraped_content?: string;
   instagram_context?: string;
   brain_updated_at?: string;
+  tiktok_content_access_token?: string;
+  tiktok_content_refresh_token?: string;
+  tiktok_content_open_id?: string;
+  tiktok_content_display_name?: string;
+  tiktok_content_avatar_url?: string;
+  tiktok_content_expiration?: string;
+  tiktok_advertiser_id?: string;
+  youtube_access_token?: string;
+  youtube_refresh_token?: string;
+  youtube_channel_id?: string;
+  youtube_channel_title?: string;
+  youtube_expiration?: string;
+  connection_statuses?: Record<string, any>;
   created_at: string;
 }
 
@@ -115,7 +133,7 @@ export interface MonthlyReport {
 export const db = {
   clients: {
     async getAll(): Promise<Pick<ClientProfile, 'id' | 'business_name'>[]> {
-      const client = supabaseAdmin ?? supabase;
+      const client = dbClient();
       const { data, error } = await client
         .from('car_clients')
         .select('id, business_name')
@@ -124,7 +142,7 @@ export const db = {
       return data ?? [];
     },
     async getAllWithIntegrations(): Promise<Pick<ClientProfile, 'id' | 'business_name' | 'klaviyo_api_key'>[]> {
-      const client = supabaseAdmin ?? supabase;
+      const client = dbClient();
       const { data, error } = await client
         .from('car_clients')
         .select('id, business_name, klaviyo_api_key')
@@ -133,7 +151,7 @@ export const db = {
       return data ?? [];
     },
     async updateField(clientId: string, fields: Partial<ClientProfile>) {
-      const client = supabaseAdmin ?? supabase;
+      const client = dbClient();
       const { error } = await client.from('car_clients').update(fields).eq('id', clientId);
       if (error) throw error;
     },
@@ -153,17 +171,18 @@ export const db = {
       }
       if (data) return data;
 
-      // 2. Cuenta asociada: buscar el business_id en car_business_accounts
-      const { data: links, error: errLink } = await supabase
+      // 2. Cuenta asociada: buscar el business_id en car_business_accounts (usando el cliente standard con RLS)
+      const { data: link, error: errLink } = await supabase
         .from('car_business_accounts')
         .select('id, business_id')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .maybeSingle();
 
       if (errLink) {
-        console.error("db.profile.getByUserId - Error fetching business links by user_id:", errLink);
+        console.error("db.profile.getByUserId - Error fetching business link by user_id:", errLink);
       }
 
-      let activeLink: any = links && links.length > 0 ? links[0] : null;
+      let activeLink = link;
 
       // Fallback: si no se encuentra por user_id pero se proporciona el email, se busca por email para vincularlo dinámicamente
       if (!activeLink && email) {
@@ -188,7 +207,7 @@ export const db = {
           if (errUpdate) {
             console.error("db.profile.getByUserId - Error updating user_id in business link:", errUpdate);
             // Fallback al service role si el cliente anon no pudo
-            if (supabaseAdmin) {
+            if (typeof (supabaseAdmin as any)?.from === 'function') {
               const { error: errUpdateAdmin } = await supabaseAdmin
                 .from('car_business_accounts')
                 .update({ user_id: userId })
@@ -215,7 +234,7 @@ export const db = {
       if (errBiz) {
         console.error("db.profile.getByUserId - Error fetching associated business:", errBiz);
         // Fallback al service role si RLS falló
-        if (supabaseAdmin) {
+        if (typeof (supabaseAdmin as any)?.from === 'function') {
           const { data: adminBiz, error: errAdminBiz } = await supabaseAdmin
             .from('car_clients')
             .select('*')
@@ -264,7 +283,7 @@ export const db = {
 
   links: {
     async getByClientId(clientId: string): Promise<ClientLink[]> {
-      const client = supabaseAdmin ?? supabase;
+      const client = dbClient();
       const { data, error } = await client
         .from('car_links')
         .select('*')
@@ -317,7 +336,7 @@ export const db = {
 
   emailAssignments: {
     async getAll(): Promise<EmailAssignment[]> {
-      const client = supabaseAdmin ?? supabase;
+      const client = dbClient();
       const { data, error } = await client.from('car_email_assignments').select('*').order('created_at', { ascending: false });
       if (error) { console.error(error); return []; }
       return data ?? [];

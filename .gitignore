@@ -30,3 +30,13 @@ dist-ssr
 .env.development
 
 .vercel
+.env*
+.claude/
+
+# Local TRIBE v2 runtime
+services/tribev2_service/.venv/
+services/tribev2_service/cache/
+services/tribev2_service/__pycache__/
+*.pyc
+
+.env*.local

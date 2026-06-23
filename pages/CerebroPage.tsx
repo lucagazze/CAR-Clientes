@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
-import { db } from '../services/db';
 import { useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
 import {
@@ -12,6 +11,7 @@ import {
 } from 'lucide-react';
 import { AppleLoader } from '../components/ui/AppleLoader';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
+import { AI_BRAIN_STEPS } from '../utils/aiReadiness';
 
 const Pill = ({ active, label, icon: Icon }: { active: boolean; label: string; icon: any }) => (
   <div className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg ${active ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400' : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-400'}`}>
@@ -29,8 +29,8 @@ const SCAN_STEPS = [
 ];
 
 export default function CerebroPage() {
-  const { profile: authProfile, loading: authLoading, session } = useAuth();
-  const { viewAsProfile, isViewingAs } = useViewAs();
+  const { profile: authProfile, loading: authLoading, session, refreshProfile } = useAuth();
+  const { viewAsProfile, isViewingAs, setViewAsProfile } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
   
   const detectedPlatform = useMemo(() => {
@@ -135,13 +135,36 @@ export default function CerebroPage() {
     if (!profile) return;
     setSaving(true);
     try {
-      await db.clients.updateField(profile.id, {
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const token = freshSession?.access_token || session?.access_token || '';
+      if (!token) throw new Error('La sesión expiró. Volvé a iniciar sesión.');
+      const res = await fetch('/api/oauth?action=brain-save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          clientId: profile.id,
         business_description: businessDescription,
         custom_instructions: JSON.stringify({ tone: toneInstructions, offers, faq }),
-        website_url: websiteUrl,
-        brain_updated_at: new Date().toISOString(),
+          website_url: websiteUrl
+        })
       });
-      setBrainUpdatedAt(new Date().toISOString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo guardar el Cerebro.');
+      const nextBrainUpdatedAt = data.brain_updated_at || new Date().toISOString();
+      setBrainUpdatedAt(nextBrainUpdatedAt);
+      if (isViewingAs) {
+        setViewAsProfile(prev => prev ? ({
+          ...prev,
+          business_description: businessDescription,
+          custom_instructions: JSON.stringify({ tone: toneInstructions, offers, faq }),
+          website_url: websiteUrl,
+          brain_updated_at: nextBrainUpdatedAt,
+        } as any) : prev);
+      }
+      await refreshProfile();
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 3000);
       showToast('Cerebro actualizado correctamente.', 'success');
@@ -296,6 +319,21 @@ export default function CerebroPage() {
       setOffers(fieldsData.offers || '');
       setFaq(fieldsData.faq || '');
       setBrainUpdatedAt(fieldsData.brain_updated_at || null);
+      if (isViewingAs) {
+        setViewAsProfile(prev => prev ? ({
+          ...prev,
+          business_description: fieldsData.business_description || '',
+          custom_instructions: JSON.stringify({
+            tone: fieldsData.tone || '',
+            offers: fieldsData.offers || '',
+            faq: fieldsData.faq || '',
+          }),
+          scraped_content: webData.scraped_content || '',
+          instagram_context: socialContent,
+          brain_updated_at: fieldsData.brain_updated_at || new Date().toISOString(),
+        } as any) : prev);
+      }
+      await refreshProfile();
 
       // ── STEP 4: Done ──────────────────────────────────────────────────
       setScanCurrentStep(3);
@@ -334,10 +372,18 @@ export default function CerebroPage() {
   ];
   const contextScore = sections.filter(s => s.value).length;
   const contextPct = Math.round((contextScore / sections.length) * 100);
+  const aiReady = Boolean(brainUpdatedAt && (
+    businessDescription.trim() ||
+    scrapedContent.trim() ||
+    instagramContext.trim() ||
+    toneInstructions.trim() ||
+    offers.trim() ||
+    faq.trim()
+  ));
 
   return (
     <CenteredPageLoader isLoading={loading || authLoading}>
-    <div className="w-full pt-4 pb-20 md:pt-6 px-4 md:px-0 animate-fade-in">
+    <div className="w-full pt-3 pb-20 md:pt-6 animate-fade-in">
 
       <div className="page-header">
         <div className="flex items-center gap-4 min-w-0">
@@ -410,6 +456,30 @@ export default function CerebroPage() {
           </button>
         ))}
       </div>
+
+      {!aiReady && (
+        <div className="mb-6 rounded-2xl border border-amber-200 dark:border-amber-500/20 bg-amber-50/80 dark:bg-amber-500/10 p-4 md:p-5 flex flex-col md:flex-row md:items-start gap-4 shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-white/80 dark:bg-zinc-950/60 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center shrink-0">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[14px] font-black text-zinc-900 dark:text-zinc-100">
+              La IA todavía no está habilitada
+            </h2>
+            <p className="text-[12.5px] leading-relaxed text-zinc-600 dark:text-zinc-400 mt-1">
+              Para usar el chat, respuestas sugeridas y análisis con IA, primero completá este análisis del negocio. Cuando quede guardado, la IA se activa automáticamente.
+            </p>
+            <div className="grid gap-2 mt-4 md:grid-cols-3">
+              {AI_BRAIN_STEPS.map((step) => (
+                <div key={step} className="rounded-xl bg-white/70 dark:bg-zinc-950/40 border border-amber-200/70 dark:border-amber-500/15 px-3 py-2 flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                  <span className="text-[11.5px] font-bold text-zinc-700 dark:text-zinc-300 leading-snug">{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ TAB: IDENTIDAD ═══ */}
       {activeTab === 'identidad' && (

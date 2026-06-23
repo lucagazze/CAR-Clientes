@@ -10,6 +10,49 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+const getFirstEnv = (...names: string[]) => {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return '';
+};
+
+const GEMINI_MODELS = [
+  process.env.GEMINI_MODEL,
+  process.env.GOOGLE_AI_MODEL,
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash-lite'
+].filter(Boolean) as string[];
+
+const isProbablyTruncated = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+
+  // If it ends with punctuation or common closing characters
+  if (/[.!?…)"'”’\]\-\*]$/.test(trimmed)) return false;
+
+  // If it ends with a hashtag (e.g. #skincare)
+  if (/#\w+$/.test(trimmed)) return false;
+
+  // If it ends with an emoji
+  try {
+    if (/\p{Emoji}/u.test(trimmed.slice(-2)) && !/[\d#\*]/.test(trimmed.slice(-1))) return false;
+  } catch (e) {
+    if (/[🙌🙏👍👌💪🔥❤️💜💙💚🖤🤍✨🎉🌟🥳👏😍💖😎📸💄🛍️💅💆‍♀️✨💥🌿🎯👇]$/.test(trimmed)) return false;
+  }
+
+  // Otherwise, it is probably truncated
+  return true;
+};
+
+const normalizeDraftText = (text: string) =>
+  text
+    .replace(/^["'“”]+|["'“”]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const argentineTime = new Date().toLocaleString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -42,66 +85,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     const { data: authData, error: authError } = await authSupabase.auth.getUser(token);
-    
     if (authError || !authData?.user) {
-      // Fallback: If session is missing or expired, attempt to decode JWT payload locally.
-      // This makes multi-device/multi-tab sessions extremely resilient to synchronization conflicts.
-      try {
-        const tokenParts = token.split('.');
-        if (tokenParts.length === 3) {
-          const payload = JSON.parse(Buffer.from(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
-          if (payload && payload.sub && payload.exp && payload.exp * 1000 > Date.now() - 365 * 24 * 60 * 60 * 1000) {
-            user = { id: payload.sub, email: payload.email };
-            console.log('Using decoded JWT fallback for user_id in draft-reply:', user.id);
-          }
-        }
-      } catch (decodeErr) {
-        console.error('JWT decode fallback failed in draft-reply:', decodeErr);
-      }
-
-      if (!user) {
-        const tokenPreview = token ? `${token.substring(0, 10)}...${token.substring(Math.max(0, token.length - 10))}` : 'empty';
-        const errMsg = `Invalid auth token: ${authError?.message || 'No user data'} (len: ${token ? token.length : 0}, preview: ${tokenPreview})`;
-        console.error('getUser failed:', authError, 'token:', tokenPreview);
-        return res.status(401).json({ error: errMsg });
-      }
-    } else {
-      user = authData.user;
+      const tokenPreview = token ? `${token.substring(0, 10)}...${token.substring(Math.max(0, token.length - 10))}` : 'empty';
+      const errMsg = `Invalid auth token: ${authError?.message || 'No user data'} (len: ${token ? token.length : 0}, preview: ${tokenPreview})`;
+      console.error('getUser failed:', authError, 'token:', tokenPreview);
+      return res.status(401).json({ error: errMsg });
     }
+    user = authData.user;
 
-    // Fetch client profile (direct owner or mapped business accounts)
+    // Fetch client profile (direct owner or mapped business account)
     const { data: ownerProfile } = await supabase
       .from('car_clients')
       .select('id, is_admin')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    const targetClientId = req.body?.clientId;
-
-    if (ownerProfile && (!targetClientId || ownerProfile.id === targetClientId || ownerProfile.is_admin)) {
+    if (ownerProfile) {
       dbProfile = ownerProfile;
     } else {
-      // Fetch all links to support users managing multiple business profiles without maybeSingle() failing
-      const { data: links } = await supabase
+      const { data: link } = await supabase
         .from('car_business_accounts')
         .select('business_id')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      if (links && links.length > 0) {
-        // If a specific clientId is requested, select it. Otherwise fallback to the first linked business.
-        const matchedLink = targetClientId 
-          ? links.find(l => l.business_id === targetClientId) 
-          : links[0];
-        
-        if (matchedLink) {
-          const { data: biz } = await supabase
-            .from('car_clients')
-            .select('id, is_admin')
-            .eq('id', matchedLink.business_id)
-            .maybeSingle();
-          if (biz) {
-            dbProfile = biz;
-          }
+      if (link?.business_id) {
+        const { data: biz } = await supabase
+          .from('car_clients')
+          .select('id, is_admin')
+          .eq('id', link.business_id)
+          .maybeSingle();
+        if (biz) {
+          dbProfile = biz;
         }
       }
     }
@@ -117,18 +132,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isAdmin = !!dbProfile.is_admin;
   const userClientId = dbProfile.id;
 
-  const geminiKey = process.env.GOOGLE_AI_API_KEY;
-  const openAiKey = process.env.OPENAI_API_KEY;
-  if (!geminiKey && !openAiKey) {
-    return res.status(500).json({ error: 'No AI API key configured' });
-  }
-
   const {
     clientId, itemText, username,
     postCaption, postPlatform,
     allComments, otherComments,
     conversationHistory, isDM, forceLang,
   } = req.body || {};
+
+  const geminiKey = getFirstEnv('GOOGLE_AI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY');
+  const openAiKey = getFirstEnv('OPENAI_API_KEY', 'OPENAI_KEY');
+  if (!geminiKey && !openAiKey) {
+    return res.status(503).json({
+      error: 'AI_NOT_CONFIGURED',
+      detail: 'No hay GOOGLE_AI_API_KEY/GEMINI_API_KEY ni OPENAI_API_KEY configurada en el servidor.'
+    });
+  }
 
   if (!clientId || !itemText) {
     return res.status(400).json({ error: 'Missing clientId or itemText' });
@@ -265,7 +283,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (shopify_domain && shopify_access_token) {
         try {
           const sRes = await fetch(
-            `https://${cleanDomain}/admin/api/2024-01/products.json?limit=250&fields=title,handle,variants,status,product_type`,
+            `https://${cleanDomain}/admin/api/2026-01/products.json?limit=250&fields=title,handle,variants,status,product_type`,
             { headers: { 'X-Shopify-Access-Token': shopify_access_token, 'Accept': 'application/json' } }
           );
           if (sRes.ok) {
@@ -508,7 +526,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 10. System prompt
-    const systemPrompt = `⚠️ IDIOMA: ${LANG}. ${langRule}. Sin excepciones.
+    const systemPrompt = `⚠️ IDIOMA OBLIGATORIO DE LA RESPUESTA FINAL: ${LANG}. ${langRule}. Sin excepciones.
+Si el usuario eligió idioma manualmente, ignorá el idioma del comentario original y respondé únicamente en ${LANG}.
+No mezcles idiomas. No traduzcas el comentario; respondé naturalmente en ${LANG}.
 
 Hoy: ${argentineTime}. Plataforma: ${platformLabel}.
 
@@ -557,65 +577,129 @@ FORMATO: Solo el texto listo para enviar. Sin comillas, sin "Borrador:", sin mar
       ? `${dmHistory}\n\nMensaje del cliente: "${itemText}"\nRedactá la respuesta${username ? ` para ${username}` : ''}:`
       : `${postCaption ? `Publicación: "${postCaption}"\n` : ''}${threadContext ? `\n${threadContext}\n` : ''}Comentario: @${username}: "${itemText}"\nRedactá la respuesta:`;
 
-    // 11. Call Gemini 2.5 Flash
+    const completionGuard = `\n\nIMPORTANTE: Devolvé una respuesta COMPLETA. No la cortes a mitad de frase. Cerrá la idea con puntuación final o emoji.`;
+
+    // 11. Call Gemini, trying current models before falling back to OpenAI
     let draftText = '';
+    const aiErrors: string[] = [];
 
     if (geminiKey) {
-      try {
-        const geminiBody = {
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
-        };
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
-        );
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json() as any;
-          const parts = geminiData.candidates?.[0]?.content?.parts || [];
-          draftText = (parts.find((p: any) => p.text)?.text || '').trim();
-        } else {
-          console.error('[draft-reply] Gemini error:', geminiRes.status, await geminiRes.text());
+      const geminiBody = {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt + completionGuard }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1536 },
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+        ]
+      };
+
+      for (const model of GEMINI_MODELS) {
+        try {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+          );
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json() as any;
+            const parts = geminiData.candidates?.[0]?.content?.parts || [];
+            const finishReason = geminiData.candidates?.[0]?.finishReason;
+            draftText = normalizeDraftText(parts.map((p: any) => p.text).filter(Boolean).join(''));
+            if (draftText && (finishReason === 'MAX_TOKENS' || isProbablyTruncated(draftText))) {
+              const retryBody = {
+                ...geminiBody,
+                contents: [{ role: 'user', parts: [{ text: `${userPrompt}${completionGuard}\n\nLa respuesta anterior quedó cortada: "${draftText}". Reescribí desde cero una versión final completa y lista para enviar.` }] }],
+                generationConfig: { temperature: 0.5, maxOutputTokens: 1536 },
+              };
+              const retryRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(retryBody) }
+              );
+              if (retryRes.ok) {
+                const retryData = await retryRes.json() as any;
+                 const retryParts = retryData.candidates?.[0]?.content?.parts || [];
+                 const retryText = normalizeDraftText(retryParts.map((p: any) => p.text).filter(Boolean).join(''));
+                if (retryText && !isProbablyTruncated(retryText)) draftText = retryText;
+              }
+            }
+            if (draftText && !isProbablyTruncated(draftText)) break;
+            aiErrors.push(`Gemini ${model}: ${draftText ? 'truncated response' : 'empty response'}`);
+            draftText = '';
+          } else {
+            const errText = await geminiRes.text();
+            aiErrors.push(`Gemini ${model}: HTTP ${geminiRes.status} ${errText.slice(0, 300)}`);
+            console.error('[draft-reply] Gemini error:', model, geminiRes.status, errText);
+          }
+        } catch (e: any) {
+          aiErrors.push(`Gemini ${model}: ${e?.message || String(e)}`);
+          console.error('[draft-reply] Gemini exception:', model, e);
         }
-      } catch (e) {
-        console.error('[draft-reply] Gemini exception:', e);
       }
     }
 
     // 12. Fallback to OpenAI
-    if (!draftText && openAiKey) {
+    if ((!draftText || isProbablyTruncated(draftText)) && openAiKey) {
       try {
         const oaRes = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openAiKey}` },
           body: JSON.stringify({
             model: 'gpt-4o-mini',
-            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-            temperature: 0.7, max_tokens: 512,
+            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt + completionGuard }],
+            temperature: 0.7, max_tokens: 1536,
           }),
         });
         if (oaRes.ok) {
           const oaData = await oaRes.json() as any;
-          draftText = (oaData.choices?.[0]?.message?.content || '').trim();
+          draftText = normalizeDraftText(oaData.choices?.[0]?.message?.content || '');
+          if (draftText && (oaData.choices?.[0]?.finish_reason === 'length' || isProbablyTruncated(draftText))) {
+            const retryRes = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openAiKey}` },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: `${userPrompt}${completionGuard}\n\nLa respuesta anterior quedó cortada: "${draftText}". Reescribí desde cero una versión final completa y lista para enviar.` },
+                ],
+                temperature: 0.5,
+                max_tokens: 1536,
+              }),
+            });
+            if (retryRes.ok) {
+              const retryData = await retryRes.json() as any;
+              const retryText = normalizeDraftText(retryData.choices?.[0]?.message?.content || '');
+              if (retryText && !isProbablyTruncated(retryText)) draftText = retryText;
+            }
+          }
         } else {
           const errText = await oaRes.text();
-          console.error('[draft-reply] OpenAI error:', oaRes.status, errText);
-          return res.status(502).json({ error: 'AI error', detail: errText });
+          aiErrors.push(`OpenAI: HTTP ${oaRes.status} ${errText.slice(0, 300)}`);
+          console.warn('[draft-reply] OpenAI error:', oaRes.status, errText);
         }
       } catch (e: any) {
-        return res.status(502).json({ error: 'AI exception', detail: e.message });
+        aiErrors.push(`OpenAI: ${e?.message || String(e)}`);
+        console.warn('[draft-reply] OpenAI exception:', e.message);
       }
     }
 
-    if (!draftText) {
-      return res.status(502).json({ error: 'Empty AI response' });
+    if (!draftText || isProbablyTruncated(draftText)) {
+      console.error('[draft-reply] All AI providers failed:', aiErrors.join(' | '));
+      return res.status(502).json({
+        error: 'AI_PROVIDER_FAILED',
+        detail: aiErrors[0] || 'No se pudo generar el borrador con IA.'
+      });
     }
 
     return res.status(200).json({ draft: draftText });
 
   } catch (err: any) {
     console.error('[draft-reply] Unhandled error:', err);
-    return res.status(500).json({ error: 'Server error', detail: err.message });
+    return res.status(500).json({
+      error: 'DRAFT_REPLY_FAILED',
+      detail: err?.message || 'No se pudo generar el borrador con IA.'
+    });
   }
 }

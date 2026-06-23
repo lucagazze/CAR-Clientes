@@ -63,27 +63,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       auth: { autoRefreshToken: false, persistSession: false }
     });
     
-    const { data: authData, error: authError } = await supabase.auth.getUser(token);
-    let user = authData?.user;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
-      // Fallback: If session is missing or expired, attempt to decode JWT payload locally.
-      // This makes multi-device/multi-tab sessions extremely resilient to synchronization conflicts.
-      try {
-        const tokenParts = token.split('.');
-        if (tokenParts.length === 3) {
-          const payload = JSON.parse(Buffer.from(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
-          if (payload && payload.sub && payload.exp && payload.exp * 1000 > Date.now() - 365 * 24 * 60 * 60 * 1000) {
-            user = { id: payload.sub, email: payload.email } as any;
-            console.log('Using decoded JWT fallback for user_id in admin-users:', user.id);
-          }
-        }
-      } catch (decodeErr) {
-        console.error('JWT decode fallback failed in admin-users:', decodeErr);
-      }
-
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid auth token', details: authError?.message });
-      }
+      return res.status(401).json({ error: 'Invalid auth token', details: authError?.message });
     }
 
     const { action, payload } = req.body as { action: string; payload?: any };
@@ -186,34 +168,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // BRANCH B: Admin checks (restricted to is_admin = true)
-    let isAdmin = false;
-    const { data: ownerProfile } = await supabaseAdmin
+    const { data: profile, error: dbError } = await supabaseAdmin
       .from('car_clients')
       .select('is_admin')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (ownerProfile?.is_admin) {
-      isAdmin = true;
-    } else {
-      // Fetch all links to support users managing multiple business profiles without maybeSingle() failing
-      const { data: links } = await supabaseAdmin
-        .from('car_business_accounts')
-        .select('business_id')
-        .eq('user_id', user.id);
-
-      if (links && links.length > 0) {
-        const { data: bizs } = await supabaseAdmin
-          .from('car_clients')
-          .select('is_admin')
-          .in('id', links.map(l => l.business_id));
-        if (bizs?.some(b => b.is_admin)) {
-          isAdmin = true;
-        }
-      }
-    }
-
-    if (!isAdmin) {
+    if (dbError || !profile || !profile.is_admin) {
       return res.status(403).json({ error: 'Access denied: User is not an admin' });
     }
 

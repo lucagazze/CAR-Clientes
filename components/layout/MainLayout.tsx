@@ -55,16 +55,14 @@ class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, 
     return this.props.children;
   }
 }
-import { Menu, Sun, Moon, AlertCircle, Globe, Check, Loader2, Building2, Clock, ArrowRight } from 'lucide-react';
+import { Menu, Sun, Moon, AlertCircle, Globe, Check, Loader2 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../services/supabase';
 import { AIChatFloat } from '../AIChatFloat';
 import { useTheme } from '../../contexts/ThemeContext';
 import { metaAds } from '../../services/metaAds';
 import { AppleLoader } from '../ui/AppleLoader';
 import { TopLoadingBar } from '../ui/TopLoadingBar';
-import { CenteredPageLoader } from '../ui/CenteredPageLoader';
 import { useUnread } from '../../contexts/UnreadContext';
 import { useToast } from '../Toast';
 
@@ -120,39 +118,66 @@ const EmailLibraryPage   = lazyWithRetry(() => import('../../pages/EmailLibraryP
 const EmailMarketingPage = lazyWithRetry(() => import('../../pages/EmailMarketingPage'));
 const EmailMonitorPage   = lazyWithRetry(() => import('../../pages/EmailMonitorPage'));
 const RedesSocialesPage  = lazyWithRetry(() => import('../../pages/RedesSocialesPage'));
-const MensajesDMPage     = lazyWithRetry(() => import('../../pages/MensajesDMPage'));
 const ComentariosPage    = lazyWithRetry(() => import('../../pages/ComentariosPage'));
 const CerebroPage        = lazyWithRetry(() => import('../../pages/CerebroPage'));
 const EntradasPage       = lazyWithRetry(() => import('../../pages/EntradasPage'));
 const ContactosPage      = lazyWithRetry(() => import('../../pages/ContactosPage'));
 const InformesPage       = lazyWithRetry(() => import('../../pages/InformesPage'));
 const CostosPage         = lazyWithRetry(() => import('../../pages/CostosPage'));
+const SocialPublisherPage = lazyWithRetry(() => import('../../pages/SocialPublisherPage'));
+const PublicacionesPage = lazyWithRetry(() => import('../../pages/PublicacionesPage'));
 const InventarioPage     = lazyWithRetry(() => import('../../pages/InventarioPage'));
 const PedidosPage        = lazyWithRetry(() => import('../../pages/PedidosPage'));
 const PerfilPage         = lazyWithRetry(() => import('../../pages/PerfilPage'));
 const ClientePage        = lazyWithRetry(() => import('../../pages/ClientePage'));
 const AnalisisProductosPage = lazyWithRetry(() => import('../../pages/AnalisisProductosPage'));
-
+const IntegracionesPage  = lazyWithRetry(() => import('../../pages/IntegracionesPage'));
+const PrivacidadPage     = lazyWithRetry(() => import('../../pages/PrivacidadPage'));
+const SoportePage        = lazyWithRetry(() => import('../../pages/SoportePage'));
+const MercadoLibrePage      = lazyWithRetry(() => import('../../pages/MercadoLibrePage'));
+const CreativeTesterPage    = lazyWithRetry(() => import('../../pages/CreativeTesterPage'));
+const NotFoundPage          = lazyWithRetry(() => import('../../pages/NotFoundPage'));
 
 import { useViewAs } from '../../contexts/ViewAsContext';
+import { WelcomeGuide } from '../ui/WelcomeGuide';
 
 // Loader within the content area — sidebar stays visible
 const PageSkeleton = () => (
-  <CenteredPageLoader isLoading={true}>{null}</CenteredPageLoader>
+  <div className="min-h-[280px] w-full flex items-center justify-center px-4 animate-in fade-in duration-150">
+    <div className="flex items-center gap-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/80 px-4 py-3 shadow-sm">
+      <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
+      <div>
+        <p className="text-[12px] font-black text-zinc-800 dark:text-zinc-100 leading-tight">Cargando sección</p>
+        <p className="text-[11px] font-semibold text-zinc-400 leading-tight mt-0.5">Ya aparece la información.</p>
+      </div>
+    </div>
+  </div>
 );
 
 export const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { darkMode, toggleDarkMode } = useTheme();
-  const { profile, signOut, user } = useAuth();
+  const { profile, signOut, user, loading, refreshProfile } = useAuth();
   const { isViewingAs, viewAsProfile } = useViewAs();
   const activeProfile = isViewingAs ? viewAsProfile : profile;
-  const { unreadCount } = useUnread();
+  const hasEcommerce = !!(
+    ((activeProfile as any)?.ecommerce_platform === 'shopify' && (activeProfile as any)?.shopify_domain && (activeProfile as any)?.shopify_access_token) ||
+    ((activeProfile as any)?.ecommerce_platform === 'wordpress' && (activeProfile as any)?.wordpress_url && (activeProfile as any)?.woo_consumer_key && (activeProfile as any)?.woo_consumer_secret) ||
+    ((activeProfile as any)?.ecommerce_platform === 'tiendanube' && (activeProfile as any)?.tiendanube_store_id && (activeProfile as any)?.tiendanube_access_token)
+  );
+  const { unreadCount, chatwootAvailable } = useUnread();
   const location = useLocation();
   const navigate = useNavigate();
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   const { showToast } = useToast();
+
+  useEffect(() => {
+    document.body.classList.add('app-typography');
+    return () => {
+      document.body.classList.remove('app-typography');
+    };
+  }, []);
 
   // Scroll to top on navigation/page transition
   useEffect(() => {
@@ -160,6 +185,30 @@ export const MainLayout = () => {
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [location.pathname]);
+
+  // Redirect to integrations page if Shopify or other oauth redirect lands on dashboard/other routes
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const shop = searchParams.get('shop');
+    const hasOauthParam = ['shopify', 'tiendanube', 'woocommerce', 'mercadolibre', 'tiktok', 'meta'].some(param => searchParams.has(param));
+    if (profile?.is_admin && (shop || hasOauthParam) && location.pathname !== '/integraciones') {
+      navigate(`/integraciones${window.location.search}`, { replace: true });
+    }
+  }, [location, navigate]);
+
+  useEffect(() => {
+    if (location.pathname !== '/mensajeria') return;
+    const chatwootStatus = (activeProfile as any)?.connection_statuses?.chatwoot;
+    const hasHealthyChatwoot = !!(
+      activeProfile?.chatwoot_url &&
+      activeProfile?.chatwoot_token &&
+      (chatwootStatus === 'ok' || chatwootStatus === 'connected') &&
+      chatwootAvailable !== false
+    );
+    if (!hasHealthyChatwoot) {
+      navigate(profile?.is_admin ? '/integraciones' : '/dashboard', { replace: true });
+    }
+  }, [location.pathname, activeProfile, chatwootAvailable, navigate]);
 
   // Listen for new orders to show global notification
   useEffect(() => {
@@ -196,27 +245,25 @@ export const MainLayout = () => {
     }
   }, [location.pathname, showToast]);
 
-  const [fullName, setFullName] = useState('');
-  const [businessName, setBusinessName] = useState('');
-  const [savingBusinessName, setSavingBusinessName] = useState(false);
-  const [businessNameSaved, setBusinessNameSaved] = useState(false);
-
-  // Sync existing metadata business name / website url on mount
+  // Auto-create profile for new users (Google OAuth or email signup)
+  // When the profile is freshly created, redirect to integrations with welcome flag
   useEffect(() => {
-    if (user?.user_metadata?.full_name) {
-      setFullName(user.user_metadata.full_name);
-    } else if (user?.user_metadata?.name) {
-      setFullName(user.user_metadata.name);
+    if (!profile && user && !loading) {
+      fetch('/api/oauth?action=ensure-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          refreshProfile();
+          if (data?.created) {
+            navigate('/dashboard', { replace: true });
+          }
+        })
+        .catch(console.error);
     }
-
-    if (user?.user_metadata?.business_name_request) {
-      setBusinessName(user.user_metadata.business_name_request);
-      setBusinessNameSaved(true);
-    } else if (user?.user_metadata?.website_url) {
-      setBusinessName(user.user_metadata.website_url);
-      setBusinessNameSaved(true);
-    }
-  }, [user]);
+  }, [profile, user, loading]);
 
   // Load client-specific token into metaAds cache
   useEffect(() => {
@@ -233,161 +280,22 @@ export const MainLayout = () => {
       }
     }
 
+    const userToken = (activeProfile as any)?.facebook_access_token;
+    if (userToken) {
+      localStorage.setItem('current_facebook_access_token', userToken);
+    } else {
+      localStorage.removeItem('current_facebook_access_token');
+    }
+
   }, [activeProfile]);
 
-  const handleSaveBusinessName = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!businessName.trim() || !fullName.trim()) return;
-    setSavingBusinessName(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          full_name: fullName.trim(),
-          business_name_request: businessName.trim(),
-          website_url: businessName.trim() // store in both for backward compatibility in table columns
-        }
-      });
-      if (error) throw error;
-      setBusinessNameSaved(true);
-    } catch (err: any) {
-      console.error("Error updating business name:", err);
-    } finally {
-      setSavingBusinessName(false);
-    }
-  };
-
-  // Guard: if profile is null (and loading is false, which is guaranteed here), show onboarding / pending screen
+  // Guard: if profile is null, show loading while auto-creating via ensure-profile
   if (!profile) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center p-4 text-center ${
-        darkMode ? 'bg-[#080808]' : 'bg-[#f2f2f7]'
-      }`}>
-        <div className={`max-w-md w-full rounded-[24px] p-8 border shadow-xl text-zinc-900 dark:text-white transition-all ${
-          darkMode
-            ? 'bg-white/[0.04] border-white/[0.07] shadow-2xl'
-            : 'bg-white border-zinc-200/60 shadow-zinc-200/40'
-        }`}>
-          {!businessNameSaved ? (
-            // Phase 1: Guided step-by-step registration requesting name and business url
-            <form onSubmit={handleSaveBusinessName} className="space-y-6">
-              <div className="w-12 h-12 rounded-[16px] bg-violet-100 dark:bg-violet-500/10 flex items-center justify-center mx-auto">
-                <Building2 className="w-6 h-6 text-violet-600 dark:text-violet-400" />
-              </div>
-              <div>
-                <h2 className="text-[18px] font-bold mb-1.5">Registro de Acceso</h2>
-                <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  Para ingresar al ecosistema de Algoritmia, por favor completá tus datos <strong className="text-violet-500 dark:text-violet-400 font-bold">por única vez</strong> para enviar la solicitud de acceso.
-                </p>
-              </div>
-
-              <div className="text-left space-y-1.5">
-                <label className="block text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                  Nombre completo
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="ej. Juan Pérez"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    disabled={savingBusinessName}
-                    className={`w-full h-11 px-4 rounded-xl border text-[13px] outline-none transition-all font-medium ${
-                      darkMode
-                        ? 'bg-white/5 border-white/8 text-white focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/60'
-                        : 'bg-zinc-50 border-zinc-200 text-zinc-900 focus:border-violet-500 focus:ring-1 focus:ring-violet-500'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div className="text-left space-y-1.5">
-                <label className="block text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                  Nombre del negocio
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="ej. Mi Negocio"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    disabled={savingBusinessName}
-                    className={`w-full h-11 px-4 rounded-xl border text-[13px] outline-none transition-all font-medium ${
-                      darkMode
-                        ? 'bg-white/5 border-white/8 text-white focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/60'
-                        : 'bg-zinc-50 border-zinc-200 text-zinc-900 focus:border-violet-500 focus:ring-1 focus:ring-violet-500'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-3">
-                <button
-                  type="submit"
-                  disabled={savingBusinessName || !businessName.trim() || !fullName.trim()}
-                  className={`w-full h-11 flex items-center justify-center gap-2 rounded-xl text-[13px] font-bold transition-all disabled:opacity-50 ${
-                    darkMode
-                      ? 'bg-white text-black hover:bg-zinc-100 shadow-md'
-                      : 'bg-zinc-900 text-white hover:bg-black shadow-md shadow-zinc-900/10'
-                  }`}
-                >
-                  {savingBusinessName ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <span>Enviar Solicitud</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => signOut()}
-                  className={`w-full h-11 rounded-xl text-[13px] font-bold border transition-all ${
-                    darkMode
-                      ? 'border-white/8 hover:bg-white/5 text-zinc-400'
-                      : 'border-zinc-200 hover:bg-zinc-50 text-zinc-500'
-                  }`}
-                >
-                  Cerrar sesión
-                </button>
-              </div>
-            </form>
-          ) : (
-            // Phase 2: Pending Approval indicator screen
-            <div className="space-y-6">
-              <div className="w-12 h-12 rounded-[16px] bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center mx-auto">
-                <Clock className="w-6 h-6 text-amber-500" />
-              </div>
-              <div>
-                <h2 className="text-[18px] font-bold mb-1.5 text-center">Solicitud de Acceso Enviada</h2>
-                <div className="text-[13px] text-zinc-500 dark:text-zinc-400 space-y-4 leading-relaxed text-center">
-                  <p>
-                    Tu solicitud para vincular el negocio <strong className="text-zinc-800 dark:text-zinc-200">"{businessName}"</strong> ha sido registrada con éxito.
-                  </p>
-                  <div className="bg-zinc-50 dark:bg-zinc-800/40 p-3.5 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/60 text-left text-[12px] text-zinc-600 dark:text-zinc-300">
-                    <span className="font-bold text-amber-600 dark:text-amber-400 block mb-1">💬 ¿Qué pasa ahora?</span>
-                    Te enviaremos una notificación por <strong>WhatsApp</strong> en cuanto el administrador apruebe tu acceso. Una vez que la recibas, ya podrás ingresar al ecosistema.
-                  </div>
-                  <p className="font-bold text-violet-500 dark:text-violet-400 text-[13.5px]">
-                    Ya podés cerrar esta pestaña o salir del sitio.
-                  </p>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/60 text-center">
-                <button
-                  type="button"
-                  onClick={() => signOut()}
-                  className="text-[11px] font-bold text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors uppercase tracking-wider"
-                >
-                  Salir / Cerrar sesión
-                </button>
-              </div>
-            </div>
-          )}
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-[#080808]' : 'bg-[#f2f2f7]'}`}>
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+          <p className="text-[13px] text-zinc-500 font-medium">Preparando tu cuenta...</p>
         </div>
       </div>
     );
@@ -396,7 +304,7 @@ export const MainLayout = () => {
   const isFixedPage = location.pathname === '/mensajeria';
 
   return (
-    <div className="flex min-h-screen bg-[#f5f5f7] dark:bg-[#0a0a0a] text-zinc-900 dark:text-zinc-100 transition-colors duration-300 print:bg-white">
+    <div className="app-shell flex min-h-screen bg-[#f5f5f7] dark:bg-[#0a0a0a] text-zinc-900 dark:text-zinc-100 transition-colors duration-300 print:bg-white" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <div className="print:hidden">
         <Sidebar
           isOpen={sidebarOpen}
@@ -407,8 +315,8 @@ export const MainLayout = () => {
       </div>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden h-screen relative print:overflow-visible print:h-auto">
-        {/* Mobile header — fixed so it never scrolls away */}
-        <div className="print:hidden md:hidden h-14 border-b border-black/[0.06] dark:border-white/[0.05] flex items-center justify-between px-4 bg-white/80 dark:bg-[#161618]/80 backdrop-blur-xl fixed top-0 inset-x-0 z-[200]">
+        {/* Compact header — fixed so it never scrolls away on mobile/tablet/narrow desktop */}
+        <div className="print:hidden xl:hidden h-14 border-b border-black/[0.06] dark:border-white/[0.05] flex items-center justify-between px-4 bg-white/80 dark:bg-[#161618]/80 backdrop-blur-xl fixed top-0 inset-x-0 z-[200]">
           <div className="flex items-center">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -428,7 +336,7 @@ export const MainLayout = () => {
             onClick={toggleDarkMode}
             className={`p-1.5 rounded-[8px] border shadow-sm transition-all ${
               darkMode 
-                ? 'bg-zinc-900 border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-800' 
+                ? 'bg-zinc-950 border-white/10 text-zinc-350 hover:text-white hover:bg-zinc-900' 
                 : 'bg-white border-zinc-200 text-zinc-650 hover:text-zinc-900 hover:bg-zinc-50'
             }`}
             title="Cambiar apariencia"
@@ -437,21 +345,26 @@ export const MainLayout = () => {
           </button>
         </div>
 
-        <div ref={scrollContainerRef} className={`flex-1 w-full print:overflow-visible print:h-auto print:p-6 ${
+        <div id="main-scroll-container" ref={scrollContainerRef} className={`flex-1 w-full print:overflow-visible print:h-auto print:p-6 ${
           location.pathname === '/mensajeria' || location.pathname === '/clientes'
-            ? 'overflow-hidden p-0 h-[calc(100dvh-56px)] md:h-screen flex flex-col'
+            ? 'overflow-hidden p-0 h-[calc(100dvh-56px)] xl:h-screen flex flex-col'
             : location.pathname === '/admin/meta'
-              ? 'overflow-x-hidden overflow-y-auto px-2 py-3 sm:px-3 sm:py-4 md:p-4 lg:p-6 pb-8'
+              ? 'overflow-x-hidden overflow-y-auto px-2 py-3 sm:px-3 sm:py-4 md:p-5 xl:p-6 pb-8'
               : isFixedPage 
-                ? 'overflow-hidden p-4 md:p-6 h-[calc(100dvh-56px)] md:h-screen flex flex-col' 
-                : 'overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 md:p-8 lg:p-10 pb-8'
+                ? 'overflow-hidden p-4 md:p-6 h-[calc(100dvh-56px)] xl:h-screen flex flex-col'
+                : 'overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 md:p-6 xl:p-8 2xl:p-10 pb-8'
         }`}>
           {/* Spacer so content starts below the fixed mobile header */}
-          <div className="h-14 md:hidden" />
+          <div className="h-14 xl:hidden" />
+          {/* Feature announcements only appear after a new integration activates app sections. */}
+          {activeProfile && (
+            <WelcomeGuide profile={activeProfile} />
+          )}
           <RouteErrorBoundary key={location.pathname}>
           <Suspense fallback={<PageSkeleton />}>
             <Routes>
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/captacion" element={<CaptacionPage />} />
               <Route path="/redes-sociales" element={<RedesSocialesPage />} />
               <Route path="/mensajeria" element={<MensajeriaPage />} />
@@ -462,14 +375,16 @@ export const MainLayout = () => {
               <Route path="/links" element={<LinksPage />} />
               <Route path="/reportes" element={<ReportsPage />} />
               <Route path="/admin" element={<AdminPage />} />
-              <Route path="/admin/usuarios" element={profile?.is_admin && !isViewingAs ? <AdminUsersPage /> : <Navigate to="/" replace />} />
+              <Route path="/admin/usuarios" element={profile?.is_admin && !isViewingAs ? <AdminUsersPage /> : <Navigate to="/dashboard" replace />} />
               <Route path="/admin/actividad" element={<ActivityPage />} />
               <Route path="/admin/meta" element={<MetaAdsPage />} />
               <Route path="/admin/emails" element={<EmailLibraryPage />} />
               <Route path="/admin/email-monitor" element={<EmailMonitorPage />} />
               <Route path="/email-marketing" element={<EmailMarketingPage />} />
+              <Route path="/publicador" element={<SocialPublisherPage />} />
+              <Route path="/publicaciones" element={<PublicacionesPage />} />
               <Route path="/entradas" element={<EntradasPage />} />
-              <Route path="/cerebro" element={profile?.is_admin ? <CerebroPage /> : <Navigate to="/" replace />} />
+              <Route path="/cerebro" element={<CerebroPage />} />
               <Route path="/pedidos" element={<PedidosPage />} />
               <Route path="/inventario" element={<InventarioPage />} />
               <Route path="/analisis-productos" element={<AnalisisProductosPage />} />
@@ -477,11 +392,16 @@ export const MainLayout = () => {
               <Route path="/informes" element={<InformesPage />} />
               <Route 
                 path="/costos" 
-                element={profile?.is_admin && !isViewingAs ? <CostosPage /> : <Navigate to="/" replace />} 
+                element={hasEcommerce || profile?.is_admin ? <CostosPage /> : <Navigate to="/dashboard" replace />} 
               />
               <Route path="/perfil" element={<PerfilPage />} />
               <Route path="/cliente/:email" element={<ClientePage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/integraciones" element={profile?.is_admin ? <IntegracionesPage /> : <Navigate to="/dashboard" replace />} />
+              <Route path="/mercadolibre" element={<MercadoLibrePage />} />
+              <Route path="/analisis-creativo" element={<CreativeTesterPage />} />
+              <Route path="/privacidad" element={<PrivacidadPage />} />
+              <Route path="/soporte" element={<SoportePage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
           </RouteErrorBoundary>

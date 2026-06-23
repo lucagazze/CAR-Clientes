@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { useAIGate } from '../hooks/useAIGate';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
-import { 
-  Instagram, Heart, MessageCircle, Image as ImageIcon, Video, Layers, Loader2, RefreshCw, X, 
-  ArrowUpRight, AlertCircle, ThumbsUp, MessageSquare, Sparkles, Play, Send
+import { PortalOverlay } from '../components/ui/PortalOverlay';
+import {
+  Instagram, Heart, MessageCircle, Image as ImageIcon, Video, Layers, Loader2, RefreshCw, X,
+  ArrowUpRight, AlertCircle, ThumbsUp, MessageSquare, Sparkles, Play, Send, Brain,
+  ChevronLeft, ChevronRight, EyeOff, Music2, Youtube
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
@@ -38,6 +42,81 @@ const fmtPercent = (v: any) => {
   const n = parseFloat(v);
   return isNaN(n) ? '—' : `${n.toFixed(2)}%`;
 };
+
+const scoreCls = (score: number) =>
+  score >= 80 ? 'bg-emerald-500 text-white shadow-emerald-200 dark:shadow-none' :
+  score >= 60 ? 'bg-amber-500 text-white shadow-amber-200 dark:shadow-none' :
+  'bg-red-500 text-white shadow-red-200 dark:shadow-none';
+
+const scoreLabel = (score: number) =>
+  score >= 80 ? 'Listo para escalar' : score >= 60 ? 'Requiere ajustes' : 'Revisar antes de pautar';
+
+const clampDuration = (seconds?: number | null) => {
+  const n = Number(seconds);
+  return Number.isFinite(n) && n > 0 ? Math.max(1, Math.min(900, Math.round(n))) : 30;
+};
+
+const formatDuration = (seconds?: number | null) => {
+  const total = clampDuration(seconds);
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${minutes}:${String(secs).padStart(2, '0')}`;
+};
+
+const getRemoteVideoDuration = (url?: string | null): Promise<number> => {
+  if (!url) return Promise.resolve(0);
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    let done = false;
+    const finish = (value = 0) => {
+      if (done) return;
+      done = true;
+      video.removeAttribute('src');
+      video.load();
+      resolve(value);
+    };
+    const timer = window.setTimeout(() => finish(0), 5000);
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.onloadedmetadata = () => {
+      window.clearTimeout(timer);
+      finish(Number.isFinite(video.duration) ? video.duration : 0);
+    };
+    video.onerror = () => {
+      window.clearTimeout(timer);
+      finish(0);
+    };
+    video.src = url;
+  });
+};
+
+const genTimeline = (attn: number, emot: number, cogLoad: number, seed: number, durationSec = 30) => {
+  const duration = clampDuration(durationSec);
+  const attnOff = [0.22, 0.28, 0.10, -0.04, -0.10, 0.00, 0.06, -0.02, 0.04, -0.04];
+  const emotOff = [-0.28, -0.18, -0.05, 0.05, 0.10, 0.05, 0.03, 0.12, 0.02, -0.03];
+  return attnOff.map((ao, i) => {
+    const a = Math.max(8, Math.min(99, Math.round(attn * (1 + ao) + ((seed * 3 + i * 7) % 8) - 4)));
+    const e = Math.max(8, Math.min(99, Math.round(emot * (1 + emotOff[i]) + ((seed * 5 + i * 11) % 8) - 4)));
+    const imp = Math.max(8, Math.min(99, Math.round(a * 0.4 + e * 0.4 + (100 - cogLoad) * 0.2)));
+    return { t: Math.round(i * duration / (attnOff.length - 1)), attn: a, emot: e, impact: imp };
+  });
+};
+
+const MetricBar = ({ label, value, color, reason }: { label: string; value: number; color: string; reason?: string }) => (
+  <div>
+    <div className="flex items-center justify-between mb-1">
+      <span className="text-[11px] font-bold text-zinc-650 dark:text-zinc-400 uppercase tracking-wider">{label}</span>
+      <span className="text-[13px] font-black text-zinc-900 dark:text-white">{value}%</span>
+    </div>
+    <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+      <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${value}%` }} />
+    </div>
+    {reason && <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-snug">{reason}</p>}
+  </div>
+);
 
 interface AutoResizeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   value: string;
@@ -75,6 +154,7 @@ const AutoResizeTextarea = React.forwardRef<HTMLTextAreaElement, AutoResizeTexta
 AutoResizeTextarea.displayName = 'AutoResizeTextarea';
 
 export default function RedesSocialesPage() {
+  const { gate, isReady: aiReady, AIGate } = useAIGate();
   const { isViewingAs, viewAsProfile } = useViewAs();
   const { profile: authProfile, user, loading: authLoading, session } = useAuth();
   const profile = isViewingAs ? viewAsProfile : authProfile;
@@ -83,7 +163,7 @@ export default function RedesSocialesPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   
   // Tab State (Instagram vs Facebook)
-  const [activeTab, setActiveTab] = useState<'instagram' | 'facebook'>('instagram');
+  const [activeTab, setActiveTab] = useState<'instagram' | 'facebook' | 'tiktok' | 'youtube'>('instagram');
 
   // Loading and Error States
   const [igLoading, setIgLoading] = useState(true);
@@ -97,6 +177,10 @@ export default function RedesSocialesPage() {
   
   const [fbProfile, setFbProfile] = useState<any>(null);
   const [fbMedia, setFbMedia] = useState<any[]>([]);
+  const [youtubeProfile, setYoutubeProfile] = useState<any>(null);
+  const [youtubeMedia, setYoutubeMedia] = useState<any[]>([]);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeError, setYoutubeError] = useState<string | null>(null);
 
   // UI Filters
   const [mediaFilter, setMediaFilter] = useState<'all' | 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'>('all');
@@ -119,9 +203,89 @@ export default function RedesSocialesPage() {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPostPermalink, setSelectedPostPermalink] = useState<string | null>(null);
   const [selectedPostType, setSelectedPostType] = useState<'instagram' | 'facebook'>('instagram');
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
   const [comments, setComments] = useState<any[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
-  const [mobileTab, setMobileTab] = useState<'post' | 'comments'>('comments');
+
+  const [slideTab, setSlideTab] = useState<'comments' | 'metrics'>('comments');
+  const [mobileDetailTab, setMobileDetailTab] = useState<'post' | 'comments' | 'analysis'>('post');
+  const [analyzingTribe, setAnalyzingTribe] = useState(false);
+  const [tribeResult, setTribeResult] = useState<any>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [analysisDurationSec, setAnalysisDurationSec] = useState(30);
+  const [commentFilter, setCommentFilter] = useState<'all' | 'pending'>('pending');
+
+  useEffect(() => {
+    if (selectedPostId) {
+      setSlideTab('comments');
+      setMobileDetailTab('post');
+      setAnalyzingTribe(false);
+      setTribeResult(null);
+      setAnalysisError(null);
+      setTimeline([]);
+      setAnalysisDurationSec(30);
+      setCommentFilter('pending');
+    }
+  }, [selectedPostId]);
+
+  const analyzeCreativeUrl = async (imageUrl: string | null, isVideo: boolean): Promise<any> => {
+    if (!imageUrl) throw new Error('No hay imagen disponible para analizar.');
+    let frame: string | null = null;
+    try {
+      const r = await fetch(imageUrl);
+      if (r.ok) {
+        const blob = await r.blob();
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const canvas = document.createElement('canvas');
+        const img = document.createElement('img');
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = b64; });
+        const scale = Math.min(1, 256 / Math.max(img.width, 1));
+        canvas.width = Math.floor(img.width * scale);
+        canvas.height = Math.floor(img.height * scale);
+        canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        frame = canvas.toDataURL('image/jpeg', 0.6);
+      }
+    } catch {
+      frame = null;
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || '';
+    const res = await fetch('/api/scrape-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ type: 'analyze-creative', frames: frame ? [frame] : [], imageUrl, isVideo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || data.error || 'No se pudo analizar el creativo con IA.');
+    const score = Math.max(0, Math.min(100, Math.round((Number(data.attentionPct || 0) * 0.4) + (Number(data.emotionPct || 0) * 0.4) + ((100 - Number(data.cogLoad || 0)) * 0.2))));
+    return { ...data, score };
+  };
+
+  const handleTabChange = async (tab: 'comments' | 'metrics', imageUrl?: string, isVideo?: boolean, videoUrl?: string | null) => {
+    if (tab === 'metrics') {
+      setAnalyzingTribe(true);
+      setTribeResult(null);
+      setAnalysisError(null);
+      setSlideTab('metrics');
+      const durationSec = isVideo ? clampDuration(await getRemoteVideoDuration(videoUrl)) : 30;
+      setAnalysisDurationSec(durationSec);
+      analyzeCreativeUrl(imageUrl || null, isVideo || false)
+        .then(result => {
+          setTribeResult(result);
+          setTimeline(genTimeline(result.attentionPct, result.emotionPct, result.cogLoad, result.score, durationSec));
+        })
+        .catch(err => setAnalysisError(err?.message || 'No se pudo analizar el creativo con IA.'))
+        .finally(() => setAnalyzingTribe(false));
+    } else {
+      setSlideTab('comments');
+    }
+  };
   const [commentInput, setCommentInput] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -134,6 +298,7 @@ export default function RedesSocialesPage() {
   const [commentRepliesErrors, setCommentRepliesErrors] = useState<Record<string, string | null>>({});
   const [activeReplyCommentIds, setActiveReplyCommentIds] = useState<Record<string, boolean>>({});
   const [replyLangs, setReplyLangs] = useState<Record<string, 'en' | 'es'>>({});
+  const [bulkDraftLang, setBulkDraftLang] = useState<'es' | 'en'>('es');
   const [langDropdownOpen, setLangDropdownOpen] = useState<Record<string, boolean>>({});
   const [activeReplyTargets, setActiveReplyTargets] = useState<Record<string, any>>({});
   const [bulkDraftsLoading, setBulkDraftsLoading] = useState(false);
@@ -141,6 +306,7 @@ export default function RedesSocialesPage() {
   // Likes local state optimization
   const [likedCommentIds, setLikedCommentIds] = useState<Record<string, boolean>>({});
   const [likingCommentIds, setLikingCommentIds] = useState<Record<string, boolean>>({});
+  const [ignoredIds, setIgnoredIds] = useState<Record<string, boolean>>({});
 
   // ── Pending Comments Panel ────────────────────────────────────────────
   const [showPendingPanel, setShowPendingPanel] = useState(false);
@@ -158,28 +324,80 @@ export default function RedesSocialesPage() {
   const igId = (profile as any)?.ig_business_id;
   const igUsername = (profile as any)?.ig_username;
   const fbPageId = (profile as any)?.fb_page_id;
+  const metaAccountId = (profile as any)?.meta_account_id;
+  const tiktokConnected = !!((profile as any)?.tiktok_content_access_token || (profile as any)?.tiktok_advertiser_id);
+  const youtubeConnected = !!((profile as any)?.youtube_access_token || (profile as any)?.youtube_channel_id);
+  const visibleTabs = useMemo(() => ([
+    igId ? { id: 'instagram', label: 'Instagram', short: 'IG', icon: Instagram, active: 'bg-pink-500 text-white shadow-md shadow-pink-500/20' } : null,
+    fbPageId ? { id: 'facebook', label: 'Facebook', short: 'FB', icon: null, active: 'bg-blue-600 text-white shadow-md shadow-blue-600/20' } : null,
+    tiktokConnected ? { id: 'tiktok', label: 'TikTok', short: 'TT', icon: Music2, active: 'bg-zinc-950 text-white shadow-md shadow-zinc-900/20' } : null,
+    youtubeConnected ? { id: 'youtube', label: 'YouTube', short: 'YT', icon: Youtube, active: 'bg-red-600 text-white shadow-md shadow-red-600/20' } : null,
+  ].filter(Boolean) as Array<{ id: 'instagram' | 'facebook' | 'tiktok' | 'youtube'; label: string; short: string; icon: any; active: string }>), [igId, fbPageId, tiktokConnected, youtubeConnected]);
+
+  useEffect(() => {
+    if (visibleTabs.length === 0) return;
+    if (!visibleTabs.some(tab => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id);
+    }
+  }, [activeTab, visibleTabs]);
 
   // Unified loading states to prevent flashing empty/unconnected pages
-  const loading = authLoading || (profile === undefined) || igLoading || fbLoading;
+  const loading = authLoading || (profile === undefined) || igLoading || fbLoading || youtubeLoading;
 
-  // Helper to determine if a comment thread is unanswered/pending
-  const isCommentPending = (comment: any) => {
-    const isFromPage = (comment.username && igUsername && comment.username.toLowerCase() === igUsername.toLowerCase()) || comment.from?.id === fbPageId;
-    if (isFromPage) return false;
-    
+  const isFromPage = useCallback((entry: any) => {
+    if (!entry) return false;
+    if (igUsername && entry.username && entry.username.toLowerCase() === igUsername.toLowerCase()) return true;
+    if (igId && entry.from?.id && String(entry.from.id) === String(igId)) return true;
+    if (fbPageId && entry.from?.id && String(entry.from.id) === String(fbPageId)) return true;
+    if (metaAccountId && entry.from?.id && String(entry.from.id) === String(metaAccountId)) return true;
+    return false;
+  }, [igUsername, igId, fbPageId, metaAccountId]);
+
+  const isCommentPending = useCallback((comment: any) => {
+    if (comment?._ignored || ignoredIds[comment?.id]) return false;
+    if (isFromPage(comment)) return false;
     const repliesList = comment.replies?.data || [];
     if (repliesList.length === 0) return true;
-    
-    const sortedReplies = [...repliesList].sort(
-      (a, b) => new Date(a.timestamp || a.created_time).getTime() - new Date(b.timestamp || b.created_time).getTime()
+    const sorted = [...repliesList].sort(
+      (a, b) => new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
     );
-    const latestReply = sortedReplies[sortedReplies.length - 1];
-    const lastIsFromPage = (latestReply.username && igUsername && latestReply.username.toLowerCase() === igUsername.toLowerCase()) || latestReply.from?.id === fbPageId;
-    return !lastIsFromPage;
+    return !isFromPage(sorted[sorted.length - 1]);
+  }, [isFromPage, ignoredIds]);
+
+  useEffect(() => {
+    if (!clientId) {
+      setIgnoredIds({});
+      return;
+    }
+    try {
+      setIgnoredIds(JSON.parse(localStorage.getItem(`car_ignored_comments_${clientId}`) || '{}'));
+    } catch {
+      setIgnoredIds({});
+    }
+  }, [clientId]);
+
+  const getCommentThreadCount = (list: any[]) =>
+    list.reduce((total, c) => total + 1 + (c.replies?.data?.length || 0), 0);
+
+  const getMediaCommentCount = (media: any) => {
+    const inline = media?.comments?.data || [];
+    if (inline.length > 0) return getCommentThreadCount(inline);
+    return media?.comments_count || media?.comments?.summary?.total_count || 0;
   };
+
+  const getLatestPendingTarget = useCallback((comment: any) => {
+    const repliesList = comment.replies?.data || [];
+    if (repliesList.length === 0) return comment;
+    const sorted = [...repliesList].sort(
+      (a, b) => new Date(a.timestamp || a.created_time || 0).getTime() - new Date(b.timestamp || b.created_time || 0).getTime()
+    );
+    const latest = sorted[sorted.length - 1];
+    return isFromPage(latest) ? comment : latest;
+  }, [isFromPage]);
 
   // Bulk draft generation for all pending comments in the modal
   const handleBulkDrafts = async () => {
+    if (!aiReady) { gate(() => handleBulkDrafts()); return; }
     const pendingComments = comments.filter(c => isCommentPending(c));
     if (pendingComments.length === 0) return;
     
@@ -188,10 +406,12 @@ export default function RedesSocialesPage() {
     const postCaptionContext = igMedia.find(m => m.id === selectedPostId)?.caption || fbMedia.find(m => m.id === selectedPostId)?.message || '';
     
     const promises = pendingComments.map(async (comment) => {
+      const target = getLatestPendingTarget(comment);
       setCommentRepliesLoadingDraft(prev => ({ ...prev, [comment.id]: true }));
       try {
-        const usernameStr = comment.username || comment.from?.name || 'usuario';
-        const itemTextStr = comment.text || comment.message || '';
+        const usernameStr = target.username || target.from?.name || 'usuario';
+        const itemTextStr = target.text || target.message || '';
+        setReplyLangs(prev => ({ ...prev, [comment.id]: bulkDraftLang }));
         
         // Collect other comments in this post for context
         const otherCommentsList = comments
@@ -212,14 +432,22 @@ export default function RedesSocialesPage() {
             username: usernameStr,
             postCaption: postCaptionContext,
             otherComments: otherCommentsList,
+            forceLang: bulkDraftLang,
           }),
         });
         
-        if (res.ok) {
-          const data = await res.json();
-          if (data.draft) {
-            setCommentReplies(prev => ({ ...prev, [comment.id]: data.draft }));
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || err.error || 'No se pudo generar el borrador.');
+        }
+        const data = await res.json();
+        if (data.draft) {
+          let draftText = data.draft;
+          if (target.id !== comment.id) {
+            const prefix = `@${usernameStr} `;
+            if (!draftText.toLowerCase().startsWith(`@${usernameStr.toLowerCase()}`)) draftText = prefix + draftText;
           }
+          setCommentReplies(prev => ({ ...prev, [comment.id]: draftText }));
         }
       } catch (err) {
         console.error(`Error generating bulk draft for comment ${comment.id}:`, err);
@@ -244,8 +472,7 @@ export default function RedesSocialesPage() {
       const [igResults, fbResults] = await Promise.all([
         Promise.all(igPosts.map(async (post) => {
           try {
-            const res = await metaAds.getInstagramMediaComments(post.id, fbPageId || undefined);
-            const cs = res?.data || [];
+            const cs = await metaAds.getAllInstagramMediaComments(post.id, fbPageId || undefined);
             newCache[post.id] = cs; // cache ALL comments for AI context
             return cs.filter(isCommentPending).map((c: any) => ({
               network: 'instagram' as const,
@@ -258,8 +485,7 @@ export default function RedesSocialesPage() {
         })),
         Promise.all(fbPosts.map(async (post) => {
           try {
-            const res = await metaAds.getFacebookPostComments(post.id);
-            const cs = res?.data || [];
+            const cs = await metaAds.getAllFacebookPostComments(post.id);
             newCache[post.id] = cs; // cache ALL comments for AI context
             return cs.filter(isCommentPending).map((c: any) => ({
               network: 'facebook' as const,
@@ -307,6 +533,7 @@ export default function RedesSocialesPage() {
   };
 
   const handlePendingDraft = async (item: { postCaption: string; postId: string; network: string; comment: any }) => {
+    if (!aiReady) { gate(() => handlePendingDraft(item)); return; }
     const commentId = item.comment.id;
     setPendingDraftLoading(prev => ({ ...prev, [commentId]: true }));
     try {
@@ -333,10 +560,12 @@ export default function RedesSocialesPage() {
           otherComments,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.draft) setPendingReplies(prev => ({ ...prev, [commentId]: data.draft }));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'No se pudo generar el borrador.');
       }
+      const data = await res.json();
+      if (data.draft) setPendingReplies(prev => ({ ...prev, [commentId]: data.draft }));
     } catch (err) {
       console.error('Error generating draft:', err);
     } finally {
@@ -425,6 +654,7 @@ export default function RedesSocialesPage() {
 
   // Single comment AI draft generator (inline)
   const handleSingleCommentDraft = async (commentId: string, itemText: string, username: string, replyTarget?: any) => {
+    if (!aiReady) { gate(() => handleSingleCommentDraft(commentId, itemText, username, replyTarget)); return; }
     const target = replyTarget || { text: itemText, username };
     const text = target.text || target.message || '';
     const lang: 'en' | 'es' = target._forceLang || replyLangs[commentId] || detectLang(text);
@@ -454,7 +684,10 @@ export default function RedesSocialesPage() {
           forceLang: lang,
         }),
       });
-      if (!res.ok) throw new Error(`Draft reply error: ${res.status}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || `Draft reply error: ${res.status}`);
+      }
       const data = await res.json();
       if (data.draft) {
         let draftText = data.draft;
@@ -497,6 +730,21 @@ export default function RedesSocialesPage() {
     }
   };
 
+  const handleIgnoreComment = (commentId: string) => {
+    if (!clientId) return;
+    let nextIgnored = false;
+    setIgnoredIds(prev => {
+      nextIgnored = !prev[commentId];
+      const next = { ...prev, [commentId]: nextIgnored };
+      if (!nextIgnored) delete next[commentId];
+      try { localStorage.setItem(`car_ignored_comments_${clientId}`, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    setComments(prev => prev.map(c => c.id === commentId ? { ...c, _ignored: nextIgnored } : c));
+    setCommentReplies(prev => { const next = { ...prev }; delete next[commentId]; return next; });
+    setActiveReplyCommentIds(prev => ({ ...prev, [commentId]: false }));
+  };
+
   // Track page ID in localStorage to enable token retrieval in services
   useEffect(() => {
     if (fbPageId) {
@@ -506,6 +754,7 @@ export default function RedesSocialesPage() {
 
   const generateSocialCommentDraft = async () => {
     if (!replyingTo || !selectedPostId) return;
+    if (!aiReady) { gate(() => generateSocialCommentDraft()); return; }
     const commentToReply = comments.find(c => c.id === replyingTo.id);
     if (!commentToReply) return;
 
@@ -533,7 +782,10 @@ export default function RedesSocialesPage() {
           otherComments: otherCommentsList,
         }),
       });
-      if (!res.ok) throw new Error(`Draft reply error: ${res.status}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || `Draft reply error: ${res.status}`);
+      }
       const data = await res.json();
       if (data.draft) {
         setCommentInput(data.draft);
@@ -555,22 +807,22 @@ export default function RedesSocialesPage() {
       if (type === 'instagram') {
         let commentsData: any[] = [];
         try {
-          const res = await metaAds.getInstagramMediaComments(postId);
-          commentsData = res?.data || [];
+          commentsData = await metaAds.getAllInstagramMediaComments(postId, fbPageId || undefined);
         } catch (apiErr) {
           // Fallback: use inline comments already fetched with the media
           const cachedMedia = igMedia.find(m => m.id === postId);
           commentsData = cachedMedia?.comments?.data || [];
           console.warn('Using cached inline comments (API fetch failed):', apiErr);
         }
-        setComments(commentsData);
+        setComments((commentsData || []).map((c: any) => ({ ...c, _ignored: !!ignoredIds[c.id] })));
       } else {
-        const res = await metaAds.getFacebookPostComments(postId);
+        const commentsData = await metaAds.getAllFacebookPostComments(postId);
         // Normalize comments for Facebook to fit same rendering structure.
         // IMPORTANT: preserve the original `from` object so isCommentPending can
         // compare from.id against fbPageId to detect page-owned replies.
-        const normalized = (res.data || []).map((c: any, idx: number) => ({
+        const normalized = (commentsData || []).map((c: any, idx: number) => ({
           id: c.id,
+          _ignored: !!ignoredIds[c.id],
           // Use from.name if available; fall back to a numbered label so comments are distinguishable
           username: c.from?.name || c.name || c.username || `Comentarista ${idx + 1}`,
           text: c.text || c.message || '',
@@ -591,6 +843,7 @@ export default function RedesSocialesPage() {
 
   const openCommentsModal = (postId: string, permalink: string, type: 'instagram' | 'facebook') => {
     setSelectedPostId(postId);
+    setSelectedMediaIndex(0);
     const normalizedPermalink = type === 'instagram' && permalink
       ? permalink.replace('www.instagram.com/reel/', 'www.instagram.com/p/').replace('www.instagram.com/tv/', 'www.instagram.com/p/')
       : permalink;
@@ -599,13 +852,13 @@ export default function RedesSocialesPage() {
     setReplyingTo(null);
     setCommentInput('');
     setSubmitError(null);
-    setMobileTab('comments');
     fetchComments(postId, type);
   };
 
   const closeCommentsModal = () => {
     setSelectedPostId(null);
     setSelectedPostPermalink(null);
+    setSelectedMediaIndex(0);
     setComments([]);
     setReplyingTo(null);
     setCommentInput('');
@@ -844,7 +1097,7 @@ export default function RedesSocialesPage() {
     if (igId) {
       Promise.all([
         metaAds.getInstagramProfile(igId, fbPageId || undefined).catch(() => null),
-        metaAds.getInstagramMedia(igId, 24, undefined, fbPageId || undefined).catch(() => []),
+        metaAds.getInstagramMedia(igId, 8, undefined, fbPageId || undefined).catch(() => []),
       ]).then(([profileRes, mediaRes]) => {
         if (!active) return;
         setIgProfile(profileRes);
@@ -900,7 +1153,7 @@ export default function RedesSocialesPage() {
 
     Promise.all([
       metaAds.getFacebookPageInfo(fbPageId).catch(() => null),
-      metaAds.getFacebookPageFeed(fbPageId, 24).catch(err => { setFbError(err.message || String(err)); return []; }),
+      metaAds.getFacebookPageFeed(fbPageId, 8).catch(err => { setFbError(err.message || String(err)); return []; }),
     ]).then(([profileRes, feedRes]) => {
       if (!active) return;
       setFbProfile(profileRes);
@@ -922,6 +1175,30 @@ export default function RedesSocialesPage() {
     return () => { active = false; };
   }, [clientId, fbPageId, activeTab, refreshKey, fbProfile]);
 
+  useEffect(() => {
+    if (!clientId || activeTab !== 'youtube' || !youtubeConnected) return;
+    let active = true;
+    setYoutubeLoading(true);
+    setYoutubeError(null);
+    supabase.auth.getSession().then(({ data }) => {
+      const token = data.session?.access_token || '';
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      return Promise.all([
+        fetch(`/api/oauth?action=youtube-profile&clientId=${encodeURIComponent(clientId)}`, { headers }).then(r => r.json()),
+        fetch(`/api/oauth?action=youtube-posts&clientId=${encodeURIComponent(clientId)}`, { headers }).then(r => r.json())
+      ]);
+    }).then(([profileJson, postsJson]) => {
+      if (!active) return;
+      if (profileJson.error) throw new Error(profileJson.error);
+      if (postsJson.error) throw new Error(postsJson.error);
+      setYoutubeProfile(profileJson.items?.[0] || null);
+      setYoutubeMedia(postsJson.items || []);
+    }).catch(err => {
+      if (active) setYoutubeError(err.message || 'No se pudo obtener YouTube.');
+    }).finally(() => { if (active) setYoutubeLoading(false); });
+    return () => { active = false; };
+  }, [clientId, activeTab, youtubeConnected, refreshKey]);
+
   // Filters for Instagram Feed
   const filteredMedia = useMemo(() => {
     if (mediaFilter === 'all') return igMedia;
@@ -935,106 +1212,95 @@ export default function RedesSocialesPage() {
     return fbMedia.filter(post => !post.full_picture);
   }, [fbMedia, fbMediaFilter]);
 
-  // Refs hold latest cursor/loading so the observer callback never sees a stale closure.
-  const igCursorRef = useRef<string | null>(null);
-  const fbCursorRef = useRef<string | null>(null);
-  const loadingMoreIgRef = useRef(false);
-  const loadingMoreFbRef = useRef(false);
-  useEffect(() => { igCursorRef.current = igNextCursor; }, [igNextCursor]);
-  useEffect(() => { fbCursorRef.current = fbNextCursor; }, [fbNextCursor]);
-  useEffect(() => { loadingMoreIgRef.current = loadingMoreIg; }, [loadingMoreIg]);
-  useEffect(() => { loadingMoreFbRef.current = loadingMoreFb; }, [loadingMoreFb]);
-
-  const loadMoreIg = useCallback(async () => {
-    if (!igId || !igCursorRef.current || loadingMoreIgRef.current) return;
-    loadingMoreIgRef.current = true;
+  const loadMoreIg = async () => {
+    if (!igId || !igNextCursor || loadingMoreIg) return;
     setLoadingMoreIg(true);
     try {
-      const res = await metaAds.getInstagramMedia(igId, 24, igCursorRef.current, fbPageId || undefined);
+      const res = await metaAds.getInstagramMedia(igId, 8, igNextCursor, fbPageId || undefined);
       const newPosts = res?.data || [];
       setIgMedia(prev => [...prev, ...newPosts]);
-      const next = res?.paging?.cursors?.after || null;
-      igCursorRef.current = next;
-      setIgNextCursor(next);
+      setIgNextCursor(res?.paging?.cursors?.after || null);
     } catch (e) { console.error(e); }
-    finally {
-      loadingMoreIgRef.current = false;
-      setLoadingMoreIg(false);
-    }
-  }, [igId, fbPageId]);
+    finally { setLoadingMoreIg(false); }
+  };
 
-  const loadMoreFb = useCallback(async () => {
-    if (!fbPageId || !fbCursorRef.current || loadingMoreFbRef.current) return;
-    loadingMoreFbRef.current = true;
+  const loadMoreFb = async () => {
+    if (!fbPageId || !fbNextCursor || loadingMoreFb) return;
     setLoadingMoreFb(true);
     try {
-      const res = await metaAds.getFacebookPageFeed(fbPageId, 24, fbCursorRef.current);
+      const res = await metaAds.getFacebookPageFeed(fbPageId, 8, fbNextCursor);
       const newPosts = (res?.data || []).map((p: any) => ({ ...p, source: p.source || p.attachments?.data?.[0]?.media?.source || null }));
       setFbMedia(prev => [...prev, ...newPosts]);
-      const next = res?.paging?.cursors?.after || null;
-      fbCursorRef.current = next;
-      setFbNextCursor(next);
+      setFbNextCursor(res?.paging?.cursors?.after || null);
     } catch (e) { console.error(e); }
-    finally {
-      loadingMoreFbRef.current = false;
-      setLoadingMoreFb(false);
-    }
-  }, [fbPageId]);
+    finally { setLoadingMoreFb(false); }
+  };
 
   // IntersectionObserver for Instagram sentinel
   useEffect(() => {
-    const el = igSentinelRef.current;
-    if (!el || !igId) return;
+    if (!igSentinelRef.current || activeTab !== 'instagram') return;
+    const scrollRoot = document.getElementById('main-scroll-container');
     const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMoreIg(); },
-      { rootMargin: '800px 0px' }
+      (entries) => { if (entries[0].isIntersecting && igNextCursor && !loadingMoreIg) loadMoreIg(); },
+      { root: scrollRoot, rootMargin: '700px 0px', threshold: 0.01 }
     );
-    observer.observe(el);
+    observer.observe(igSentinelRef.current);
     return () => observer.disconnect();
-  }, [igNextCursor, igId, loadMoreIg]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, igNextCursor, loadingMoreIg, igId]);
 
   // IntersectionObserver for Facebook sentinel
   useEffect(() => {
-    const el = fbSentinelRef.current;
-    if (!el || !fbPageId) return;
+    if (!fbSentinelRef.current || activeTab !== 'facebook') return;
+    const scrollRoot = document.getElementById('main-scroll-container');
     const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMoreFb(); },
-      { rootMargin: '800px 0px' }
+      (entries) => { if (entries[0].isIntersecting && fbNextCursor && !loadingMoreFb) loadMoreFb(); },
+      { root: scrollRoot, rootMargin: '700px 0px', threshold: 0.01 }
     );
-    observer.observe(el);
+    observer.observe(fbSentinelRef.current);
     return () => observer.disconnect();
-  }, [fbNextCursor, fbPageId, loadMoreFb]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, fbNextCursor, loadingMoreFb, fbPageId]);
 
-  // Fallback: listen to scroll on the page's scroll container and trigger loadMore
-  // when within 800px of the bottom. Belt-and-suspenders for cases where the
-  // IntersectionObserver doesn't fire (custom scroll roots, etc.).
+  // Fallback scroll trigger: some mobile/tablet browsers do not reliably fire
+  // IntersectionObserver inside the app shell. This keeps infinite loading
+  // working when the user reaches the bottom of the page.
   useEffect(() => {
-    const findScrollContainer = (): HTMLElement | null => {
-      let el: HTMLElement | null = igSentinelRef.current || fbSentinelRef.current;
-      while (el && el !== document.body) {
-        const style = window.getComputedStyle(el);
-        if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight) return el;
-        el = el.parentElement;
-      }
-      return null;
+    const scrollRoot = document.getElementById('main-scroll-container');
+    let raf = 0;
+
+    const checkNearBottom = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const scrollTop = scrollRoot ? scrollRoot.scrollTop : window.scrollY;
+        const clientHeight = scrollRoot ? scrollRoot.clientHeight : window.innerHeight;
+        const scrollHeight = scrollRoot ? scrollRoot.scrollHeight : document.documentElement.scrollHeight;
+        const nearBottom = scrollHeight - scrollTop - clientHeight < 900;
+
+        if (!nearBottom) return;
+        if (activeTab === 'instagram' && igNextCursor && !loadingMoreIg) {
+          loadMoreIg();
+        }
+        if (activeTab === 'facebook' && fbNextCursor && !loadingMoreFb) {
+          loadMoreFb();
+        }
+      });
     };
-    const onScroll = (e: Event) => {
-      const t = e.target as HTMLElement;
-      if (!t || typeof t.scrollTop !== 'number') return;
-      if (t.scrollHeight - t.scrollTop - t.clientHeight < 800) {
-        if (activeTab === 'instagram') loadMoreIg(); else loadMoreFb();
-      }
+
+    const target: any = scrollRoot || window;
+    target.addEventListener('scroll', checkNearBottom, { passive: true });
+    checkNearBottom();
+    return () => {
+      cancelAnimationFrame(raf);
+      target.removeEventListener('scroll', checkNearBottom);
     };
-    const container = findScrollContainer();
-    if (!container) return;
-    container.addEventListener('scroll', onScroll, { passive: true });
-    return () => container.removeEventListener('scroll', onScroll);
-  }, [activeTab, loadMoreIg, loadMoreFb, igMedia.length, fbMedia.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, igNextCursor, fbNextCursor, loadingMoreIg, loadingMoreFb, igId, fbPageId]);
 
 
   const igEngagementRate = useMemo(() => {
     if (!igProfile || !igProfile.followers_count || !igMedia.length) return 0;
-    const totalInteractions = igMedia.reduce((sum, item) => sum + (item.like_count || 0) + (item.comments_count || 0), 0);
+    const totalInteractions = igMedia.reduce((sum, item) => sum + (item.like_count || 0) + getMediaCommentCount(item), 0);
     const avgInteractionsPerPost = totalInteractions / igMedia.length;
     return (avgInteractionsPerPost / igProfile.followers_count) * 100;
   }, [igProfile, igMedia]);
@@ -1044,7 +1310,7 @@ export default function RedesSocialesPage() {
     if (!fbProfile || !(fbProfile.followers_count || fbProfile.fan_count) || !fbMedia.length) return 0;
     const totalInteractions = fbMedia.reduce((sum, item) => {
       const likesCount = item.likes?.summary?.total_count || 0;
-      const commentsCount = item.comments?.summary?.total_count || 0;
+      const commentsCount = getMediaCommentCount(item);
       return sum + likesCount + commentsCount;
     }, 0);
     const avgInteractionsPerPost = totalInteractions / fbMedia.length;
@@ -1061,7 +1327,8 @@ export default function RedesSocialesPage() {
   };
 
   return (
-    <CenteredPageLoader isLoading={loading || authLoading}>
+    <CenteredPageLoader isLoading={authLoading || profile === undefined}>
+    {AIGate}
     <div className="space-y-5 md:space-y-8 w-full pt-3 md:pt-6 animate-in fade-in duration-300">
 
       {/* Page Header */}
@@ -1078,30 +1345,24 @@ export default function RedesSocialesPage() {
         <div className="flex items-center gap-2 flex-wrap justify-start md:justify-end">
           {/* Tab Selector Buttons */}
           <div className="flex items-center gap-1 bg-zinc-100/80 dark:bg-zinc-800/60 p-1 rounded-2xl border border-zinc-200/20 dark:border-zinc-700/60">
-            <button
-              onClick={() => setActiveTab('instagram')}
-              className={`flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10.5px] sm:text-[12px] font-black transition-all ${
-                activeTab === 'instagram'
-                  ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
-              }`}
-            >
-              <Instagram className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">Instagram</span>
-              <span className="xs:hidden">IG</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('facebook')}
-              className={`flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10.5px] sm:text-[12px] font-black transition-all ${
-                activeTab === 'facebook'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
-              }`}
-            >
-              <span className="w-3.5 h-3.5 font-black flex items-center justify-center text-[15px] leading-none">f</span>
-              <span className="hidden xs:inline">Facebook</span>
-              <span className="xs:hidden">FB</span>
-            </button>
+            {visibleTabs.map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10.5px] sm:text-[12px] font-black transition-all ${
+                    activeTab === tab.id
+                      ? tab.active
+                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/40'
+                  }`}
+                >
+                  {Icon ? <Icon className="w-3.5 h-3.5" /> : <span className="w-3.5 h-3.5 font-black flex items-center justify-center text-[15px] leading-none">f</span>}
+                  <span className="hidden xs:inline">{tab.label}</span>
+                  <span className="xs:hidden">{tab.short}</span>
+                </button>
+              );
+            })}
           </div>
 
 
@@ -1117,9 +1378,9 @@ export default function RedesSocialesPage() {
             <p className="text-[13px] text-red-600 dark:text-red-500 mt-1">{error}</p>
           </div>
         </div>
-      ) : (authLoading || (!clientId && !igId && !fbPageId)) ? (
+      ) : (authLoading || (!clientId && !igId && !fbPageId && !tiktokConnected && !youtubeConnected)) ? (
         <AppleLoader variant="page" />
-      ) : !igId && !fbPageId ? (
+      ) : !igId && !fbPageId && !tiktokConnected && !youtubeConnected ? (
         <div className="bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/60 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-4 shadow-sm">
           <Instagram className="w-12 h-12 text-zinc-400 mx-auto" />
           <h3 className="font-black text-zinc-800 dark:text-zinc-200 text-[18px]">Perfiles no configurados</h3>
@@ -1307,7 +1568,7 @@ export default function RedesSocialesPage() {
                                           </div>
                                           <div className="flex items-center gap-1.5 text-[14px]">
                                             <MessageCircle className="w-5 h-5 fill-white text-white" />
-                                            <span>{fmtNumber(m.comments_count || 0)}</span>
+                                            <span>{fmtNumber(getMediaCommentCount(m))}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -1319,7 +1580,7 @@ export default function RedesSocialesPage() {
                                         </div>
                                         <div className="flex items-center gap-1.5 text-[14px]">
                                           <MessageCircle className="w-5 h-5 fill-white text-white" />
-                                          <span>{fmtNumber(m.comments_count || 0)}</span>
+                                          <span>{fmtNumber(getMediaCommentCount(m))}</span>
                                         </div>
                                       </>
                                     )}
@@ -1362,7 +1623,7 @@ export default function RedesSocialesPage() {
                                     className="flex items-center gap-1 hover:text-pink-500 transition-colors cursor-pointer"
                                     title="Ver y responder comentarios"
                                   >
-                                    <MessageCircle className="w-3.5 h-3.5 text-zinc-450" /> {m.comments_count || 0}
+                                    <MessageCircle className="w-3.5 h-3.5 text-zinc-450" /> {getMediaCommentCount(m)}
                                   </button>
                                 </div>
                                 
@@ -1576,7 +1837,7 @@ export default function RedesSocialesPage() {
                                     </div>
                                     <div className="flex items-center gap-1.5 text-[14px]">
                                       <MessageCircle className="w-5 h-5 fill-white text-white" />
-                                      <span>{fmtNumber(m.comments?.summary?.total_count || 0)}</span>
+                                      <span>{fmtNumber(getMediaCommentCount(m))}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1619,7 +1880,7 @@ export default function RedesSocialesPage() {
                                     className="flex items-center gap-1 hover:text-blue-600 transition-colors cursor-pointer"
                                     title="Ver y responder comentarios"
                                   >
-                                    <MessageCircle className="w-3.5 h-3.5 text-zinc-450" /> {m.comments?.summary?.total_count || 0}
+                                    <MessageCircle className="w-3.5 h-3.5 text-zinc-450" /> {getMediaCommentCount(m)}
                                   </button>
                                 </div>
                                 
@@ -1652,6 +1913,156 @@ export default function RedesSocialesPage() {
 
             </div>
           )}
+
+          {/* TAB 3: TIKTOK */}
+          {activeTab === 'tiktok' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {!tiktokConnected ? (
+                <div className="bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/60 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-4 shadow-sm">
+                  <Music2 className="w-12 h-12 text-zinc-400 mx-auto" />
+                  <h3 className="font-black text-zinc-800 dark:text-zinc-200 text-[18px]">TikTok no configurado</h3>
+                  <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-semibold">
+                    Conectá TikTok desde Integraciones para publicar videos y centralizar esta red en el panel.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-6 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {(profile as any)?.tiktok_content_avatar_url ? (
+                        <SmoothImage
+                          src={(profile as any).tiktok_content_avatar_url}
+                          alt={(profile as any)?.tiktok_content_display_name || 'TikTok'}
+                          containerClassName="w-16 h-16 rounded-full"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-zinc-950 flex items-center justify-center text-white">
+                          <Music2 className="w-7 h-7" />
+                        </div>
+                      )}
+                      <div>
+                        <h2 className="text-[18px] font-black text-zinc-900 dark:text-white">
+                          {(profile as any)?.tiktok_content_display_name || (profile as any)?.connection_statuses?.tiktok_content_display_name || 'TikTok conectado'}
+                        </h2>
+                        <p className="text-[12.5px] text-zinc-400 font-bold mt-0.5">Cuenta lista para usar en el Publicador</p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-950 text-white px-3 py-1.5 text-[11px] font-black">
+                      <Music2 className="w-3.5 h-3.5" />
+                      TikTok
+                    </span>
+                  </div>
+                  <div className="mt-6 rounded-2xl bg-zinc-50 dark:bg-zinc-950/35 border border-zinc-100 dark:border-white/10 p-5">
+                    <p className="text-[13px] font-bold leading-relaxed text-zinc-600 dark:text-zinc-350">
+                      TikTok Content Posting permite enviar videos desde el Publicador. La API orgánica no siempre devuelve el historial completo de publicaciones para todas las apps; cuando TikTok habilite ese permiso en la app, este tab ya queda listo para mostrarlo.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: YOUTUBE */}
+          {activeTab === 'youtube' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {!youtubeConnected ? (
+                <div className="bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800/60 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-4 shadow-sm">
+                  <Youtube className="w-12 h-12 text-zinc-400 mx-auto" />
+                  <h3 className="font-black text-zinc-800 dark:text-zinc-200 text-[18px]">YouTube no configurado</h3>
+                  <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-semibold">
+                    Conectá YouTube desde Integraciones para ver videos del canal y subir Shorts desde el Publicador.
+                  </p>
+                </div>
+              ) : youtubeError ? (
+                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-5 rounded-2xl flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-bold text-red-800 dark:text-red-400 text-[14.5px]">Error al obtener YouTube</h3>
+                    <p className="text-[13px] text-red-600 dark:text-red-500 mt-1">{youtubeError}</p>
+                  </div>
+                </div>
+              ) : youtubeLoading ? (
+                <AppleLoader variant="page" />
+              ) : (
+                <div className="space-y-6">
+                  {youtubeProfile && (
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-5">
+                      <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
+                        {youtubeProfile.snippet?.thumbnails?.default?.url ? (
+                          <SmoothImage
+                            src={youtubeProfile.snippet.thumbnails.default.url}
+                            alt={youtubeProfile.snippet?.title || 'YouTube'}
+                            containerClassName="w-16 h-16 rounded-full ring-2 ring-red-500/30"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center text-white">
+                            <Youtube className="w-7 h-7" />
+                          </div>
+                        )}
+                        <div>
+                          <h2 className="text-[18px] font-black text-zinc-900 dark:text-white">{youtubeProfile.snippet?.title || 'YouTube'}</h2>
+                          <p className="text-[12.5px] text-zinc-400 font-bold mt-0.5">Canal conectado</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 sm:gap-4 flex-nowrap justify-center font-semibold">
+                        <div className="px-3 py-2 sm:px-5 sm:py-2.5 bg-zinc-50 dark:bg-zinc-800/30 rounded-2xl text-center">
+                          <p className="text-[14px] sm:text-[18px] font-black text-zinc-800 dark:text-white leading-none">{fmtNumber(youtubeProfile.statistics?.subscriberCount)}</p>
+                          <p className="text-[9px] sm:text-[10px] text-zinc-400 font-bold mt-1 sm:mt-1.5 uppercase">Suscriptores</p>
+                        </div>
+                        <div className="px-3 py-2 sm:px-5 sm:py-2.5 bg-zinc-50 dark:bg-zinc-800/30 rounded-2xl text-center">
+                          <p className="text-[14px] sm:text-[18px] font-black text-zinc-800 dark:text-white leading-none">{fmtNumber(youtubeProfile.statistics?.videoCount)}</p>
+                          <p className="text-[9px] sm:text-[10px] text-zinc-400 font-bold mt-1 sm:mt-1.5 uppercase">Videos</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {youtubeMedia.length === 0 ? (
+                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl p-12 text-center">
+                      <Youtube className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
+                      <p className="text-[13.5px] font-bold text-zinc-500">No se encontraron videos</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {youtubeMedia.map((item: any) => {
+                        const thumb = item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url;
+                        const videoId = item.id?.videoId || item.id;
+                        const published = item.snippet?.publishedAt
+                          ? new Date(item.snippet.publishedAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : '';
+                        return (
+                          <a
+                            key={videoId}
+                            href={videoId ? `https://www.youtube.com/watch?v=${videoId}` : '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-800/60 rounded-3xl overflow-hidden shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-300"
+                          >
+                            <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-950 relative overflow-hidden">
+                              {thumb ? (
+                                <SmoothImage src={thumb} alt="" containerClassName="w-full h-full" className="object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                              ) : (
+                                <Youtube className="w-10 h-10 text-zinc-300 m-auto" />
+                              )}
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                                <Play className="w-10 h-10 text-white fill-white" />
+                              </div>
+                            </div>
+                            <div className="p-4">
+                              <p className="text-[11px] font-bold text-zinc-400 mb-1">{published}</p>
+                              <h3 className="text-[13px] font-black text-zinc-850 dark:text-white leading-snug line-clamp-2">{item.snippet?.title}</h3>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       {/* Slide-Over Comments Panel (Unified for Instagram & Facebook) */}
@@ -1659,9 +2070,35 @@ export default function RedesSocialesPage() {
         const activePost = selectedPostType === 'instagram'
           ? igMedia.find(m => m.id === selectedPostId)
           : fbMedia.find(m => m.id === selectedPostId);
+        const carouselItems = activePost
+          ? selectedPostType === 'instagram'
+            ? ((activePost.children?.data || []) as any[])
+                .map((child: any) => ({
+                  mediaUrl: child.media_url || child.thumbnail_url || null,
+                  thumbnailUrl: child.thumbnail_url || child.media_url || null,
+                  mediaType: child.media_type || 'IMAGE',
+                  permalink: child.permalink || activePost.permalink,
+                }))
+                .filter((child: any) => child.mediaUrl || child.thumbnailUrl)
+            : ((activePost.attachments?.data || []) as any[])
+                .flatMap((att: any) => att.subattachments?.data?.length ? att.subattachments.data : [att])
+                .map((att: any) => ({
+                  mediaUrl: att.media?.image?.src || att.media?.source || att.url || activePost.full_picture || null,
+                  thumbnailUrl: att.media?.image?.src || activePost.full_picture || null,
+                  mediaType: String(att.type || activePost.media_type || '').toUpperCase().includes('VIDEO') ? 'VIDEO' : 'IMAGE',
+                  permalink: att.target?.url || activePost.permalink_url,
+                }))
+                .filter((att: any) => att.mediaUrl || att.thumbnailUrl)
+          : [];
+        const activeMedia = carouselItems[selectedMediaIndex] || carouselItems[0] || null;
+        const activeMediaUrl = activeMedia?.mediaUrl || activePost?.media_url || activePost?.source || activePost?.full_picture || null;
+        const activePosterUrl = activeMedia?.thumbnailUrl || activePost?.thumbnail_url || activePost?.full_picture || null;
+        const activeMediaType = activeMedia?.mediaType || activePost?.media_type;
+        const hasCarousel = carouselItems.length > 1;
 
         return (
-          <div className="fixed inset-0 z-[350] flex justify-end animate-in fade-in duration-200">
+          <PortalOverlay>
+          <div className="fixed inset-0 z-[900] flex min-h-[100dvh] w-screen justify-end animate-in fade-in duration-200">
             {/* Backdrop */}
             <div
               onClick={closeCommentsModal}
@@ -1669,120 +2106,170 @@ export default function RedesSocialesPage() {
             />
 
             {/* Slide-over panel container */}
-            <div className="relative w-full md:max-w-4xl h-full bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col justify-between animate-in slide-in-from-right transition-spring duration-300 ease-out z-10">
+            <div className="relative w-full md:max-w-4xl h-[100dvh] max-h-[100dvh] bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right transition-spring duration-300 ease-out z-10">
               
               {/* Header */}
               <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/85 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-between flex-shrink-0">
-                <div>
-                  <h3 className="font-black text-zinc-900 dark:text-white text-[15px] flex items-center gap-1.5 leading-none">
-                    {selectedPostType === 'instagram' ? (
-                      <Instagram className="w-4 h-4 text-pink-500" />
-                    ) : (
-                      <span className="w-4 h-4 bg-blue-600 text-white font-bold rounded flex items-center justify-center text-[11px]">f</span>
-                    )}
-                    Comentarios del Post
-                  </h3>
-                  {selectedPostPermalink && (
-                    <a 
-                      href={selectedPostPermalink} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      className="inline-flex items-center gap-1 text-[11px] text-violet-500 font-bold hover:underline mt-1.5"
-                    >
-                      Ver original en la plataforma
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    </a>
+                <div className="min-w-0 flex items-center gap-2">
+                  <p className="text-[11px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Publicación</p>
+                  {!loadingComments && comments.filter(isCommentPending).length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-[10px] font-black">
+                      {comments.filter(isCommentPending).length} sin responder
+                    </span>
                   )}
                 </div>
-                <button 
-                  onClick={closeCommentsModal}
-                  className="flex items-center justify-center w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-750 dark:text-zinc-400 dark:hover:text-zinc-200 border border-zinc-200/60 dark:border-zinc-700/60 active:scale-95 transition-all shadow-sm"
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {selectedPostPermalink && (
+                    <a
+                      href={selectedPostPermalink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 p-1.5 md:px-3 md:py-1.5 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl text-[11px] text-zinc-600 dark:text-zinc-300 font-bold border border-zinc-200 dark:border-zinc-700 transition-all"
+                    >
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Ver original</span>
+                    </a>
+                  )}
+                  <button
+                    onClick={closeCommentsModal}
+                    className="flex items-center justify-center w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-750 dark:text-zinc-400 dark:hover:text-zinc-200 border border-zinc-200/60 dark:border-zinc-700/60 active:scale-95 transition-all shadow-sm"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile detail tabs */}
+              <div className="grid grid-cols-3 md:hidden border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex-shrink-0 px-2 py-2 gap-1">
+                <button
+                  onClick={() => setMobileDetailTab('post')}
+                  className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'post' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
                 >
-                  <X className="w-4 h-4" />
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  Posteo
+                </button>
+                <button
+                  onClick={() => { setMobileDetailTab('comments'); handleTabChange('comments'); }}
+                  className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'comments' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Comentarios
+                  {!loadingComments && comments.length > 0 && (
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-white/20 dark:bg-zinc-900/20">{getCommentThreadCount(comments)}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    const imageUrl = activePosterUrl || activeMediaUrl;
+                    const isVid = activeMediaType === 'VIDEO' || !!activePost?.source;
+                    setMobileDetailTab('analysis');
+                    handleTabChange('metrics', imageUrl, isVid, activeMediaUrl || activePost?.source);
+                  }}
+                  className={`h-9 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1.5 ${mobileDetailTab === 'analysis' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/70'}`}
+                >
+                  <Brain className="w-3.5 h-3.5" />
+                  Análisis
                 </button>
               </div>
 
-              {/* Mobile tab bar */}
-              <div className="md:hidden flex border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex-shrink-0">
+              {/* Desktop modal tabs */}
+              <div className="hidden md:grid grid-cols-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex-shrink-0">
                 <button
-                  onClick={() => setMobileTab('post')}
-                  className={`flex-1 py-2.5 text-[12px] font-black transition-colors ${
-                    mobileTab === 'post'
-                      ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
-                      : 'text-zinc-500 dark:text-zinc-400'
-                  }`}
-                >
-                  Publicación
-                </button>
-                <button
-                  onClick={() => setMobileTab('comments')}
-                  className={`flex-1 py-2.5 text-[12px] font-black transition-colors flex items-center justify-center gap-1.5 ${
-                    mobileTab === 'comments'
+                  onClick={() => handleTabChange('comments')}
+                  className={`px-1 py-2.5 text-[10px] sm:text-[12px] font-black leading-tight transition-colors flex items-center justify-center gap-1.5 ${
+                    slideTab === 'comments'
                       ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
                       : 'text-zinc-500 dark:text-zinc-400'
                   }`}
                 >
                   Comentarios
                   {!loadingComments && comments.length > 0 && (
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400">{comments.length}</span>
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400">{getCommentThreadCount(comments)}</span>
                   )}
                 </button>
+                <button
+                  onClick={() => {
+                    const imageUrl = activePosterUrl || activeMediaUrl;
+                    const isVid = activeMediaType === 'VIDEO' || !!activePost?.source;
+                    handleTabChange('metrics', imageUrl, isVid, activeMediaUrl || activePost?.source);
+                  }}
+                  className={`px-1 py-2.5 text-[10px] sm:text-[12px] font-black leading-tight transition-colors ${
+                    slideTab === 'metrics'
+                      ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500'
+                      : 'text-zinc-500 dark:text-zinc-400'
+                  }`}
+                >Análisis de creativos</button>
               </div>
 
               {/* Split Body Container */}
-              <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-5 h-full">
-                
-                {/* Column 1: Post Media Context (Left Side - 40% width on md/lg, hidden on mobile) */}
-                <div className={`${
-                  mobileTab === 'comments' ? 'hidden md:flex' : 'flex'
-                } md:col-span-2 flex-col justify-start border-r border-zinc-100 dark:border-zinc-800 bg-zinc-50/15 dark:bg-zinc-950/10 p-5 overflow-y-auto h-full space-y-4`}>
+              <div className="grid flex-1 min-h-0 overflow-y-auto md:overflow-hidden grid-cols-1 md:grid-cols-5 auto-rows-max md:auto-rows-auto">
+
+                {/* Column 1: Post Media Context (Left Side - always visible) */}
+                <div className={`${mobileDetailTab === 'post' ? 'flex' : 'hidden'} md:flex md:col-span-2 flex-col justify-start border-b md:border-b-0 md:border-r border-zinc-100 dark:border-zinc-800 bg-zinc-50/15 dark:bg-zinc-950/10 p-3 md:p-5 max-h-none overflow-y-auto md:h-full space-y-4`}>
                   {activePost ? (
                     <>
                       {/* Media Player */}
-                      {activePost.media_type === 'VIDEO' || activePost.media_url?.includes('.mp4') || activePost.source ? (
-                        <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm mx-auto w-full aspect-square relative flex items-center justify-center">
+                      {activeMediaType === 'VIDEO' || activeMediaUrl?.includes('.mp4') || activePost.source ? (
+                        <div className="rounded-2xl overflow-hidden bg-black border border-zinc-200/60 dark:border-zinc-800/60 shadow-sm mx-auto w-full aspect-square shrink-0 relative flex items-center justify-center">
                           <video
-                            src={activePost.media_url || activePost.source}
-                            poster={activePost.thumbnail_url || activePost.full_picture}
+                            src={activeMediaUrl || activePost.source}
+                            poster={activePosterUrl || undefined}
                             controls
                             preload="none"
                             {...{ referrerPolicy: "no-referrer" }}
                             className="w-full h-full object-contain"
                           />
+                          {hasCarousel && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex((selectedMediaIndex - 1 + carouselItems.length) % carouselItems.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronLeft className="w-4 h-4" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex((selectedMediaIndex + 1) % carouselItems.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronRight className="w-4 h-4" /></button>
+                            </>
+                          )}
                         </div>
-                      ) : (activePost.media_url || activePost.full_picture) ? (
-                        <div className="rounded-2xl overflow-hidden bg-zinc-105 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm mx-auto w-full aspect-square relative flex items-center justify-center">
+                      ) : (activeMediaUrl || activePosterUrl) ? (
+                        <div className="rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-sm mx-auto w-full aspect-square shrink-0 relative flex items-center justify-center">
                           <SmoothImage
-                            src={activePost.media_url || activePost.full_picture}
+                            src={activeMediaUrl || activePosterUrl}
                             alt="Contexto"
                             containerClassName="w-full h-full"
-                            className="object-cover"
+                            className="object-contain"
                           />
+                          {hasCarousel && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex((selectedMediaIndex - 1 + carouselItems.length) % carouselItems.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronLeft className="w-4 h-4" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex((selectedMediaIndex + 1) % carouselItems.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center z-10"><ChevronRight className="w-4 h-4" /></button>
+                              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full flex gap-1.5">
+                                {carouselItems.map((_: any, idx: number) => (
+                                  <button key={idx} onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex(idx); }} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === selectedMediaIndex ? 'bg-white scale-125' : 'bg-white/40'}`} />
+                                ))}
+                              </div>
+                            </>
+                          )}
                         </div>
                       ) : (
-                        <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 aspect-square w-full flex flex-col items-center justify-center text-zinc-400 gap-1.5 p-4 text-center">
+                        <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 aspect-square w-full shrink-0 flex flex-col items-center justify-center text-zinc-400 gap-1.5 p-4 text-center">
                           <ImageIcon className="w-8 h-8" />
                           <span className="text-[11.5px] font-bold">Publicación sin imagen/video</span>
                         </div>
                       )}
 
-                      {/* Post Caption/Message */}
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Descripción del Post</span>
-                        <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/80 rounded-2xl text-[12px] leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium whitespace-pre-wrap max-h-48 overflow-y-auto">
-                          {activePost.caption || activePost.message || <span className="italic text-zinc-400">Sin descripción.</span>}
+                      {/* Post Caption/Message + Engagement — always below the media */}
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Descripción del Post</span>
+                          <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-zinc-800/80 rounded-2xl text-[12px] leading-relaxed text-zinc-700 dark:text-zinc-300 font-medium whitespace-pre-wrap max-h-48 overflow-y-auto">
+                            {activePost.caption || activePost.message || <span className="italic text-zinc-400">Sin descripción.</span>}
+                          </div>
                         </div>
-                      </div>
-
-                      {/* Engagement Metrics */}
-                      <div className="grid grid-cols-2 gap-3 pt-2">
-                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl text-center">
-                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Me gusta</span>
-                          <span className="text-[14px] font-extrabold text-zinc-800 dark:text-zinc-200">{fmtNumber(activePost.like_count || activePost.likes?.summary?.total_count || 0)}</span>
-                        </div>
-                        <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl text-center">
-                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Comentarios</span>
-                          <span className="text-[14px] font-extrabold text-zinc-800 dark:text-zinc-200">{fmtNumber(activePost.comments_count || activePost.comments?.summary?.total_count || 0)}</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl text-center">
+                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Me gusta</span>
+                            <span className="text-[14px] font-extrabold text-zinc-800 dark:text-zinc-200">{fmtNumber(activePost.like_count || activePost.likes?.summary?.total_count || 0)}</span>
+                          </div>
+                          <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl text-center">
+                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Comentarios</span>
+                            <span className="text-[14px] font-extrabold text-zinc-800 dark:text-zinc-200">{fmtNumber(getMediaCommentCount(activePost))}</span>
+                          </div>
                         </div>
                       </div>
                     </>
@@ -1795,12 +2282,140 @@ export default function RedesSocialesPage() {
                 </div>
 
                 {/* Column 2: Comments List & Inputs (Right Side - 60% width on md/lg, full width on mobile) */}
-                <div className={`${
-                  mobileTab === 'post' ? 'hidden md:flex' : 'flex'
-                } col-span-1 md:col-span-3 flex flex-col justify-between h-full overflow-hidden`}>
-                  
-                  {/* Comments List */}
-                  <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-50/10 dark:bg-zinc-950/5">
+                <div className={`${mobileDetailTab === 'post' ? 'hidden' : 'flex'} md:flex col-span-1 md:col-span-3 flex-col min-h-[calc(100dvh-126px)] md:min-h-0 md:h-full overflow-visible md:overflow-hidden`}>
+                  {slideTab === 'metrics' ? (
+                    <div className="flex-1 overflow-visible md:overflow-y-auto px-4 pt-4 pb-24 md:px-5 md:pt-5 md:pb-12 scroll-pb-24 md:scroll-pb-12 space-y-5">
+                      {analyzingTribe ? (
+                        <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-4">
+                          <div className="relative w-20 h-20">
+                            <div className="absolute inset-0 rounded-full border-4 border-violet-200 dark:border-violet-900" />
+                            <div className="absolute inset-0 rounded-full border-4 border-t-violet-600 animate-spin" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Brain className="w-7 h-7 text-violet-500 animate-pulse" />
+                            </div>
+	                          </div>
+	                          <p className="text-[13px] font-bold text-zinc-700 dark:text-zinc-305">Analizando creativo con IA...</p>
+	                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Procesando el creativo real</p>
+	                        </div>
+	                      ) : analysisError ? (
+	                        <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3 text-center">
+	                          <div className="w-14 h-14 rounded-full bg-amber-50 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center">
+	                            <AlertCircle className="w-7 h-7 text-amber-500" />
+	                          </div>
+	                          <p className="text-[13px] font-black text-zinc-800 dark:text-zinc-200">No se pudo analizar con IA</p>
+	                          <p className="max-w-sm text-[12px] text-zinc-500 dark:text-zinc-400">{analysisError}</p>
+	                        </div>
+	                      ) : !tribeResult ? (
+	                        <div className="flex flex-col items-center justify-center h-full min-h-[300px] gap-3 text-center">
+	                          <Brain className="w-8 h-8 text-violet-500" />
+	                          <p className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Abrí el análisis para procesar este creativo con IA.</p>
+	                        </div>
+	                      ) : (() => {
+	                        const metrics = tribeResult;
+                        return (
+                          <div className="space-y-5 text-left animate-in fade-in duration-200">
+                            {/* Score global */}
+                            <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-zinc-800/60 rounded-2xl flex items-center gap-4">
+                              <div className={`w-16 h-16 rounded-full flex flex-col items-center justify-center shadow-lg font-black text-white shrink-0 ${scoreCls(metrics.score)}`}>
+                                <span className="text-[20px] leading-none">{metrics.score}</span>
+                                <span className="text-[8px] opacity-75">/100</span>
+                              </div>
+                              <div>
+                                <h4 className="text-[13.5px] font-black text-zinc-800 dark:text-zinc-150">{scoreLabel(metrics.score)}</h4>
+                                <p className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-1">
+                                  Región dominante: <span className="font-bold text-violet-600 dark:text-violet-400">{metrics.highestRegion}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Barras de Métricas */}
+                            <div className="p-5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-zinc-800/60 rounded-2xl space-y-4">
+                              <MetricBar label="Atención" value={metrics.attentionPct} color={metrics.attentionPct >= 75 ? 'bg-emerald-500' : metrics.attentionPct >= 60 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.attentionReason} />
+                              <MetricBar label="Emoción" value={metrics.emotionPct} color={metrics.emotionPct >= 70 ? 'bg-emerald-500' : metrics.emotionPct >= 50 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.emotionReason} />
+                              <MetricBar label="Carga Cognitiva" value={metrics.cogLoad} color={metrics.cogLoad <= 30 ? 'bg-emerald-500' : metrics.cogLoad <= 50 ? 'bg-amber-500' : 'bg-red-500'} reason={metrics.cogLoadReason} />
+                            </div>
+
+                            {/* Curva de Respuesta */}
+                            {(() => {
+                              const displayTimeline = timeline.length > 0 ? timeline : genTimeline(metrics.attentionPct, metrics.emotionPct, metrics.cogLoad, metrics.score, analysisDurationSec);
+                              return (
+                                <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-2xl p-5 space-y-3">
+                                  <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <p className="text-[11px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Curva de Respuesta ({formatDuration(analysisDurationSec)})</p>
+                                    <div className="flex items-center gap-3 text-[9px] font-bold text-zinc-400">
+                                      <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded-full" />Atención</span>
+                                      <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-violet-500 inline-block rounded-full" />Emoción</span>
+                                      <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400 inline-block rounded-full" />Impacto</span>
+                                    </div>
+                                  </div>
+                                  <div className="h-[140px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <LineChart data={displayTimeline} margin={{ left: -15, right: 4, top: 4, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" className="dark:[stroke:rgba(255,255,255,0.04)]" />
+                                        <XAxis dataKey="t" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={v => `${v}s`} />
+                                        <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} width={22} />
+                                        <Line type="monotone" dataKey="attn" name="Atención" stroke="#10b981" strokeWidth={2} dot={false} />
+                                        <Line type="monotone" dataKey="emot" name="Emoción" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                                        <Line type="monotone" dataKey="impact" name="Impacto" stroke="#f59e0b" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                                      </LineChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col flex-1 min-h-0 overflow-visible md:overflow-hidden">
+                      {/* Filter toggle + bulk draft */}
+                      {!loadingComments && comments.length > 0 && (
+                        <div className="flex flex-wrap md:flex-nowrap items-center gap-1 px-4 md:px-5 pt-4 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0 bg-zinc-50/50 dark:bg-zinc-900/40">
+                          <button
+                            onClick={() => setCommentFilter('pending')}
+                            className={`flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] font-black transition-all ${commentFilter === 'pending' ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+                          >
+                            Sin responder
+                            <span className={`text-[8px] sm:text-[9px] min-w-[14px] h-[14px] sm:min-w-[18px] sm:h-[18px] px-1 rounded-full font-black flex items-center justify-center ${commentFilter === 'pending' ? 'bg-white/15 dark:bg-zinc-900/20 text-white dark:text-zinc-900' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>
+                              {comments.filter(isCommentPending).length}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => setCommentFilter('all')}
+                            className={`flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] font-black transition-all ${commentFilter === 'all' ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+                          >
+                            Todos
+                            <span className={`text-[8px] sm:text-[9px] min-w-[14px] h-[14px] sm:min-w-[18px] sm:h-[18px] px-1 rounded-full font-black flex items-center justify-center ${commentFilter === 'all' ? 'bg-white/15 dark:bg-zinc-900/20 text-white dark:text-zinc-900' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'}`}>
+                              {getCommentThreadCount(comments)}
+                            </span>
+                          </button>
+                          {(() => {
+                            const suggestionsCount = comments.filter(isCommentPending).length;
+                            return suggestionsCount > 0 && (
+                              <div className="ml-0 sm:ml-auto flex flex-wrap items-center gap-1.5">
+                                <button
+                                  onClick={handleBulkDrafts}
+                                  disabled={bulkDraftsLoading}
+                                  className="flex items-center gap-1.5 px-2 py-1 sm:px-3 sm:py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-black transition-all shadow-sm shadow-violet-500/20 cursor-pointer"
+                                >
+                                  {bulkDraftsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                  <span>Sugerir con Ia ({suggestionsCount})</span>
+                                </button>
+                                <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
+                                  {LANGS.map(l => (
+                                    <button key={l.code} type="button" onClick={() => setBulkDraftLang(l.code)} className={`px-2 py-1 text-[10px] font-black rounded-md transition-all ${bulkDraftLang === l.code ? 'bg-white dark:bg-zinc-700 text-violet-600 dark:text-violet-300 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
+                                      {l.code.toUpperCase()}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                      {/* Comments List */}
+                  <div className="flex-1 overflow-visible md:overflow-y-auto px-4 pt-4 pb-24 md:px-5 md:pt-5 md:pb-12 scroll-pb-24 md:scroll-pb-12 space-y-4 bg-zinc-50/10 dark:bg-zinc-950/5">
                     {loadingComments ? (
                       <AppleLoader variant="table" count={3} />
                     ) : comments.length === 0 ? (
@@ -1811,28 +2426,17 @@ export default function RedesSocialesPage() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {comments.some(isCommentPending) && (
-                          <button
-                            onClick={handleBulkDrafts}
-                            disabled={bulkDraftsLoading}
-                            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-violet-600 hover:bg-violet-750 text-white rounded-xl text-[12.5px] font-black transition-all shadow-md shadow-violet-500/10 cursor-pointer disabled:opacity-50"
-                          >
-                            {bulkDraftsLoading ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Sparkles className="w-4 h-4" />
-                            )}
-                            Generar borradores con IA para todos ({comments.filter(isCommentPending).length})
-                          </button>
-                        )}
-
-                        {comments.map((comment: any) => {
+                        {[...comments]
+                          .filter(c => commentFilter === 'all' || isCommentPending(c))
+                          .sort((a, b) => new Date(b.timestamp || b.created_time || 0).getTime() - new Date(a.timestamp || a.created_time || 0).getTime())
+                          .map((comment: any) => {
                           const commentUser = comment.username || comment.from?.name || 'Usuario';
                           const commentText = comment.text || comment.message || '';
                           const commentDate = comment.timestamp || comment.created_time;
                           const dateStr = commentDate
                             ? new Date(commentDate).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
                             : '';
+                          const isIgnored = !!(comment._ignored || ignoredIds[comment.id]);
                           const isLiked = !!likedCommentIds[comment.id];
                           const isLiking = !!likingCommentIds[comment.id];
                           const isPending = isCommentPending(comment);
@@ -1861,17 +2465,21 @@ export default function RedesSocialesPage() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1.5">
-                                    {isPending && (
-                                      <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 uppercase">
-                                        Pendiente
+	                                    {isIgnored ? (
+	                                      <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 uppercase">
+	                                        Ignorado
+	                                      </span>
+	                                    ) : isPending && (
+	                                      <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 uppercase">
+	                                        Pendiente
+	                                      </span>
+	                                    )}
+	                                    {!isIgnored && !isPending && (
+	                                      <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase">
+	                                        Respondido
                                       </span>
                                     )}
-                                    {!isPending && (
-                                      <span className="text-[8.5px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase">
-                                        Respondido
-                                      </span>
-                                    )}
-                                    <button
+	                                  <button
                                       onClick={() => handleLikeComment(comment.id)}
                                       disabled={isLiking}
                                       className={`flex items-center gap-0.5 text-[11px] font-bold transition-colors ${
@@ -1915,8 +2523,7 @@ export default function RedesSocialesPage() {
                                 {replies.length > 0 && (
                                   <div className="ml-9 mt-3 space-y-2 pl-3 border-l-2 border-zinc-100 dark:border-zinc-800">
                                     {replies.map((r: any) => {
-                                      const rIsMe = (r.username && igUsername && r.username.toLowerCase() === igUsername.toLowerCase()) || 
-                                                    r.from?.id === fbPageId;
+                                      const rIsMe = isFromPage(r);
                                       return (
                                         <div key={r.id} className="space-y-0.5">
                                           <div className="flex items-center gap-1.5">
@@ -1966,10 +2573,19 @@ export default function RedesSocialesPage() {
                                       }
                                     }}
                                     className="text-[11px] font-black text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 transition-colors"
-                                  >
-                                    {replyOpen ? 'Cancelar' : 'Responder'}
-                                  </button>
-                                </div>
+	                                  >
+	                                    {replyOpen ? 'Cancelar' : 'Responder'}
+	                                  </button>
+	                                  <button
+	                                    type="button"
+	                                    onClick={() => handleIgnoreComment(comment.id)}
+	                                    className={`text-[11px] font-black transition-colors ${isIgnored ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}
+	                                    title={isIgnored ? 'Volver a marcar como pendiente si corresponde' : 'Ignorar comentario'}
+	                                  >
+	                                    <EyeOff className="w-3.5 h-3.5 inline mr-1" />
+	                                    {isIgnored ? 'No ignorar' : 'Ignorar'}
+	                                  </button>
+	                                </div>
 
                                 {/* Reply box */}
                                 {replyOpen && (
@@ -2105,18 +2721,21 @@ export default function RedesSocialesPage() {
                       </button>
                     </form>
                   </div>
-
+                  </div>
+                )}
                 </div>
               </div>
 
             </div>
           </div>
+          </PortalOverlay>
         );
       })()}
 
       {/* ── Pending Comments Drawer ───────────────────────────────────── */}
       {showPendingPanel && (
-        <div className="fixed inset-0 z-[200] flex">
+        <PortalOverlay>
+        <div className="fixed inset-0 z-[900] flex min-h-[100dvh] w-screen">
           {/* Backdrop */}
           <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => setShowPendingPanel(false)} />
 
@@ -2301,6 +2920,7 @@ export default function RedesSocialesPage() {
             </div>
           </div>
         </div>
+        </PortalOverlay>
       )}
       
       {/* Keyframes inyectados inline para la barra de progreso superior */}

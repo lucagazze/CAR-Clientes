@@ -5,12 +5,12 @@ import './index.css';
 
 import { initMetaToken } from './services/metaAds';
 
-// Initialize Meta Token from DB before rendering the React app to prevent race conditions
-initMetaToken().finally(() => {
-  const root = createRoot(document.getElementById('root')!);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-});
+// Initialize Meta Token from DB before rendering
+initMetaToken();
+
+const root = createRoot(document.getElementById('root')!);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);

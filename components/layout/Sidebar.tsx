@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag,
-  AlertTriangle, Activity, Library, Workflow, Instagram, Inbox, MessageSquare, Brain, Users, Package,
-  Calculator, Coins, Target, Send, Zap, Building2, Loader2, User, ShoppingCart
+  AlertTriangle, Activity, Library, Workflow, Instagram, MessageSquare, Brain, Users, Package,
+  Calculator, Coins, Target, Send, Zap, Building2, Loader2, User, ShoppingCart, UploadCloud, History
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useViewAs } from '../../contexts/ViewAsContext';
@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const navigate = useNavigate();
   const { profile, signOut, user } = useAuth();
   const { viewAsProfile, setViewAsProfile, isViewingAs } = useViewAs();
-  const { unreadCount, pendingCommentsCount, commentsLoading, unreadLoading, pendingOrdersCount, ordersLoading } = useUnread();
+  const { unreadCount, pendingCommentsCount, commentsLoading, unreadLoading, chatwootAvailable, pendingOrdersCount, ordersLoading } = useUnread();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [hasLinks, setHasLinks] = useState(false);
 
@@ -76,58 +76,69 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   const detectedPlatform = React.useMemo(() => {
     const prof: any = activeProfile;
-    if (prof?.shopify_domain && prof?.shopify_access_token) return 'shopify';
-    if (prof?.wordpress_url && prof?.woo_consumer_key && prof?.woo_consumer_secret) return 'wordpress';
-    if (prof?.tiendanube_store_id && prof?.tiendanube_access_token) return 'tiendanube';
+    const platform = prof?.ecommerce_platform;
+    if (platform === 'shopify' && prof?.shopify_domain && prof?.shopify_access_token) return 'shopify';
+    if (platform === 'wordpress' && prof?.wordpress_url && prof?.woo_consumer_key && prof?.woo_consumer_secret) return 'wordpress';
+    if (platform === 'tiendanube' && prof?.tiendanube_store_id && prof?.tiendanube_access_token) return 'tiendanube';
     return null;
   }, [activeProfile]);
 
-  // Channel flags — based on what the client has configured
-  const hasChatwoot  = !!(activeProfile?.chatwoot_url && activeProfile?.chatwoot_token);
+  // Channel flags — based on real configured + healthy connection state
+  const chatwootStatus = (activeProfile as any)?.connection_statuses?.chatwoot;
+  const hasChatwoot  = !!(
+    activeProfile?.chatwoot_url &&
+    activeProfile?.chatwoot_token &&
+    (chatwootStatus === 'ok' || chatwootStatus === 'connected') &&
+    chatwootAvailable !== false
+  );
   const hasMeta      = !!(activeProfile?.meta_account_id);
   const hasKlaviyo   = !!(activeProfile?.klaviyo_api_key);
-  const hasEcommerce = !!(
-    activeProfile?.shopify_domain ||
-    activeProfile?.tiendanube_store_id ||
-    (activeProfile as any)?.wordpress_url ||
-    activeProfile?.ecommerce_platform === 'wordpress'
-  );
+  const connectionStatuses = activeProfile?.connection_statuses || {};
+  const hasEcommerce = !!detectedPlatform;
   const hasRedes = !!(
     activeProfile?.fb_page_id ||
     (activeProfile as any)?.ig_business_id
   );
+  const hasPublisher = hasRedes || hasMeta || !!((activeProfile as any)?.connection_statuses?.tiktok_content === 'ok' || (activeProfile as any)?.tiktok_content_access_token);
 
   // Admins always see all pages (including unconfigured ones, shown dimmed)
   const isAdmin = !!(profile?.is_admin);
+  const hasMercadoLibre = (activeProfile as any)?.connection_statuses?.mercadolibre === 'ok';
 
   // Sidebar Menu Items
   const principalItems = [
-    { path: '/',               icon: Home,          label: 'Inicio',          configured: true },
+    { path: '/dashboard',      icon: Home,          label: 'Inicio',          configured: true },
     { path: '/mensajeria',     icon: MessageSquare, label: 'Mensajería',      configured: hasChatwoot, badge: unreadCount },
     { path: '/comentarios',    icon: MessageCircle, label: 'Comentarios',     configured: hasRedes, badge: pendingCommentsCount },
     { path: '/redes-sociales', icon: Instagram,     label: 'Redes Sociales',  configured: hasRedes },
     { path: '/pedidos',        icon: ShoppingCart,  label: 'Pedidos',         configured: hasEcommerce, badge: pendingOrdersCount, badgeLoading: ordersLoading },
     { path: '/inventario',     icon: Package,       label: 'Inventario',      configured: hasEcommerce },
-    { path: '/clientes',        icon: Users,         label: 'Clientes',        configured: hasEcommerce },
+    { path: '/clientes',       icon: Users,         label: 'Clientes',        configured: hasEcommerce },
+    { path: '/costos',         icon: Coins,         label: 'Costos',          configured: hasEcommerce },
   ].filter(i => isAdmin || i.configured);
 
   const metricasItems = [
-    { path: '/tienda',    icon: ShoppingBag,   label: 'Tienda Online', configured: hasEcommerce },
-    { path: '/captacion', icon: BarChart2,     label: 'Meta Ads',     configured: hasMeta },
-    { path: '/atencion',  icon: MessageCircle, label: 'Atención',      configured: hasChatwoot },
-    { path: '/retencion', icon: Mail,          label: 'Email Marketing',     configured: hasKlaviyo },
+    { path: '/tienda',       icon: ShoppingBag,   label: 'Tienda Online', configured: hasEcommerce },
+    { path: '/mercadolibre', icon: ShoppingBag,   label: 'Mercado Libre', configured: hasMercadoLibre },
+    { path: '/captacion',    icon: BarChart2,     label: 'Meta Ads',     configured: hasMeta },
+    { path: '/atencion',     icon: MessageCircle, label: 'Atención',      configured: hasChatwoot },
+    { path: '/retencion',    icon: Mail,          label: 'Email Marketing',     configured: hasKlaviyo },
   ].filter(i => isAdmin || i.configured);
 
   const activosItems = [
+    { path: '/publicador',          icon: UploadCloud, label: 'Publicador',        configured: hasPublisher },
+    { path: '/publicaciones',       icon: History,     label: 'Historial Public.', configured: hasPublisher },
     { path: '/analisis-productos',  icon: BarChart2,  label: 'Análisis Productos', configured: hasEcommerce },
     { path: '/admin/meta',          icon: Target,     label: 'Creativos Ads',      configured: hasMeta },
+    { path: '/analisis-creativo',   icon: Brain,      label: 'Análisis Creativo',  configured: true },
     { path: '/email-marketing',     icon: Send,       label: 'Plantillas Email',   configured: hasKlaviyo },
   ].filter(i => isAdmin || i.configured);
 
   const configuracionItems = [
     { path: '/perfil',           icon: User,   label: 'Mi Perfil',      configured: true },
     { path: '/links',            icon: Link2,  label: 'Mis Accesos',    configured: hasLinks },
-    { path: '/cerebro',          icon: Brain,  label: 'Cerebro de IA',  configured: true, adminOnly: true },
+    { path: '/integraciones',    icon: Workflow, label: 'Integraciones',  configured: true, adminOnly: true },
+    { path: '/cerebro',          icon: Brain,  label: 'Cerebro IA',      configured: true },
   ].filter(i => (!i.adminOnly || isAdmin) && (isAdmin || i.configured));
 
   const adminItems = [
@@ -136,7 +147,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     { path: '/admin/actividad',        icon: Activity,  label: 'Monitoreo Actividad' },
     { path: '/admin/emails',           icon: Library,   label: 'Email Library' },
     { path: '/admin/email-monitor',    icon: Workflow,  label: 'Email Monitor' },
-    { path: '/costos',                 icon: Coins,     label: 'Costos' },
   ];
 
   const isActivePath = (itemPath: string) => {
@@ -179,6 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     const isMetaAds = item.label === 'Meta Ads';
     const isTiendaOnline = item.label === 'Tienda Online';
     const isEmailMarketing = item.label === 'Email Marketing';
+    const isMercadoLibre = item.label === 'Mercado Libre';
 
     const renderIcon = () => {
       const className = `w-4 h-4 flex-shrink-0 transition-all duration-150 ${
@@ -219,9 +230,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
       if (isEmailMarketing) {
         return <img src="/assets/Klaviyo-Logo-Photoroom.webp" alt="Klaviyo" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
       }
+      if (isMercadoLibre) {
+        return <img src="/assets/logomercadolibre.png" alt="Mercado Libre" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
+      }
       if (isTiendaOnline) {
         if (detectedPlatform === 'shopify') return <img src="/assets/shopify-bag.webp" alt="Shopify" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
-        if (detectedPlatform === 'tiendanube') return <img src="/assets/tiendanube.webp" alt="Tiendanube" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
+        if (detectedPlatform === 'tiendanube') {
+          const showDarkLogo = isActive ? darkMode : !darkMode;
+          return <img src={showDarkLogo ? "/assets/tiendanubeoscuro.png" : "/assets/tiendanube.webp"} alt="Tiendanube" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
+        }
         if (detectedPlatform === 'wordpress') return <img src="/assets/logowordpress.webp" alt="WooCommerce" className="w-4 h-4 object-contain flex-shrink-0 transition-all duration-150 group-hover:scale-110" />;
         return <ShoppingBag className={className} />;
       }
@@ -229,12 +246,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
       return <Icon className={className} />;
     };
 
+    const tourId: Record<string, string> = {
+      '/dashboard': 'tour-dashboard',
+      '/mensajeria': 'tour-mensajeria',
+      '/redes-sociales': 'tour-redes-sociales',
+      '/publicador': 'tour-publicador',
+      '/publicaciones': 'tour-publicaciones',
+      '/admin/meta': 'tour-creativos',
+      '/captacion': 'tour-meta-ads',
+      '/comentarios': 'tour-comentarios',
+      '/pedidos': 'tour-pedidos',
+      '/inventario': 'tour-inventario',
+      '/analisis-creativo': 'tour-analisis-creativo',
+      '/integraciones': 'tour-integraciones',
+      '/perfil': 'tour-perfil',
+    };
+
     return (
       <Link
         key={item.path}
         to={item.path}
+        id={tourId[item.path]}
         title={isUnconfigured ? `${item.label} (no configurado)` : item.label}
-        onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+        onClick={() => window.innerWidth < 1280 && setIsOpen(false)}
         className={`group flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-[11px] md:text-[12px] font-bold transition-all duration-150 active:scale-[0.98] ${
           isActive
             ? 'bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 shadow-md shadow-black/10 dark:shadow-white/5'
@@ -247,7 +281,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         <span className="tracking-tight flex-1">{item.label}</span>
         {/* Unread badge / Loading spinner */}
         {((item.path === '/comentarios' && commentsLoading) || (item.path === '/mensajeria' && unreadLoading) || (item.path === '/pedidos' && ordersLoading)) ? (
-          <span className="w-3.5 h-3.5 rounded-full border-2 border-zinc-200 dark:border-zinc-700 border-t-violet-500 dark:border-t-violet-400 animate-spin shrink-0" />
+          <Loader2 className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 animate-spin shrink-0" />
         ) : badgeCount > 0 ? (
           <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm shadow-red-500/30 animate-in fade-in zoom-in-90 duration-300">
             {badgeCount > 99 ? '99+' : badgeCount}
@@ -266,7 +300,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
       </Link>
     );
   };
-
 
   return (
     <>
@@ -306,18 +339,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
       {/* Mobile backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-md z-[280] md:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-md z-[280] xl:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       <aside className={`
-        fixed inset-y-0 left-0 z-[300] md:w-[220px] w-[220px]
+        fixed inset-y-0 left-0 z-[300] xl:w-[220px] w-[220px]
         bg-white dark:bg-[#09090b]
         border-r border-zinc-200 dark:border-white/[0.05]
         flex flex-col
         transform transition-all duration-300 ease-in-out
-        md:translate-x-0 md:static md:h-screen
+        xl:translate-x-0 xl:static xl:h-screen
         ${isOpen ? 'translate-x-0 shadow-[20px_0_60px_rgba(0,0,0,0.2)]' : '-translate-x-full'}
       `}>
 
@@ -339,29 +372,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         )}
 
         {/* Logo / Brand */}
-        <div className="h-[72px] flex items-center px-5 border-b border-zinc-100 dark:border-white/[0.03] flex-shrink-0">
-          <div className="flex items-center gap-2.5 group">
+        <div className="h-[76px] flex items-center px-5 border-b border-zinc-100 dark:border-white/[0.03] flex-shrink-0">
+          <div className="flex items-center gap-3.5 group">
             <img 
               src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} 
               alt="Algoritmia" 
-              className="w-9 h-9 object-contain group-hover:scale-110 transition-transform drop-shadow-sm"
+              className="w-10 h-10 object-contain group-hover:scale-110 transition-transform drop-shadow-sm"
             />
             <div className="flex flex-col animate-in fade-in duration-200">
-              <span className="text-[13px] font-black text-zinc-900 dark:text-white tracking-tighter leading-none uppercase">ALGORITMIA</span>
-              <span className="text-[9px] font-bold text-violet-500 tracking-[0.2em] mt-1 uppercase">Gestión</span>
+              <span className="text-[15px] font-black text-zinc-900 dark:text-white tracking-tighter leading-none uppercase" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Algoritmia</span>
+              <span className="text-[9.5px] font-bold text-violet-500 tracking-[0.2em] mt-1 uppercase" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Gestión</span>
             </div>
           </div>
           
           <div className="ml-auto flex items-center gap-1">
             <button
               onClick={toggleDarkMode}
-              className="hidden md:block p-1.5 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all"
+              className="hidden xl:block p-1.5 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all"
               title="Cambiar apariencia"
             >
               {darkMode ? <Sun className="w-[18px] h-[18px] text-amber-400" /> : <Moon className="w-[18px] h-[18px]" />}
             </button>
             <button
-              className="md:hidden p-1.5 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all"
+              className="xl:hidden p-1.5 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-all"
               onClick={() => setIsOpen(false)}
             >
               <X className="w-[18px] h-[18px]" />
@@ -424,7 +457,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
           <div className="flex items-center gap-2.5 bg-white dark:bg-[#111] p-2.5 rounded-xl border border-zinc-200 dark:border-white/[0.05] shadow-sm">
             <Link
               to="/perfil"
-              onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+              onClick={() => window.innerWidth < 1280 && setIsOpen(false)}
               className="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-85 active:scale-[0.98] transition-all"
             >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-zinc-800 to-black dark:from-zinc-200 dark:to-white text-white dark:text-black flex items-center justify-center text-[11px] font-black shadow-inner overflow-hidden shrink-0">

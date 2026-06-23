@@ -46,15 +46,15 @@ async function handleAudioProxy(req: VercelRequest, res: VercelResponse) {
   if (!upstream.ok) return res.status(upstream.status).json({ error: 'Upstream error' });
 
   const ct = upstream.headers.get('content-type') || '';
-  const isOgg = ct.includes('ogg') || ct.includes('opus') || /\.(ogg|oga|opus)(\?|$)/i.test(url);
-  if (!isOgg) {
+  if (!ct.includes('ogg') && !ct.includes('opus')) {
     res.setHeader('Content-Type', ct || 'audio/mpeg');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.send(Buffer.from(await upstream.arrayBuffer()));
   }
 
   try {
-    const { OggOpusDecoder } = await import('ogg-opus-decoder');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { OggOpusDecoder } = require('ogg-opus-decoder');
     const audioData = new Uint8Array(await upstream.arrayBuffer());
     const decoder = new OggOpusDecoder();
     await decoder.ready;
@@ -66,10 +66,7 @@ async function handleAudioProxy(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Content-Length', String(wav.length));
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.send(wav);
-  } catch (err) {
-    console.error('Audio conversion error:', err);
-    return res.status(500).json({ error: 'Conversion failed' });
-  }
+  } catch { return res.status(500).json({ error: 'Conversion failed' }); }
 }
 
 // ── main handler ─────────────────────────────────────────────────────────────

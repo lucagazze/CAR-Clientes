@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "tribev2": "services/tribev2_service/run.sh",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -28,6 +29,7 @@
     "@vercel/node": "^3.0.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
+    "playwright": "^1.60.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.2.2",

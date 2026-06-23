@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://czocbnyoenjbpxmcqobn.supabase.co';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b2NibnlvZW5qYnB4bWNxb2JuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4NDI5MTMsImV4cCI6MjA2ODQxODkxM30.pNgJnwAY8uxb6yCQilJfD92VNwsCkntr4Ie_os2lI44";
+const READ_ONLY_DENY = new Set(['access_token']);
 
 const META_DOMAINS = ['fbcdn.net', 'facebook.com', 'facebookmobi.com', 'cdninstagram.com', 'instagram.com', 'fb.com'];
 function isMetaUrl(urlStr: string): boolean {
@@ -13,78 +15,111 @@ function isMetaUrl(urlStr: string): boolean {
   } catch { return false; }
 }
 
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+const supabase = SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+
+const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
 let tokenCache: { value: string; expiresAt: number } | null = null;
 let pageTokensCache: { [pageId: string]: { value: string; expiresAt: number } } = {};
-let creativeCache: { [creativeId: string]: { value: any; expiresAt: number } } = {};
-let videoCache: { [videoId: string]: { value: any; expiresAt: number } } = {};
 
 async function getMetaToken(): Promise<string> {
   const now = Date.now();
   if (tokenCache && tokenCache.expiresAt > now) return tokenCache.value;
+  if (!supabase) return '';
   const { data } = await supabase.from('AgencySettings').select('value').eq('key', 'meta_ads_token').maybeSingle();
   const value = data?.value || '';
   tokenCache = { value, expiresAt: now + 5 * 60 * 1000 };
   return value;
 }
 
-async function getClientTokens(clientId?: string, accountId?: string): Promise<{ fb_page_id?: string; fb_page_access_token?: string; facebook_access_token?: string } | null> {
-  try {
-    if (clientId) {
-      const { data, error } = await supabase
-        .from('car_clients')
-        .select('fb_page_id, fb_page_access_token, facebook_access_token')
-        .eq('id', clientId)
-        .maybeSingle();
-      if (!error && data) return data;
-    }
-    if (accountId) {
-      const idWithAct = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-      const idWithoutAct = accountId.startsWith('act_') ? accountId.substring(4) : accountId;
-      const { data, error } = await supabase
-        .from('car_clients')
-        .select('fb_page_id, fb_page_access_token, facebook_access_token')
-        .or(`meta_account_id.eq.${idWithAct},meta_account_id.eq.${idWithoutAct}`)
-        .maybeSingle();
-      if (!error && data) return data;
-    }
-  } catch (err) {
-    console.error("Exception fetching client tokens in getClientTokens:", err);
-  }
-  return null;
+function getBearer(req: VercelRequest): string {
+  const header = req.headers.authorization || '';
+  if (!header.toLowerCase().startsWith('bearer ')) return '';
+  return header.slice(7).trim();
 }
 
-async function resolvePageToken(pageId: string, clientTokens: any, agencyToken: string): Promise<string | null> {
-  if (clientTokens && String(clientTokens.fb_page_id) === String(pageId) && clientTokens.fb_page_access_token) {
-    return clientTokens.fb_page_access_token;
-  }
+function normalizeGraphPath(path: unknown): string {
+  const value = Array.isArray(path) ? path[0] : path;
+  const clean = String(value || '').trim().replace(/^\/+/, '');
+  if (!clean || clean.includes('://') || clean.includes('..') || clean.includes('\\')) return '';
+  return clean;
+}
 
+async function getClientMetaTokens(clientId: string, bearer: string): Promise<{ userToken: string; pageToken: string }> {
+  if (!clientId) return { userToken: '', pageToken: '' };
+  const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: `Bearer ${bearer}` } },
+  });
+  const { data } = await supabaseUser
+    .from('car_clients')
+    .select('facebook_access_token, fb_page_access_token')
+    .eq('id', clientId)
+    .maybeSingle();
+  return {
+    userToken: data?.facebook_access_token || '',
+    pageToken: data?.fb_page_access_token || '',
+  };
+}
+
+async function handleGraphProxy(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const bearer = getBearer(req);
+  if (!bearer) return res.status(401).json({ error: 'Missing Authorization header' });
+
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(bearer);
+  if (authError || !user) return res.status(401).json({ error: 'Invalid auth token' });
+
+  const graphPath = normalizeGraphPath(req.query.path);
+  if (!graphPath) return res.status(400).json({ error: 'Invalid Meta path' });
+
+  const clientIdRaw = Array.isArray(req.query.clientId) ? req.query.clientId[0] : req.query.clientId;
+  const graphClientId = typeof clientIdRaw === 'string' ? clientIdRaw.trim() : '';
+  const clientTokens = await getClientMetaTokens(graphClientId, bearer);
+  const token = graphPath.startsWith('act_')
+    ? (clientTokens.userToken || await getMetaToken())
+    : (clientTokens.pageToken || clientTokens.userToken || await getMetaToken());
+  if (!token) return res.status(500).json({ error: 'No Meta token configured' });
+
+  const graphUrl = new URL(`https://graph.facebook.com/v21.0/${graphPath}`);
+  Object.entries(req.query).forEach(([key, raw]) => {
+    if (key === 'action' || key === 'path' || key === 'clientId' || READ_ONLY_DENY.has(key)) return;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value !== undefined) graphUrl.searchParams.set(key, String(value));
+  });
+  graphUrl.searchParams.set('access_token', token);
+
+  try {
+    const metaRes = await fetch(graphUrl.toString());
+    const data = await metaRes.json().catch(() => ({}));
+    if (!metaRes.ok || data?.error) {
+      return res.status(metaRes.ok ? 502 : metaRes.status).json({
+        error: data?.error?.message || `Meta API error ${metaRes.status}`,
+        metaError: data?.error || null,
+      });
+    }
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    return res.status(200).json(data);
+  } catch (err: any) {
+    return res.status(502).json({ error: err?.message || 'Meta API request failed' });
+  }
+}
+
+async function getPageToken(pageId: string, systemToken: string): Promise<string | null> {
   const now = Date.now();
   if (pageTokensCache[pageId] && pageTokensCache[pageId].expiresAt > now) {
     return pageTokensCache[pageId].value;
   }
-
-  if (clientTokens && clientTokens.facebook_access_token) {
-    try {
-      const res = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${clientTokens.facebook_access_token}&limit=100`);
-      if (res.ok) {
-        const data = await res.json();
-        const page = (data.data || []).find((p: any) => String(p.id) === String(pageId));
-        if (page && page.access_token) {
-          pageTokensCache[pageId] = { value: page.access_token, expiresAt: now + 15 * 60 * 1000 };
-          return page.access_token;
-        }
-      }
-    } catch (err) {
-      console.error(`Error fetching page token using client user token for page ${pageId}:`, err);
-    }
-  }
-
   try {
-    const res = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${agencyToken}&limit=100`);
+    const res = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${systemToken}&limit=100`);
     if (res.ok) {
       const data = await res.json();
       const page = (data.data || []).find((p: any) => String(p.id) === String(pageId));
@@ -94,14 +129,20 @@ async function resolvePageToken(pageId: string, clientTokens: any, agencyToken: 
       }
     }
   } catch (err) {
-    console.error(`Error fetching page token using agency token for page ${pageId}:`, err);
+    console.error("Error fetching page token:", err);
   }
-
   return null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { adId, creativeId, videoId, action, url, filename, clientId, accountId } = req.query;
+  const { adId, creativeId, videoId, action, url, filename, clientId } = req.query;
+
+  if (action === 'graph') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    return handleGraphProxy(req, res);
+  }
 
   if (action === 'download') {
     if (!url || typeof url !== 'string' || !isMetaUrl(url)) {
@@ -140,58 +181,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'adId, creativeId, videoId, or action=download is required' });
   }
 
-  // Cache lookup to bypass Meta API rate limits
-  const now = Date.now();
-  if (typeof creativeId === 'string' && creativeCache[creativeId] && creativeCache[creativeId].expiresAt > now) {
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.status(200).json(creativeCache[creativeId].value);
-  }
-  if (typeof videoId === 'string' && videoCache[videoId] && videoCache[videoId].expiresAt > now) {
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.status(200).json(videoCache[videoId].value);
-  }
-
-  // Intercept res.json to populate memory cache on successful resolves
-  const originalJson = res.json.bind(res);
-  res.json = (body: any) => {
-    if (body && body.type !== 'none' && body.type !== 'failed' && res.statusCode === 200) {
-      const expiresAt = Date.now() + 2 * 3600 * 1000; // 2 hours TTL
-      if (typeof creativeId === 'string') {
-        creativeCache[creativeId] = { value: body, expiresAt };
-      } else if (typeof videoId === 'string') {
-        videoCache[videoId] = { value: body, expiresAt };
-      }
-    }
-    return originalJson(body);
-  };
-
   try {
-    const token = await getMetaToken();
+    let clientToken: string | null = null;
+    let dbPageToken: string | null = null;
+    if (clientId && typeof clientId === 'string' && supabase) {
+      const { data: clientData } = await supabase
+        .from('car_clients')
+        .select('facebook_access_token, fb_page_access_token')
+        .eq('id', clientId)
+        .maybeSingle();
+      clientToken = clientData?.facebook_access_token || null;
+      dbPageToken = clientData?.fb_page_access_token || null;
+    }
+
+    const token = clientToken || await getMetaToken();
     if (!token) return res.status(500).json({ error: 'No Meta token configured' });
-
-    let clientTokens: any = null;
-    if (clientId || accountId) {
-      clientTokens = await getClientTokens(
-        typeof clientId === 'string' ? clientId : undefined,
-        typeof accountId === 'string' ? accountId : undefined
-      );
-    }
-
-    async function ensureClientTokensForAccount(accId: string) {
-      if (!clientTokens && accId) {
-        clientTokens = await getClientTokens(undefined, accId);
-      }
-    }
-
-    function getAdToken() {
-      return (clientTokens?.facebook_access_token) || token;
-    }
 
     const base = 'https://graph.facebook.com/v21.0';
 
     // Helper function to resolve video source
     async function resolveVideoSource(vidId: string, useToken?: string) {
-      const activeToken = useToken || getAdToken();
+      const activeToken = useToken || token;
       const videoRes = await fetch(
         `${base}/${vidId}?fields=source,picture,format&access_token=${activeToken}`
       );
@@ -210,32 +220,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return null;
     }
 
-    let activeToken = getAdToken();
+    async function resolveAdImageHashes(accountId: string | null | undefined, hashes: Array<string | null | undefined>) {
+      const cleanHashes = Array.from(new Set(hashes.filter(Boolean).map(String)));
+      const hashToUrlMap: Record<string, string> = {};
+      if (!accountId || cleanHashes.length === 0) return hashToUrlMap;
+      try {
+        const imagesRes = await fetch(
+          `${base}/act_${accountId}/adimages?hashes=${encodeURIComponent(JSON.stringify(cleanHashes))}&fields=url,permalink_url,hash,width,height&access_token=${token}`
+        );
+        if (imagesRes.ok) {
+          const imagesData = await imagesRes.json();
+          (imagesData?.data || []).forEach((img: any) => {
+            if (img.hash && (img.url || img.permalink_url)) {
+              hashToUrlMap[img.hash] = img.url || img.permalink_url;
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Error resolving ad image hashes:", err);
+      }
+      return hashToUrlMap;
+    }
+
+    const firstUsableUrl = (...urls: Array<string | null | undefined>): string | null =>
+      urls.find((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u)) || null;
+
+    let activeToken = dbPageToken || token;
     let pageToken: string | null = null;
     let creativeData: any = null;
 
     // Fetch creative spec first (if creativeId is provided) so we can extract Page ID & token
     if (creativeId && typeof creativeId === 'string') {
-      const adToken = getAdToken();
       const creativeRes = await fetch(
-        `${base}/${creativeId}?fields=video_id,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id,effective_object_story_id,effective_instagram_story_id,object_story_id&access_token=${adToken}`
+        `${base}/${creativeId}?fields=id,video_id,image_hash,object_story_spec,asset_feed_spec,object_type,image_url,thumbnail_url,account_id,effective_object_story_id,effective_instagram_story_id,object_story_id&access_token=${token}`
       );
 
       if (creativeRes.ok) {
         creativeData = await creativeRes.json();
-        if (creativeData.account_id) {
-          await ensureClientTokensForAccount(creativeData.account_id);
-        }
         const pageId =
           creativeData.object_story_spec?.page_id ||
           (creativeData.effective_object_story_id ? creativeData.effective_object_story_id.split('_')[0] : null) ||
           (creativeData.object_story_id ? creativeData.object_story_id.split('_')[0] : null);
 
-        pageToken = pageId ? await resolvePageToken(pageId, clientTokens, token) : null;
+        pageToken = dbPageToken || (pageId ? await getPageToken(pageId, token) : null);
         if (pageToken) {
           activeToken = pageToken;
-        } else {
-          activeToken = getAdToken();
         }
       }
     }
@@ -268,26 +297,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const childAttachments = creativeData.object_story_spec?.link_data?.child_attachments;
       if (Array.isArray(childAttachments) && childAttachments.length > 0) {
         const accountId = creativeData.account_id;
-        const hashToUrlMap: Record<string, string> = {};
-
-        if (accountId) {
-          const hashes = childAttachments.map((c: any) => c.image_hash).filter(Boolean);
-          if (hashes.length > 0) {
-            try {
-              const imagesRes = await fetch(
-                `${base}/act_${accountId}/adimages?hashes=${JSON.stringify(hashes)}&fields=url,hash&access_token=${getAdToken()}`
-              );
-              if (imagesRes.ok) {
-                const imagesData = await imagesRes.json();
-                (imagesData?.data || []).forEach((img: any) => {
-                  hashToUrlMap[img.hash] = img.url;
-                });
-              }
-            } catch (err) {
-              console.error("Error resolving carousel image hashes:", err);
-            }
-          }
-        }
+        const hashToUrlMap = await resolveAdImageHashes(accountId, childAttachments.map((c: any) => c.image_hash));
 
         const cards = await Promise.all(
           childAttachments.map(async (att: any) => {
@@ -302,8 +312,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 };
               }
             }
+            const cardImageUrl = firstUsableUrl(
+              hashToUrlMap[att.image_hash],
+              att.picture,
+              att.image_url,
+              att.thumbnail_url,
+              att.media?.image?.src
+            );
             return {
-              url: hashToUrlMap[att.image_hash] || att.picture || '',
+              url: cardImageUrl || '',
               isVideo: false,
               name: att.name || '',
             };
@@ -343,6 +360,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
           }
         }
+      }
+
+      // 2b-1. Resolve static ad images by image_hash before falling back to low-res thumbnail_url.
+      const linkData = creativeData.object_story_spec?.link_data;
+      const photoData = creativeData.object_story_spec?.photo_data;
+      const templateImages = Array.isArray(creativeData.asset_feed_spec?.images)
+        ? creativeData.asset_feed_spec.images
+        : [];
+      const staticImageHashes = [
+        creativeData.image_hash,
+        linkData?.image_hash,
+        photoData?.image_hash,
+        ...templateImages.map((img: any) => img.hash || img.image_hash),
+      ];
+      const staticHashMap = await resolveAdImageHashes(creativeData.account_id, staticImageHashes);
+      const hashUrl = (hash: any) => hash ? staticHashMap[String(hash)] : undefined;
+      const hashedImageUrl = firstUsableUrl(
+        hashUrl(creativeData.image_hash),
+        hashUrl(linkData?.image_hash),
+        hashUrl(photoData?.image_hash),
+        ...templateImages.map((img: any) => hashUrl(img.hash || img.image_hash) || img.url || img.permalink_url),
+        linkData?.picture,
+        photoData?.url
+      );
+      if (hashedImageUrl) {
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.status(200).json({
+          type: 'image',
+          url: hashedImageUrl,
+        });
       }
 
       // 2b-2. Try resolving via effective_instagram_story_id (Instagram Reels and Posts)
@@ -477,21 +524,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // 2c. Check if single image creative
-      const imageUrl = creativeData.image_url || creativeData.thumbnail_url;
-      if (imageUrl) {
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        return res.status(200).json({
-          type: 'image',
-          url: imageUrl,
-        });
-      }
     }
 
     // 3. Fallback to Meta Ad Previews API (on creative ID first)
     if (creativeId && typeof creativeId === 'string') {
       const previewRes = await fetch(
-        `${base}/${creativeId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${getAdToken()}`
+        `${base}/${creativeId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${activeToken}`
       );
 
       if (previewRes.ok) {
@@ -510,7 +548,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 4. Fallback to Meta Ad Previews API (on ad ID)
     if (adId && typeof adId === 'string') {
       const previewRes = await fetch(
-        `${base}/${adId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${getAdToken()}`
+        `${base}/${adId}/previews?ad_format=MOBILE_FEED_STANDARD&access_token=${activeToken}`
       );
 
       if (previewRes.ok) {
@@ -524,6 +562,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
       }
+    }
+
+    // 5. Last-resort static creative image. Avoid thumbnail_url here because Meta often
+    // returns 64px thumbnails that look broken when opened in the detail panel.
+    if (creativeData?.image_url) {
+      res.setHeader('Cache-Control', 'public, max-age=1800');
+      return res.status(200).json({
+        type: 'image',
+        url: creativeData.image_url,
+      });
     }
 
     res.setHeader('Cache-Control', 'no-store');

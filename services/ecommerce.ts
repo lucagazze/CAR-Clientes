@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 // ─── sessionStorage result cache — survives page refreshes, cleared on tab close ───
 const EC_PREFIX = 'ec:';
+const DASHBOARD_CACHE_VERSION = 'v2';
 const EC_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function ecGetCached(key: string): any | null {
@@ -479,7 +480,7 @@ export const ecommerce = {
 
   getDashboardData: async (platform: string, domain: string, token: string, since: string, until: string, clientId?: string) => {
     if (clientId || platform !== 'shopify') {
-      const cacheKey = `dashboard:${clientId || domain}:${since}:${until}`;
+      const cacheKey = `dashboard:${DASHBOARD_CACHE_VERSION}:${clientId || domain}:${since}:${until}`;
       const cached = ecGetCached(cacheKey);
       if (cached) return cached;
 
@@ -516,7 +517,7 @@ export const ecommerce = {
       }
     }
 
-    const cacheKey = `dashboard:${domain}:${since}:${until}`;
+    const cacheKey = `dashboard:${DASHBOARD_CACHE_VERSION}:${domain}:${since}:${until}`;
     const cached = ecGetCached(cacheKey);
     if (cached) return cached;
 
@@ -759,7 +760,10 @@ export const ecommerce = {
       const res = await fetch(`/api/shopify/tn/orders?${params.toString()}`, {
         headers: { 'x-tn-store-id': storeId, 'x-tn-token': token },
       });
-      if (!res.ok) throw new Error(`Tiendanube API Error: ${res.status}`);
+      if (!res.ok) {
+        if (res.status === 404) break;
+        throw new Error(`Tiendanube API Error: ${res.status}`);
+      }
       const data: any[] = await res.json();
       if (!Array.isArray(data) || data.length === 0) break;
       allOrders = allOrders.concat(data);

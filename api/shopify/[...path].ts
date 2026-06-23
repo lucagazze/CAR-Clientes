@@ -59,7 +59,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const linkHeader = tnRes.headers.get('Link');
       if (linkHeader) res.setHeader('Link', linkHeader);
-      const data = await tnRes.json();
+      if (
+        req.method === 'GET' &&
+        tnRes.status === 404 &&
+        /^(products|orders)(\?|$)/.test(tnPathAndQuery)
+      ) {
+        return res.status(200).json([]);
+      }
+      const text = await tnRes.text();
+      const data = text ? JSON.parse(text) : null;
       return res.status(tnRes.status).json(data);
     } catch (err: any) {
       return res.status(502).json({ error: 'Tiendanube proxy error', detail: err.message });
@@ -87,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
   
   // Choose correct endpoint (Admin API vs OAuth)
-  let targetUrl = `https://${cleanDomain}/admin/api/2024-01/${pathAndQuery}`;
+  let targetUrl = `https://${cleanDomain}/admin/api/2026-01/${pathAndQuery}`;
   if (pathAndQuery.includes('oauth/access_token')) {
     targetUrl = `https://${cleanDomain}/admin/${pathAndQuery}`;
   }
