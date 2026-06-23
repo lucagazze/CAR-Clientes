@@ -105,7 +105,7 @@ export default function LoginPage() {
       </header>
 
       {/* Main */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-start px-4 pt-28 pb-16">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-16">
         <div className="w-full max-w-[360px] animate-in fade-in slide-in-from-bottom-5 duration-700">
 
           {/* Logo + title */}
