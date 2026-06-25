@@ -1,3 +1,48 @@
+import { isDemoChatwoot } from './demoData';
+
+const DEMO_INBOXES = [
+  { id: 1, name: 'WhatsApp', channel_type: 'Channel::Api' },
+  { id: 2, name: 'Instagram DM', channel_type: 'Channel::Instagram' },
+  { id: 3, name: 'Messenger', channel_type: 'Channel::FacebookPage' },
+];
+const DEMO_CONTACTS = [
+  { id: 1001, name: 'Camila Rossi', email: 'camila.rossi@gmail.com', phone_number: '+541138472901' },
+  { id: 1002, name: 'Joaquín Pereyra', email: 'joaquin.pereyra@gmail.com', phone_number: '+541166210034' },
+  { id: 1003, name: 'Martina Gómez', email: 'martina.gomez@gmail.com', phone_number: '+541159381122' },
+  { id: 1004, name: 'Lucas Fernández', email: 'lucas.f@gmail.com', phone_number: '+541140290011' },
+  { id: 1005, name: 'Sofía Acuña', email: 'sofia.acuna@gmail.com', phone_number: '+541139023488' },
+];
+const DEMO_MESSAGES = [
+  'Hola! Quiero saber si tienen el buzo en M',
+  'Cuánto sale el envío a Córdoba?',
+  'Aceptan transferencia?',
+  'Hace cuánto envían?',
+  'Tienen showroom?',
+  'Pueden cambiar el talle si no me queda?',
+];
+const buildDemoConversations = (status: string) => {
+  const now = Date.now();
+  return DEMO_CONTACTS.map((c, i) => ({
+    id: 7000 + i,
+    status: status === 'all' ? (i % 3 === 0 ? 'resolved' : 'open') : status,
+    inbox_id: DEMO_INBOXES[i % DEMO_INBOXES.length].id,
+    contact: c,
+    contact_inbox: { contact: c },
+    meta: { sender: c, channel: DEMO_INBOXES[i % DEMO_INBOXES.length].channel_type, assignee: null },
+    messages: [{
+      id: 8000 + i, content: DEMO_MESSAGES[i % DEMO_MESSAGES.length],
+      message_type: 0, created_at: Math.floor((now - i * 3600 * 1000) / 1000),
+      sender: c, content_type: 'text',
+    }],
+    last_non_activity_message: { content: DEMO_MESSAGES[i % DEMO_MESSAGES.length], created_at: Math.floor((now - i * 3600 * 1000) / 1000) },
+    timestamp: Math.floor((now - i * 3600 * 1000) / 1000),
+    unread_count: i % 2 === 0 ? 1 : 0,
+    assignee: null, channel: DEMO_INBOXES[i % DEMO_INBOXES.length].channel_type,
+    created_at: Math.floor((now - i * 86400 * 1000) / 1000),
+    updated_at: Math.floor((now - i * 3600 * 1000) / 1000),
+  }));
+};
+
 const proxy = async (chatwoot_url: string, chatwoot_token: string, path: string, body?: any, method?: string) => {
   const res = await fetch('/api/scrape-website', {
     method: 'POST',
@@ -14,6 +59,7 @@ let cachedProfile: Record<string, { account_id: number; pubsub_token: string }> 
 
 export const chatwoot = {
   async getProfile(url: string, token: string) {
+    if (isDemoChatwoot(token)) return { account_id: 1, pubsub_token: 'demo_pubsub' };
     const key = `${url}:${token}`;
     if (cachedProfile[key]) return cachedProfile[key];
     const data = await proxy(url, token, '/api/v1/profile');
@@ -23,10 +69,16 @@ export const chatwoot = {
   },
 
   async getAccountId(url: string, token: string): Promise<number> {
+    if (isDemoChatwoot(token)) return 1;
     return (await chatwoot.getProfile(url, token)).account_id;
   },
 
   async getConversationsPage(url: string, token: string, status = 'open', page = 1, inboxId?: number) {
+    if (isDemoChatwoot(token)) {
+      const all = buildDemoConversations(status).filter(c => inboxId === undefined || c.inbox_id === inboxId);
+      const items = page === 1 ? all : [];
+      return { payload: items, hasMore: false, meta: { all_count: all.length, mine_count: 0, unassigned_count: all.filter(c => !c.assignee).length, assigned_count: 0 } };
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     let path = `/api/v1/accounts/${accountId}/conversations?status=${status}&page=${page}&assignee_type=all`;
     if (inboxId !== undefined) {
@@ -44,11 +96,16 @@ export const chatwoot = {
   },
 
   async getSummary(url: string, token: string, since: number, until: number) {
+    if (isDemoChatwoot(token)) return { conversations_count: 124, incoming_messages_count: 432, outgoing_messages_count: 412, avg_first_response_time: 540, avg_resolution_time: 3200, resolutions_count: 98, previous: { conversations_count: 102 } };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/reports/summary?since=${since}&until=${until}`);
   },
 
   async getConversationsMeta(url: string, token: string, status = 'open', inboxId?: number) {
+    if (isDemoChatwoot(token)) {
+      const all = buildDemoConversations(status).filter(c => inboxId === undefined || c.inbox_id === inboxId);
+      return { meta: { all_count: all.length, mine_count: 0, unassigned_count: all.length, assigned_count: 0 } };
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     let path = `/api/v1/accounts/${accountId}/conversations/meta?status=${status}`;
     if (inboxId !== undefined) {
@@ -58,6 +115,7 @@ export const chatwoot = {
   },
 
   async getAgents(url: string, token: string) {
+    if (isDemoChatwoot(token)) return [{ id: 1, name: 'Luca Demo', email: 'demo@car.app', availability_status: 'online', confirmed: true }];
     const accountId = await chatwoot.getAccountId(url, token);
     const data = await proxy(url, token, `/api/v1/accounts/${accountId}/agents`);
     return Array.isArray(data) ? data : (data?.payload || data?.data || []);
@@ -89,6 +147,16 @@ export const chatwoot = {
   },
 
   async getMessages(url: string, token: string, conversationId: number, before?: number) {
+    if (isDemoChatwoot(token)) {
+      const idx = (conversationId - 7000) % DEMO_CONTACTS.length;
+      const c = DEMO_CONTACTS[idx];
+      const now = Math.floor(Date.now() / 1000);
+      return [
+        { id: 9001, content: DEMO_MESSAGES[idx % DEMO_MESSAGES.length], message_type: 0, created_at: now - 3600, sender: c, content_type: 'text' },
+        { id: 9002, content: '¡Hola! Te confirmo enseguida 🙌', message_type: 1, created_at: now - 3500, sender: { id: 1, name: 'Luca Demo', email: 'demo@car.app' }, content_type: 'text' },
+        { id: 9003, content: 'Gracias!', message_type: 0, created_at: now - 3400, sender: c, content_type: 'text' },
+      ];
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     const qs = before ? `?before=${before}` : '';
     const data = await proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages${qs}`);
@@ -147,6 +215,7 @@ export const chatwoot = {
 
   // GET inboxes
   async getInboxes(url: string, token: string) {
+    if (isDemoChatwoot(token)) return DEMO_INBOXES;
     const accountId = await chatwoot.getAccountId(url, token);
     const data = await proxy(url, token, `/api/v1/accounts/${accountId}/inboxes`);
     return Array.isArray(data) ? data : (data?.payload || data?.data || []);

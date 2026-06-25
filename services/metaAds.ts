@@ -1,6 +1,11 @@
 
 // Meta Marketing API — READ ONLY. Never call POST/PATCH/DELETE endpoints.
 import { supabase } from './supabase';
+import {
+  isDemoMeta, isDemoIG, isDemoFBPage,
+  buildDemoMetaInsightsDaily, buildDemoMetaCampaigns, buildDemoMetaAds,
+  buildDemoInstagramMedia, buildDemoComments,
+} from './demoData';
 
 // Loads token from Supabase into localStorage cache (called once on app start)
 export const initMetaToken = async (): Promise<void> => {
@@ -521,20 +526,25 @@ export const metaAds = {
   },
 
   // ── AD ACCOUNT ────────────────────────────────────────────
-  getAccount: (accountId = META_AD_ACCOUNT) =>
-    apiGet(accountId, {
+  getAccount: (accountId = META_AD_ACCOUNT) => {
+    if (isDemoMeta(accountId)) return Promise.resolve({ id: accountId, name: 'Demo Store Ads', currency: 'ARS', timezone_name: 'America/Argentina/Buenos_Aires', account_status: 1, amount_spent: '4520000', balance: '0' });
+    return apiGet(accountId, {
       fields: 'name,currency,timezone_name,account_status,amount_spent,balance',
-    }),
+    });
+  },
 
   // ── CAMPAIGNS ─────────────────────────────────────────────
-  getCampaigns: (accountId = META_AD_ACCOUNT) =>
-    apiGet(`${accountId}/campaigns`, {
+  getCampaigns: (accountId = META_AD_ACCOUNT) => {
+    if (isDemoMeta(accountId)) return Promise.resolve({ data: buildDemoMetaCampaigns() });
+    return apiGet(`${accountId}/campaigns`, {
       fields: 'id,name,status,objective,buying_type,daily_budget,lifetime_budget,start_time,stop_time,bid_strategy',
       limit: '100',
-    }),
+    });
+  },
 
   // ── CHECK if account has spend in the last 15 days ────────
   hasRecentSpend: async (accountId: string): Promise<boolean> => {
+    if (isDemoMeta(accountId)) return true;
     const since = new Date();
     since.setDate(since.getDate() - 15);
     const sinceStr = since.toISOString().split('T')[0];
@@ -548,21 +558,33 @@ export const metaAds = {
   },
 
   // ── ADSETS ────────────────────────────────────────────────
-  getAdsets: (campaignId?: string, accountId = META_AD_ACCOUNT) =>
-    apiGet(campaignId ? `${campaignId}/adsets` : `${accountId}/adsets`, {
+  getAdsets: (campaignId?: string, accountId = META_AD_ACCOUNT) => {
+    if (isDemoMeta(accountId)) {
+      return Promise.resolve({ data: buildDemoMetaCampaigns().flatMap((c: any, i: number) => [
+        { id: `as_${i}_1`, name: `${c.name} | Lookalike 1%`, status: 'ACTIVE', campaign_id: c.id, daily_budget: '3500', optimization_goal: 'OFFSITE_CONVERSIONS' },
+        { id: `as_${i}_2`, name: `${c.name} | Interés Moda`, status: 'ACTIVE', campaign_id: c.id, daily_budget: '2500', optimization_goal: 'OFFSITE_CONVERSIONS' },
+      ]) });
+    }
+    return apiGet(campaignId ? `${campaignId}/adsets` : `${accountId}/adsets`, {
       fields: 'id,name,status,campaign_id,daily_budget,lifetime_budget,optimization_goal',
       limit: '50',
-    }),
+    });
+  },
 
   // ── ADS with creative thumbnails ──────────────────────────
-  getAds: (adsetId: string) =>
-    apiGet(`${adsetId}/ads`, {
+  getAds: (adsetId: string) => {
+    if (typeof adsetId === 'string' && adsetId.startsWith('as_')) {
+      return Promise.resolve({ data: buildDemoMetaAds() });
+    }
+    return apiGet(`${adsetId}/ads`, {
       fields: 'id,name,status,preview_shareable_link,creative{id,name,thumbnail_url,image_url,image_hash,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_story_id,instagram_permalink_url}',
       limit: '50',
-    }),
+    });
+  },
 
   // ── ALL ADS FOR ACCOUNT ──────────────────────────────────
   getAccountAds: async (accountId = META_AD_ACCOUNT) => {
+    if (isDemoMeta(accountId)) return buildDemoMetaAds();
     const first = await apiGet(`${accountId}/ads`, {
       fields: 'id,name,status,effective_status,configured_status,campaign_id,preview_shareable_link,creative{id,name,body,title,thumbnail_url,image_url,image_hash,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_permalink_url}',
       limit: '150',
@@ -610,6 +632,59 @@ export const metaAds = {
     const cacheKey = `insights:${accountId}:${fieldsStr}:${rangeKey}:${timeIncrement || ''}`;
     const cached = metaGetCached(cacheKey);
     if (cached) return cached;
+
+    if (isDemoMeta(accountId)) {
+      const today = new Date();
+      const presetToDays: Record<string, number> = { today: 1, yesterday: 1, last_3d: 3, last_7d: 7, last_14d: 14, last_28d: 28, last_30d: 30, last_90d: 90, this_month: 30, last_month: 30, maximum: 90 };
+      const days = range ? undefined : (presetToDays[preset || ''] || 14);
+      const until = range?.until || today.toISOString().slice(0, 10);
+      const since = range?.since || new Date(today.getTime() - (days! - 1) * 86400000).toISOString().slice(0, 10);
+      const daily = buildDemoMetaInsightsDaily(since, until);
+      const extractResults = (actions: any[]) => {
+        const p = actions?.find((a: any) => a.action_type === 'purchase');
+        return p ? parseFloat(p.value) : 0;
+      };
+      const extractValue = (vals: any[]) => {
+        const v = vals?.find((a: any) => a.action_type === 'purchase');
+        return v ? parseFloat(v.value) : 0;
+      };
+      if (timeIncrement === 1) {
+        const list = daily.map((d: any) => ({
+          ...d,
+          spend: parseFloat(d.spend), reach: parseInt(d.reach),
+          results: extractResults(d.actions),
+          purchase_value: extractValue(d.action_values),
+          roas: parseFloat(d.purchase_roas[0].value),
+          date: d.date_start,
+        }));
+        metaSetCache(cacheKey, list);
+        return list;
+      }
+      const sum = daily.reduce((acc: any, d: any) => ({
+        spend: acc.spend + parseFloat(d.spend),
+        impressions: acc.impressions + parseInt(d.impressions),
+        reach: acc.reach + parseInt(d.reach),
+        clicks: acc.clicks + parseInt(d.clicks),
+        purchases: acc.purchases + extractResults(d.actions),
+        revenue: acc.revenue + extractValue(d.action_values),
+      }), { spend: 0, impressions: 0, reach: 0, clicks: 0, purchases: 0, revenue: 0 });
+      const obj = {
+        spend: sum.spend,
+        impressions: String(sum.impressions),
+        reach: sum.reach,
+        clicks: String(sum.clicks),
+        cpm: (sum.spend / sum.impressions * 1000).toFixed(2),
+        ctr: (sum.clicks / sum.impressions * 100).toFixed(2),
+        frequency: (sum.impressions / Math.max(sum.reach, 1)).toFixed(2),
+        results: sum.purchases,
+        purchase_value: sum.revenue,
+        roas: sum.spend > 0 ? sum.revenue / sum.spend : 0,
+        actions: [{ action_type: 'purchase', value: String(sum.purchases) }],
+        action_values: [{ action_type: 'purchase', value: String(sum.revenue) }],
+      };
+      metaSetCache(cacheKey, obj);
+      return obj;
+    }
 
     const params: Record<string, string> = { fields: fieldsStr, limit: '500' };
     if (range) params.time_range = JSON.stringify({ since: range.since, until: range.until || range.since });
@@ -724,6 +799,40 @@ export const metaAds = {
     timeRange?: TimeRange,
     datePreset?: DatePreset
   ) => {
+    if (isDemoMeta(accountId)) {
+      const segments: Record<string, string[]> = {
+        age: ['18-24', '25-34', '35-44', '45-54', '55-64'],
+        gender: ['female', 'male', 'unknown'],
+        region: ['Buenos Aires', 'CABA', 'Córdoba', 'Santa Fe', 'Mendoza'],
+        country: ['AR'],
+        publisher_platform: ['facebook', 'instagram', 'audience_network'],
+        platform_position: ['feed', 'stories', 'reels', 'marketplace'],
+        'publisher_platform,platform_position': ['instagram_reels','instagram_feed','facebook_feed','instagram_stories'],
+        audience_segment: ['Lookalike 1%', 'Interés Moda', 'Retargeting', 'Broad'],
+      };
+      const list = segments[breakdown] || ['Demo'];
+      return list.map((seg, i) => {
+        const spend = 18000 + i * 7000;
+        const purchases = 18 + i * 6;
+        const rev = purchases * (36000 + i * 1800);
+        const impr = 120000 + i * 35000;
+        const reach = Math.floor(impr * 0.7);
+        const obj: any = {
+          spend: String(spend), impressions: String(impr), reach: String(reach),
+          cpm: ((spend / impr) * 1000).toFixed(2),
+          inline_link_clicks: String(Math.floor(impr * 0.018)),
+          inline_link_click_ctr: '1.8',
+          actions: [{ action_type: 'purchase', value: String(purchases) }],
+          action_values: [{ action_type: 'purchase', value: String(rev) }],
+        };
+        if (breakdown.includes(',')) {
+          const [p1, p2] = breakdown.split(',');
+          const [v1, v2] = seg.split('_');
+          obj[p1] = v1; obj[p2] = v2;
+        } else { obj[breakdown] = seg; }
+        return obj;
+      });
+    }
     const fields = 'spend,impressions,reach,cpm,cpc,inline_link_clicks,inline_link_click_ctr,actions,action_values';
     const params: Record<string, string> = { fields, breakdowns: breakdown, limit: '100' };
     if (timeRange) {
@@ -766,16 +875,24 @@ export const metaAds = {
     return { data: pages };
   },
 
-  getInstagramProfile: (igId: string, fbPageId?: string) =>
-    fbPageId
+  getInstagramProfile: (igId: string, fbPageId?: string) => {
+    if (isDemoIG(igId) || isDemoFBPage(fbPageId)) {
+      return Promise.resolve({ id: igId, username: 'demostore', name: 'Demo Store', biography: 'Moda urbana DTC argentina · Envío 24-72hs · Cápsulas mensuales', followers_count: 24512, follows_count: 312, media_count: 184, profile_picture_url: 'https://api.dicebear.com/7.x/initials/svg?seed=Demo', website: 'https://demostore.example.com' });
+    }
+    return fbPageId
       ? apiGetPage(fbPageId, igId, {
           fields: 'id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website',
         })
       : apiGetPageActive(igId, {
           fields: 'id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website',
-        }),
+        });
+  },
 
   getInstagramMedia: (igId: string, limit = 8, after?: string, fbPageId?: string) => {
+    if (isDemoIG(igId) || isDemoFBPage(fbPageId)) {
+      const all = buildDemoInstagramMedia();
+      return Promise.resolve({ data: all.slice(0, limit).map(m => ({ ...m, comments: { data: buildDemoComments(m.id) } })) });
+    }
     const params: Record<string, string> = {
       fields: 'id,caption,media_type,timestamp,like_count,comments_count,permalink,thumbnail_url,media_url,children{media_url,media_type,thumbnail_url,permalink},comments.limit(100){id,text,timestamp,username,like_count,replies.limit(100){id,text,timestamp,username,from}}',
       limit: String(limit),
@@ -797,6 +914,9 @@ export const metaAds = {
       : apiGetPageActive(mediaId, { fields: 'permalink,shortcode' }),
 
   getInstagramMediaComments: (mediaId: string, fbPageId?: string, after?: string) => {
+    if (isDemoFBPage(fbPageId) || (typeof mediaId === 'string' && mediaId.startsWith('ig_178'))) {
+      return Promise.resolve({ data: buildDemoComments(mediaId) });
+    }
     const params: Record<string, string> = {
       fields: 'id,text,timestamp,username,like_count,replies.limit(100){id,text,timestamp,username,from}',
       limit: '100',
@@ -835,12 +955,29 @@ export const metaAds = {
   },
 
   // ── FACEBOOK ORGANIC ──────────────────────────────────────
-  getFacebookPageInfo: (pageId: string) =>
-    apiGetPage(pageId, pageId, {
+  getFacebookPageInfo: (pageId: string) => {
+    if (isDemoFBPage(pageId)) {
+      return Promise.resolve({ id: pageId, name: 'Demo Store Oficial', fan_count: 18432, followers_count: 19012, picture: { url: 'https://api.dicebear.com/7.x/initials/svg?seed=DemoFB' }, about: 'Moda urbana DTC argentina · Tienda online · Cápsulas mensuales' });
+    }
+    return apiGetPage(pageId, pageId, {
       fields: 'id,name,fan_count,followers_count,picture{url},about',
-    }),
+    });
+  },
 
   getFacebookPageFeed: (pageId: string, limit = 8, after?: string) => {
+    if (isDemoFBPage(pageId)) {
+      const posts = buildDemoInstagramMedia().slice(0, limit).map((m, i) => ({
+        id: `fb_${1000 + i}`,
+        message: m.caption,
+        created_time: m.timestamp,
+        full_picture: m.media_url,
+        permalink_url: 'https://facebook.com/demostore',
+        likes: { summary: { total_count: m.like_count } },
+        comments: { data: buildDemoComments(m.id), summary: { total_count: m.comments_count } },
+        attachments: { data: [{ media: { image: { src: m.media_url } }, type: 'photo', url: m.media_url }] },
+      }));
+      return Promise.resolve({ data: posts });
+    }
     const params: Record<string, string> = {
       fields: 'id,message,created_time,full_picture,permalink_url,likes.summary(true),comments.summary(true).limit(100){id,message,created_time,from{id,name},like_count,attachment{media{image{src}},type,url},replies.limit(100){id,message,from{id,name},created_time,attachment{media{image{src}},type,url}}},attachments{media,type,url,target,subattachments{media,type,url,target}}',
       limit: String(limit),

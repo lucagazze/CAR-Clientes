@@ -1,6 +1,44 @@
 
+import { isDemoKlaviyo } from './demoData';
+
 const REVISION = '2024-10-15';
 const BASE = '/api/klaviyo';
+
+// ── DEMO BUILDERS ─────────────────────────────────────────────────────
+function daysBetween(since: string, until: string): string[] {
+  const out: string[] = [];
+  const s = new Date(`${since}T00:00:00-03:00`).getTime();
+  const e = new Date(`${until}T23:59:59-03:00`).getTime();
+  let c = s, n = 0;
+  while (c <= e && n++ < 400) { out.push(new Date(c - 3*3600*1000).toISOString().slice(0,10)); c += 86400000; }
+  return out;
+}
+function demoSeed(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function demoRand(seed: number) { let s = seed; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff; }; }
+function buildDemoKlaviyoDashboard(since: string, until: string) {
+  const days = daysBetween(since, until);
+  const r = demoRand(demoSeed(`klv:${since}:${until}`));
+  const dailyRevenue: Record<string, number> = {};
+  const dailyOpens: Record<string, number> = {};
+  const dailyClicks: Record<string, number> = {};
+  const dailySent: Record<string, number> = {};
+  let revenue = 0, opens = 0, clicks = 0, sent = 0, conversions = 0;
+  for (const d of days) {
+    const dSent = 800 + Math.floor(r() * 2200);
+    const dOpens = Math.floor(dSent * (0.30 + r() * 0.18));
+    const dClicks = Math.floor(dOpens * (0.10 + r() * 0.08));
+    const dRev = Math.floor(dClicks * (28000 + r() * 12000));
+    const dConv = Math.floor(dClicks * (0.04 + r() * 0.05));
+    dailySent[d] = dSent; dailyOpens[d] = dOpens; dailyClicks[d] = dClicks; dailyRevenue[d] = dRev;
+    sent += dSent; opens += dOpens; clicks += dClicks; revenue += dRev; conversions += dConv;
+  }
+  return {
+    revenue, attributed: Math.floor(revenue * 0.62),
+    opens, clicks, sent, conversions,
+    dailyRevenue, dailyAttributed: Object.fromEntries(Object.entries(dailyRevenue).map(([k,v]) => [k, Math.floor(v * 0.62)])),
+    dailyOpens, dailyClicks, dailySent, dailyConversions: Object.fromEntries(Object.entries(dailyClicks).map(([k,v]) => [k, Math.floor(v * 0.06)])),
+  };
+}
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -174,6 +212,7 @@ export const klaviyo = {
   ) => enqueue(() => apiPost(apiKey, 'metric-aggregates', buildAggBody(metricId, since, until, measurements, by))),
 
   getDashboardData: async (apiKey: string, since: string, until: string) => {
+    if (isDemoKlaviyo(apiKey)) return buildDemoKlaviyoDashboard(since, until);
     const cacheKey = `dashboard:${apiKey}:${since}:${until}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
@@ -244,6 +283,14 @@ export const klaviyo = {
 
   // Returns sent/opens/clicks per campaign or flow message name for the date range
   getStatsByName: async (apiKey: string, since: string, until: string): Promise<Record<string, { sent: number; opens: number; clicks: number }>> => {
+    if (isDemoKlaviyo(apiKey)) {
+      const out: Record<string, { sent: number; opens: number; clicks: number }> = {};
+      ['Drop Invierno — Lanzamiento', 'Newsletter Semanal #24', 'Welcome Series', 'Abandoned Cart', 'Post-Purchase'].forEach((n, i) => {
+        const sent = 5000 + i * 4000;
+        out[n] = { sent, opens: Math.floor(sent * 0.4), clicks: Math.floor(sent * 0.06) };
+      });
+      return out;
+    }
     const cacheKey = `stats-by-name:${apiKey}:${since}:${until}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
@@ -306,6 +353,15 @@ export const klaviyo = {
   },
 
   getFlows: async (apiKey: string) => {
+    if (isDemoKlaviyo(apiKey)) {
+      return [
+        { id: 'flow_1', attributes: { name: 'Welcome Series', status: 'live', created: '2025-09-12T10:00:00Z' } },
+        { id: 'flow_2', attributes: { name: 'Abandoned Cart', status: 'live', created: '2025-10-01T10:00:00Z' } },
+        { id: 'flow_3', attributes: { name: 'Post-Purchase', status: 'live', created: '2025-11-15T10:00:00Z' } },
+        { id: 'flow_4', attributes: { name: 'Browse Abandonment', status: 'live', created: '2026-01-08T10:00:00Z' } },
+        { id: 'flow_5', attributes: { name: 'Re-engagement 90d', status: 'live', created: '2026-02-20T10:00:00Z' } },
+      ];
+    }
     const cacheKey = `flows:${apiKey}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
@@ -321,6 +377,20 @@ export const klaviyo = {
   },
 
   getCampaigns: async (apiKey: string) => {
+    if (isDemoKlaviyo(apiKey)) {
+      const now = Date.now();
+      const camps = [
+        ['Drop Invierno — Lanzamiento', 5],
+        ['Newsletter Semanal #24', 10],
+        ['Cápsula Atemporal', 17],
+        ['Re-engagement 90 días', 24],
+        ['Bienvenida — Boost', 31],
+      ];
+      return camps.map(([name, days], i) => ({
+        id: `camp_${i}`,
+        attributes: { name, status: 'Sent', send_time: new Date(now - (days as number) * 86400000).toISOString() },
+      }));
+    }
     const cacheKey = `campaigns:v4:${apiKey}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
@@ -359,6 +429,36 @@ export const klaviyo = {
     const cacheKey = `detailed6:${apiKey}:${since}:${until}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
+
+    if (isDemoKlaviyo(apiKey)) {
+      const camps = ['Drop Invierno — Lanzamiento', 'Newsletter Semanal #24', 'Cápsula Atemporal', 'Re-engagement 90 días', 'Bienvenida — Boost'];
+      const flows = ['Welcome Series', 'Abandoned Cart', 'Post-Purchase', 'Browse Abandonment', 'Re-engagement 90d'];
+      const campaigns: Record<string, any> = {};
+      const msgEngagement: Record<string, any> = {};
+      const msgRevenue: Record<string, any> = {};
+      const flowEngagement: Record<string, any> = {};
+      const flowRevenue: Record<string, any> = {};
+      camps.forEach((c, i) => {
+        const sent = 18000 + i * 4000;
+        const opens = Math.floor(sent * (0.42 - i * 0.04));
+        const clicks = Math.floor(opens * (0.16 - i * 0.012));
+        const revenue = Math.floor(clicks * (32000 + i * 1200));
+        campaigns[c] = { sent, opens, clicks };
+        msgEngagement[c] = { sent, opens, clicks };
+        msgRevenue[c] = { revenue, orders: Math.floor(clicks * 0.06) };
+      });
+      flows.forEach((f, i) => {
+        const sent = 6800 + i * 1500;
+        const opens = Math.floor(sent * (0.48 - i * 0.04));
+        const clicks = Math.floor(opens * (0.22 - i * 0.02));
+        const revenue = Math.floor(clicks * (38000 + i * 1500));
+        flowEngagement[f] = { sent, opens, clicks };
+        flowRevenue[f] = { revenue, orders: Math.floor(clicks * 0.07) };
+      });
+      const result = { campaigns, msgRevenue, flowRevenue, msgEngagement, flowEngagement };
+      setCache(cacheKey, result);
+      return result;
+    }
 
     const empty = { campaigns: {}, msgRevenue: {}, flowRevenue: {}, msgEngagement: {}, flowEngagement: {} };
     const metricsRes = await klaviyo.getMetrics(apiKey);

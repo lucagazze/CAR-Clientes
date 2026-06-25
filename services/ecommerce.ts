@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { isDemoShopify, buildDemoDashboardData, buildDemoOrders, buildDemoProducts } from './demoData';
 // ─── sessionStorage result cache — survives page refreshes, cleared on tab close ───
 const EC_PREFIX = 'ec:';
 const DASHBOARD_CACHE_VERSION = 'v2';
@@ -194,6 +195,7 @@ function applySequentialWithLifetime(
 
 export const ecommerce = {
   getShopifyOrders: async (domain: string, token: string, since: string, until: string) => {
+    if (isDemoShopify(domain)) return buildDemoOrders(since, until);
     const cacheKey = `orders_v2:${domain}:${since}:${until}`;
     const cached = ecGetCached(cacheKey);
     if (cached) return cached;
@@ -320,6 +322,12 @@ export const ecommerce = {
   },
 
   getShopifyRecentOrders: async (domain: string, token: string, limit: number = 20) => {
+    if (isDemoShopify(domain)) {
+      const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const until = new Date().toISOString().slice(0, 10);
+      const all = buildDemoOrders(since, until);
+      return all.slice(-limit).reverse();
+    }
     const cacheKey = `recent_orders:${domain}:${limit}`;
     const cached = ecGetCached(cacheKey);
     if (cached) return cached;
@@ -479,6 +487,7 @@ export const ecommerce = {
   },
 
   getDashboardData: async (platform: string, domain: string, token: string, since: string, until: string, clientId?: string) => {
+    if (isDemoShopify(domain)) return buildDemoDashboardData(since, until);
     if (clientId || platform !== 'shopify') {
       const cacheKey = `dashboard:${DASHBOARD_CACHE_VERSION}:${clientId || domain}:${since}:${until}`;
       const cached = ecGetCached(cacheKey);
@@ -941,6 +950,7 @@ export const ecommerce = {
   },
 
   getProducts: async (domain: string, token: string): Promise<any[]> => {
+    if (isDemoShopify(domain)) return buildDemoProducts();
     const cacheKey = `products:${domain}`;
     const cached = ecGetCached(cacheKey);
     if (cached) return cached;
