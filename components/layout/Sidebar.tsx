@@ -126,13 +126,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   ].filter(i => isAdmin || i.configured);
 
   const activosItems = [
-    { path: '/publicador',          icon: UploadCloud, label: 'Publicador',        configured: hasPublisher },
+    { path: '/publicador',          icon: UploadCloud, label: 'Publicador',        configured: hasPublisher, adminOnly: true },
     { path: '/publicaciones',       icon: History,     label: 'Historial Public.', configured: hasPublisher, adminOnly: true },
     { path: '/analisis-productos',  icon: BarChart2,  label: 'Análisis Productos', configured: hasEcommerce },
     { path: '/admin/meta',          icon: Target,     label: 'Creativos Ads',      configured: hasMeta },
-    { path: '/analisis-creativo',   icon: Brain,      label: 'Análisis Creativo',  configured: true },
+    { path: '/analisis-creativo',   icon: Brain,      label: 'Análisis Creativo',  configured: true, adminOnly: true },
     { path: '/email-marketing',     icon: Send,       label: 'Plantillas Email',   configured: hasKlaviyo },
-  ].filter(i => isAdmin || i.configured);
+  ].filter(i => (!i.adminOnly || isAdmin) && (isAdmin || i.configured));
 
   const configuracionItems = [
     { path: '/perfil',           icon: User,   label: 'Mi Perfil',      configured: true },

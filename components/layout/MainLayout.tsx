@@ -381,7 +381,7 @@ export const MainLayout = () => {
               <Route path="/admin/emails" element={<EmailLibraryPage />} />
               <Route path="/admin/email-monitor" element={<EmailMonitorPage />} />
               <Route path="/email-marketing" element={<EmailMarketingPage />} />
-              <Route path="/publicador" element={<SocialPublisherPage />} />
+              <Route path="/publicador" element={profile?.is_admin ? <SocialPublisherPage /> : <Navigate to="/dashboard" replace />} />
               <Route path="/publicaciones" element={profile?.is_admin ? <PublicacionesPage /> : <Navigate to="/dashboard" replace />} />
               <Route path="/entradas" element={<EntradasPage />} />
               <Route path="/cerebro" element={<CerebroPage />} />
@@ -398,7 +398,7 @@ export const MainLayout = () => {
               <Route path="/cliente/:email" element={<ClientePage />} />
               <Route path="/integraciones" element={profile?.is_admin ? <IntegracionesPage /> : <Navigate to="/dashboard" replace />} />
               <Route path="/mercadolibre" element={<MercadoLibrePage />} />
-              <Route path="/analisis-creativo" element={<CreativeTesterPage />} />
+              <Route path="/analisis-creativo" element={profile?.is_admin ? <CreativeTesterPage /> : <Navigate to="/dashboard" replace />} />
               <Route path="/privacidad" element={<PrivacidadPage />} />
               <Route path="/soporte" element={<SoportePage />} />
               <Route path="*" element={<NotFoundPage />} />
