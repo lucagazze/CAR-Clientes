@@ -98,7 +98,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setUnreadLoading(false);
       setChatwootAvailable(false);
     }
-    document.title = 'Portal C.A.R | Algoritmia';
+    document.title = 'Portal C.A.R';
   }, [profile?.id]);
 
   const fetchCount = useCallback(async () => {
@@ -209,7 +209,7 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Update browser tab title dynamically when unread count or pending comments count changes
   useEffect(() => {
-    const defaultTitle = 'Portal C.A.R | Algoritmia';
+    const defaultTitle = 'Portal C.A.R';
     const total = unreadCount + pendingCommentsCount;
     if (total > 0) {
       document.title = `(${total}) ${defaultTitle}`;

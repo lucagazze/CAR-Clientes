@@ -164,7 +164,7 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children, messa
           <div className="mb-10 flex flex-col items-center gap-5">
             <img
               src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"}
-              alt="Algoritmia"
+              alt="C.A.R"
               className="w-14 h-14 object-contain"
               style={{
                 animation: 'alg-bounce 2s ease-in-out infinite',
@@ -173,7 +173,7 @@ export const CenteredPageLoader: React.FC<Props> = ({ isLoading, children, messa
               }}
             />
             <span className="text-[11px] font-black text-zinc-550 dark:text-zinc-400 uppercase tracking-[0.22em]">
-              C.A.R · Algoritmia
+              C.A.R
             </span>
           </div>
 

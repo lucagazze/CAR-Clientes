@@ -619,7 +619,7 @@ export const AIChatFloat = () => {
           <div className="flex justify-between items-center px-4 py-3.5 md:py-3 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/60 flex-shrink-0 select-none">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shadow overflow-hidden">
-                <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="Algoritmia" className="w-6 h-6 object-contain" />
+                <img src={darkMode ? "/assets/logoSinFondo.png" : "/assets/logoAlgoritmia1.webp"} alt="C.A.R" className="w-6 h-6 object-contain" />
               </div>
               <div>
                 <p className="text-[13.5px] md:text-[13px] font-black text-zinc-800 dark:text-zinc-200 leading-none">Algor IA</p>

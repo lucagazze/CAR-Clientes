@@ -26,7 +26,7 @@ export default function PrivacidadPage() {
       content: [
         "Generar reportes y dashboards de rendimiento de tu negocio.",
         "Sincronizar datos entre tus plataformas de forma automática.",
-        "Entrenar y personalizar el asistente de inteligencia artificial de Algoritmia.",
+        "Entrenar y personalizar el asistente de inteligencia artificial de C.A.R.",
         "Enviarte alertas y notificaciones relevantes sobre tu negocio.",
         "Mejorar nuestros algoritmos de análisis y recomendación.",
       ],
@@ -90,7 +90,7 @@ export default function PrivacidadPage() {
               Política de Privacidad
             </h1>
             <p className="text-violet-200 text-sm mt-1.5 font-medium">
-              Algoritmia — Gestión Inteligente de Negocios
+              C.A.R — Gestión Inteligente de Negocios
             </p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-white/70 bg-white/10 border border-white/10 px-2.5 py-1 rounded-full">
               <span>Última actualización:</span>
@@ -103,7 +103,7 @@ export default function PrivacidadPage() {
       {/* Intro */}
       <div className="card-premium space-y-3">
         <p className="text-[14px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-          En <span className="font-bold text-zinc-900 dark:text-white">Algoritmia</span> tomamos muy en serio la privacidad de tu información. Esta política describe qué datos recopilamos, cómo los usamos y qué derechos tenés sobre ellos.
+          En <span className="font-bold text-zinc-900 dark:text-white">C.A.R</span> tomamos muy en serio la privacidad de tu información. Esta política describe qué datos recopilamos, cómo los usamos y qué derechos tenés sobre ellos.
         </p>
         <p className="text-[13px] text-zinc-500 dark:text-zinc-500 leading-relaxed">
           Al usar nuestra plataforma y conectar tus cuentas, aceptás los términos descritos en esta política. Si tenés alguna duda, podés contactarnos en cualquier momento.

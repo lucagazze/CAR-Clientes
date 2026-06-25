@@ -397,7 +397,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (/anuncios|ads|roas|inversion|gasto|spend/i.test(lower)) {
       reply += `En Meta Ads tenés campañas activas:\n- **Inversión (últimos 14 días):** $45.120,00 ARS\n- **ROAS Promedio:** 3.22\n- **Conversiones:** 12 compras registradas.`;
     } else {
-      reply += `Estoy listo para ayudarte con tu negocio "${dbProfile?.business_name || 'Algoritmia'}". Podés consultarme sobre ventas, campañas de email o el rendimiento de tus anuncios.`;
+      reply += `Estoy listo para ayudarte con tu negocio "${dbProfile?.business_name || 'C.A.R'}". Podés consultarme sobre ventas, campañas de email o el rendimiento de tus anuncios.`;
     }
 
     sendEvent({ type: 'done', reply });
@@ -494,7 +494,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : 'No active client. Use list_clients to find one.';
 
   const systemMessage = `FECHA Y HORA ACTUAL (ARGENTINA): ${argentineTime}.
-You are Algor, Algoritmia's AI assistant. Respond in Argentine Spanish (vos, tenés, etc.) — friendly and professional.
+You are Algor, C.A.R's AI assistant. Respond in Argentine Spanish (vos, tenés, etc.) — friendly and professional.
 
 ${activeClientText}
 
@@ -590,7 +590,7 @@ CRITICAL RULES FOR FOLLOWUPS AND OPTIONS:
           reply += `En Meta Ads tenés campañas activas:\n- **Inversión (últimos 14 días):** $45.120,00 ARS\n- **ROAS Promedio:** 3.22\n- **Conversiones:** 12 compras registradas.`;
           reply += `\n\n[[FOLLOWUP]]¿Querés profundizar en las campañas de anuncios?\n[[OPT]]Ver campañas de Meta\n[[OPT]]Ver creativos de anuncios`;
         } else {
-          reply += `Estoy listo para ayudarte con tu negocio "${dbProfile?.business_name || 'Algoritmia'}". Podés consultarme sobre ventas, campañas de email o el rendimiento de tus anuncios.`;
+          reply += `Estoy listo para ayudarte con tu negocio "${dbProfile?.business_name || 'C.A.R'}". Podés consultarme sobre ventas, campañas de email o el rendimiento de tus anuncios.`;
           reply += `\n\n[[FOLLOWUP]]¿Por dónde querés empezar?\n[[OPT]]Ver ventas de la tienda\n[[OPT]]Ver anuncios activos`;
         }
         sendEvent({ type: 'done', reply });
@@ -613,7 +613,7 @@ CRITICAL RULES FOR FOLLOWUPS AND OPTIONS:
           reply += `En Meta Ads tenés campañas activas:\n- **Inversión (últimos 14 días):** $45.120,00 ARS\n- **ROAS Promedio:** 3.22\n- **Conversiones:** 12 compras registradas.`;
           reply += `\n\n[[FOLLOWUP]]¿Querés profundizar en las campañas de anuncios?\n[[OPT]]Ver campañas de Meta\n[[OPT]]Ver creativos de anuncios`;
         } else {
-          reply += `Estoy listo para ayudarte con tu negocio "${dbProfile?.business_name || 'Algoritmia'}". Podés consultarme sobre ventas, campañas de email o el rendimiento de tus anuncios.`;
+          reply += `Estoy listo para ayudarte con tu negocio "${dbProfile?.business_name || 'C.A.R'}". Podés consultarme sobre ventas, campañas de email o el rendimiento de tus anuncios.`;
           reply += `\n\n[[FOLLOWUP]]¿Por dónde querés empezar?\n[[OPT]]Ver ventas de la tienda\n[[OPT]]Ver anuncios activos`;
         }
         sendEvent({ type: 'done', reply });
@@ -858,7 +858,7 @@ CRITICAL RULES FOR FOLLOWUPS AND OPTIONS:
               } else if (client.ecommerce_platform === 'tiendanube') {
                 try {
                   const r = await fetch(`https://api.tiendanube.com/v1/${client.tiendanube_store_id}/orders?created_at_min=${sinceIso}&created_at_max=${untilIso}&limit=200`, {
-                    headers: { Authentication: `bearer ${client.tiendanube_access_token}`, 'User-Agent': 'Algoritmia (lucagazze@gmail.com)' }
+                    headers: { Authentication: `bearer ${client.tiendanube_access_token}`, 'User-Agent': 'C.A.R (lucagazze@gmail.com)' }
                   });
                   if (!r.ok) throw new Error(`Tiendanube ${r.status}`);
                   const orders = await r.json();

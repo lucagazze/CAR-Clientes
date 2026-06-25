@@ -35,10 +35,10 @@ const PublicInfoLayout = ({ children }: { children: React.ReactNode }) => (
   <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#080808] text-zinc-900 dark:text-zinc-100 px-4 sm:px-6 py-8 sm:py-10">
     <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between">
       <Link to="/landing" className="flex items-center gap-2.5">
-        <img src="/assets/logoAlgoritmia1.webp" alt="Algoritmia" className="w-8 h-8 object-contain dark:hidden" />
-        <img src="/assets/logoSinFondo.png" alt="Algoritmia" className="w-8 h-8 object-contain hidden dark:block" />
+        <img src="/assets/logoAlgoritmia1.webp" alt="C.A.R" className="w-8 h-8 object-contain dark:hidden" />
+        <img src="/assets/logoSinFondo.png" alt="C.A.R" className="w-8 h-8 object-contain hidden dark:block" />
         <div>
-          <span className="block text-[13px] font-black uppercase leading-none tracking-tight">Algoritmia</span>
+          <span className="block text-[13px] font-black uppercase leading-none tracking-tight">C.A.R</span>
           <span className="block text-[8px] font-bold text-violet-500 tracking-[0.24em] uppercase mt-0.5">Gestión</span>
         </div>
       </Link>

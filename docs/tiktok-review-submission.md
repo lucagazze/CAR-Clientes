@@ -1,6 +1,6 @@
 # TikTok App Review submission
 
-Use this checklist when resubmitting Algoritmia Gestion in TikTok for Developers.
+Use this checklist when resubmitting C.A.R Gestion in TikTok for Developers.
 
 ## Public URLs
 
@@ -23,12 +23,12 @@ Do not use the login page, hash routes, or URLs with query params here. The app 
 
 ## App details
 
-- App name: `Algoritmia Gestion`
+- App name: `C.A.R Gestion`
 - Category: Business / Productivity / Marketing, whichever TikTok makes available.
 - Short description:
 
 ```text
-Algoritmia Gestion helps ecommerce teams manage social content, comments, ads insights, orders, inventory and customer support from one secure web dashboard.
+C.A.R Gestion helps ecommerce teams manage social content, comments, ads insights, orders, inventory and customer support from one secure web dashboard.
 ```
 
 ## Requested products and scopes
@@ -57,10 +57,10 @@ Add `video.publish`, `video.list`, or TikTok Ads/Business scopes only when the d
 Paste this in the review reason / app review information box and adjust the scope names if needed:
 
 ```text
-Algoritmia Gestion is a production SaaS web application for ecommerce businesses. Users connect their own commerce and social accounts to manage social publishing, comments, ads insights, orders, inventory and customer workflows from a secure dashboard.
+C.A.R Gestion is a production SaaS web application for ecommerce businesses. Users connect their own commerce and social accounts to manage social publishing, comments, ads insights, orders, inventory and customer workflows from a secure dashboard.
 
 TikTok is used in two separated workflows:
-1. TikTok Ads / Business API: the user connects TikTok Business to let Algoritmia read advertiser/campaign/video reporting for the connected ecommerce client.
+1. TikTok Ads / Business API: the user connects TikTok Business to let C.A.R read advertiser/campaign/video reporting for the connected ecommerce client.
 2. TikTok organic / Content Posting API: the user connects a TikTok account, returns to the Publisher, uploads a video or image, writes post copy, selects TikTok and confirms publication/upload.
 
 The Website URL is a public product page with visible Privacy Policy and Terms of Service links:

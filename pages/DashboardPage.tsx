@@ -1899,11 +1899,11 @@ export default function DashboardPage() {
                   ? "/assets/logoSinFondo.png"
                   : "/assets/logoAlgoritmia1.webp"
               }
-              alt="Algoritmia"
+              alt="C.A.R"
               className="w-12 h-12 object-contain drop-shadow-sm"
             />
             <span className="text-[11px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-[0.3em]">
-              Algoritmia • Gestión
+              C.A.R • Gestión
             </span>
           </div>
           <h1 className="page-title">

@@ -29,7 +29,7 @@ export default function EmailPreviewPublicPage() {
   const subjectLine = subject || label;
 
   useEffect(() => {
-    document.title = file ? `${subjectLine} — Algoritmia` : 'Email Preview — Algoritmia';
+    document.title = file ? `${subjectLine} — C.A.R` : 'Email Preview — C.A.R';
   }, [file, subjectLine]);
 
   useEffect(() => { setIframeHeight(3000); setPreheader(''); }, [mode]);
@@ -172,7 +172,7 @@ export default function EmailPreviewPublicPage() {
       {/* Footer */}
       <div style={{ flexShrink: 0, paddingBottom: 16, textAlign: 'center' }}>
         <p style={{ fontSize: 11, color: '#71717a', fontFamily: 'Arial' }}>
-          Powered by <strong style={{ color: '#a1a1aa' }}>Algoritmia</strong>
+          Powered by <strong style={{ color: '#a1a1aa' }}>C.A.R</strong>
         </p>
       </div>
     </div>

@@ -8,7 +8,7 @@ export default function TerminosPage() {
       icon: ShieldCheck,
       title: "Uso de la plataforma",
       content: [
-        "Algoritmia es una plataforma SaaS para centralizar métricas, tiendas, campañas, mensajería y análisis operativo de negocios online.",
+        "C.A.R es una plataforma SaaS para centralizar métricas, tiendas, campañas, mensajería y análisis operativo de negocios online.",
         "El usuario es responsable de mantener actualizada y veraz la información de su cuenta, negocio e integraciones conectadas.",
         "No está permitido usar la plataforma para actividades ilegales, spam, abuso de APIs, scraping no autorizado o vulneración de derechos de terceros.",
       ],
@@ -17,7 +17,7 @@ export default function TerminosPage() {
       icon: Plug,
       title: "Integraciones y datos conectados",
       content: [
-        "Al conectar servicios como Shopify, Tiendanube, Meta Ads, Google Ads, TikTok Ads, Klaviyo o WooCommerce, autorizás a Algoritmia a procesar los datos necesarios para prestar el servicio.",
+        "Al conectar servicios como Shopify, Tiendanube, Meta Ads, Google Ads, TikTok Ads, Klaviyo o WooCommerce, autorizás a C.A.R a procesar los datos necesarios para prestar el servicio.",
         "Podés desconectar integraciones desde la plataforma o revocar permisos desde cada proveedor externo cuando lo necesites.",
         "La disponibilidad de datos depende también de las APIs, permisos, límites y políticas de cada proveedor externo.",
       ],
@@ -26,16 +26,16 @@ export default function TerminosPage() {
       icon: CreditCard,
       title: "Planes, pagos y prueba gratuita",
       content: [
-        "Los planes, precios y condiciones comerciales vigentes son los publicados en la landing o comunicados por el equipo comercial de Algoritmia.",
+        "Los planes, precios y condiciones comerciales vigentes son los publicados en la landing o comunicados por el equipo comercial de C.A.R.",
         "La prueba gratuita, cuando esté disponible, permite evaluar la plataforma por el período informado antes de contratar un plan pago.",
-        "Algoritmia puede modificar precios o condiciones futuras, notificando los cambios relevantes por los canales de contacto disponibles.",
+        "C.A.R puede modificar precios o condiciones futuras, notificando los cambios relevantes por los canales de contacto disponibles.",
       ],
     },
     {
       icon: Ban,
       title: "Limitación de responsabilidad",
       content: [
-        "Algoritmia provee herramientas de análisis y automatización, pero las decisiones comerciales, publicitarias y operativas son responsabilidad del usuario.",
+        "C.A.R provee herramientas de análisis y automatización, pero las decisiones comerciales, publicitarias y operativas son responsabilidad del usuario.",
         "No garantizamos resultados específicos de ventas, ROAS, rentabilidad o performance publicitaria.",
         "Podemos suspender o limitar el acceso ante uso abusivo, fraude, incumplimiento de estos términos o riesgos de seguridad.",
       ],
@@ -51,7 +51,7 @@ export default function TerminosPage() {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">Términos de Uso</h1>
-            <p className="text-violet-200 text-sm mt-1.5 font-medium">Algoritmia — Gestión Inteligente de Negocios</p>
+            <p className="text-violet-200 text-sm mt-1.5 font-medium">C.A.R — Gestión Inteligente de Negocios</p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-white/70 bg-white/10 border border-white/10 px-2.5 py-1 rounded-full">
               <span>Última actualización:</span>
               <span className="text-white">{lastUpdated}</span>
@@ -62,7 +62,7 @@ export default function TerminosPage() {
 
       <div className="card-premium space-y-3">
         <p className="text-[14px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-          Estos términos regulan el uso de <span className="font-bold text-zinc-900 dark:text-white">Algoritmia</span>. Al crear una cuenta o utilizar la plataforma, aceptás estas condiciones.
+          Estos términos regulan el uso de <span className="font-bold text-zinc-900 dark:text-white">C.A.R</span>. Al crear una cuenta o utilizar la plataforma, aceptás estas condiciones.
         </p>
       </div>
 

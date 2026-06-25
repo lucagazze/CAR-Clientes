@@ -481,11 +481,11 @@ export default function SocialPublisherPage() {
 
     if (!accessToken || (expiresAtMs && expiresAtMs < Date.now() + 120000)) {
       const { data: refreshed, error } = await supabase.auth.refreshSession();
-      if (error) throw new Error('Tu sesión de Algoritmia expiró. Cerrá sesión y volvé a entrar.');
+      if (error) throw new Error('Tu sesión de C.A.R expiró. Cerrá sesión y volvé a entrar.');
       accessToken = refreshed.session?.access_token || '';
     }
 
-    if (!accessToken) throw new Error('Tu sesión de Algoritmia expiró. Cerrá sesión y volvé a entrar.');
+    if (!accessToken) throw new Error('Tu sesión de C.A.R expiró. Cerrá sesión y volvé a entrar.');
     return accessToken;
   };
 
@@ -633,7 +633,7 @@ export default function SocialPublisherPage() {
       if (res.status === 401) {
         const { data: refreshed, error } = await supabase.auth.refreshSession();
         if (error || !refreshed.session?.access_token) {
-          throw new Error('Tu sesión de Algoritmia expiró. Cerrá sesión y volvé a entrar.');
+          throw new Error('Tu sesión de C.A.R expiró. Cerrá sesión y volvé a entrar.');
         }
         accessToken = refreshed.session.access_token;
         res = await sendPublishRequest(confirmation.clientId, upload, accessToken, channelsToPublish, confirmation.expectedAccounts);

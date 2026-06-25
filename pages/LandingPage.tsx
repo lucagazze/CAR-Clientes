@@ -1067,12 +1067,12 @@ export default function LandingPage() {
           <div className="flex items-center gap-2.5 md:gap-3.5">
             <img
               src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
-              alt="Algoritmia"
+              alt="C.A.R"
               className="w-8 h-8 md:w-9 md:h-9 object-contain"
             />
             <div>
               <span className="text-[13px] md:text-[14px] font-bold tracking-tight uppercase leading-none block font-display">
-                Algoritmia
+                C.A.R
               </span>
               <span className="text-[8px] md:text-[9px] font-bold text-violet-500 tracking-[0.24em] uppercase block mt-0.5 md:mt-1">Gestión</span>
             </div>
@@ -1146,12 +1146,12 @@ export default function LandingPage() {
           <div className="flex items-center gap-3.5">
             <img
               src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
-              alt="Algoritmia"
+              alt="C.A.R"
               className="w-10 h-10 object-contain"
             />
             <div className="flex flex-col">
               <span className={`text-[15px] font-black tracking-tighter leading-none uppercase font-display ${darkMode ? 'text-white' : 'text-zinc-900'}`}>
-                Algoritmia
+                C.A.R
               </span>
               <span className="text-[9.5px] font-bold text-violet-500 tracking-[0.2em] mt-1 uppercase">Gestión</span>
             </div>
@@ -2197,7 +2197,7 @@ export default function LandingPage() {
           { name: 'Rodrigo Vega', role: 'Performance marketer', quote: 'Ver el ticket promedio en tiempo real me cambió la forma de hacer campañas. Ahora escalo con datos, no con intuición.', initials: 'RV', color: '#f43f5e' },
           { name: 'Camila Reyes', role: 'Moda online', quote: 'Empecé con el plan Starter y ya estoy en Corporativo. Vale cada peso. El retorno que me generó es enorme.', initials: 'CR', color: '#a855f7' },
           { name: 'Tomás Fernández', role: 'Director de operaciones', quote: 'El soporte es rápido y el producto mejora constantemente. Se nota que hay gente detrás que entiende de e-commerce.', initials: 'TF', color: '#22c55e' },
-          { name: 'Lucía Benítez', role: 'Agencia de marketing', quote: 'En nuestra agencia usamos Algoritmia para todos los clientes. Imposible volver a la forma anterior.', initials: 'LB', color: '#3b82f6' },
+          { name: 'Lucía Benítez', role: 'Agencia de marketing', quote: 'En nuestra agencia usamos C.A.R para todos los clientes. Imposible volver a la forma anterior.', initials: 'LB', color: '#3b82f6' },
         ];
         const row1 = [...testimonials.slice(0, 8), ...testimonials.slice(0, 8)];
         const row2 = [...testimonials.slice(8), ...testimonials.slice(8)];
@@ -2461,8 +2461,8 @@ export default function LandingPage() {
             {/* Brand */}
             <div className="col-span-2 sm:col-span-1 space-y-3">
               <div className="flex items-center gap-2">
-                <img src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'} alt="Algoritmia" className="w-5 h-5 object-contain" />
-                <span className="text-[11px] font-bold font-display tracking-wider text-zinc-800 dark:text-zinc-300">Algoritmia</span>
+                <img src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'} alt="C.A.R" className="w-5 h-5 object-contain" />
+                <span className="text-[11px] font-bold font-display tracking-wider text-zinc-800 dark:text-zinc-300">C.A.R</span>
               </div>
               <p className="text-[10.5px] leading-relaxed">
                 Ecosistema de control y automatización omnicanal para e-commerce.
@@ -2505,7 +2505,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className={`pt-6 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-[9.5px] font-medium ${darkMode ? 'border-white/[0.04]' : 'border-zinc-200/50'}`}>
-            <p>&copy; {new Date().getFullYear()} Algoritmia Desarrollos. Todos los derechos reservados.</p>
+            <p>&copy; {new Date().getFullYear()} C.A.R Desarrollos. Todos los derechos reservados.</p>
             <div className="flex items-center gap-4">
               <Link to="/privacidad" className="hover:underline">Privacidad</Link>
               <span className={darkMode ? 'text-zinc-700' : 'text-zinc-300'}>•</span>
@@ -2586,7 +2586,7 @@ export default function LandingPage() {
                       A
                     </div>
                     <div className="text-left">
-                      <p className="text-[11px] font-black leading-none">Algoritmia Store</p>
+                      <p className="text-[11px] font-black leading-none">C.A.R Store</p>
                       <p className="text-[8.5px] text-zinc-400 font-semibold mt-0.5 flex items-center gap-0.5">
                         Patrocinado • <span className="text-[7.5px] font-bold">Publicidad</span>
                       </p>
@@ -2624,7 +2624,7 @@ export default function LandingPage() {
                 {/* Caption / Copy */}
                 <div className="text-left space-y-1">
                   <p className="text-[11px] leading-relaxed">
-                    <span className="font-black mr-1.5">Algoritmia Store</span>
+                    <span className="font-black mr-1.5">C.A.R Store</span>
                     {selectedSimCreative.copy}
                   </p>
                   <p className="text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider pt-0.5">
@@ -2846,7 +2846,7 @@ export default function LandingPage() {
                                   </div>
                                   <div className="bg-zinc-100 dark:bg-white/[0.02] p-2 rounded-xl border border-zinc-200/50 dark:border-white/[0.04] flex-1">
                                     <p className="font-semibold text-[11px] leading-relaxed text-zinc-750 dark:text-zinc-200">
-                                      <span className="font-extrabold text-violet-600 dark:text-violet-400 mr-1.5">Algoritmia Store</span>
+                                      <span className="font-extrabold text-violet-600 dark:text-violet-400 mr-1.5">C.A.R Store</span>
                                       {reply}
                                     </p>
                                   </div>

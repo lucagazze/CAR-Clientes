@@ -2664,7 +2664,7 @@ export default function IntegracionesPage() {
                             <div className="space-y-1">
                               <span className="font-extrabold text-zinc-800 dark:text-zinc-200">Vinculación con Facebook Login</span>
                               <p className="text-zinc-500 dark:text-zinc-400">
-                                Iniciás sesión con tu cuenta de Facebook. Algoritmia accede de forma segura a tus cuentas publicitarias para importar métricas reales.
+                                Iniciás sesión con tu cuenta de Facebook. C.A.R accede de forma segura a tus cuentas publicitarias para importar métricas reales.
                               </p>
                             </div>
                           </div>

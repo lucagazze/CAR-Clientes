@@ -94,7 +94,7 @@ export default function OAuthSimulatePage() {
             {/* Logos Connection */}
             <div className="flex items-center justify-center gap-4 py-2">
               <div className="w-14 h-14 rounded-2xl bg-zinc-50 border border-zinc-150 flex items-center justify-center shadow-sm">
-                <img src="/email-images/tsf_bite_logo.png" alt="Algoritmia" className="w-9 h-9 object-contain" />
+                <img src="/email-images/tsf_bite_logo.png" alt="C.A.R" className="w-9 h-9 object-contain" />
               </div>
               <div className="h-0.5 w-10 bg-zinc-200 relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-yellow-500 animate-pulse" />
@@ -110,7 +110,7 @@ export default function OAuthSimulatePage() {
             {/* Title */}
             <div className="text-center space-y-2">
               <h2 className="text-lg font-bold text-zinc-800 leading-tight">
-                Vincular cuenta con Algoritmia
+                Vincular cuenta con C.A.R
               </h2>
               <p className="text-zinc-500 text-xs">
                 Para importar publicaciones, sincronizar stock y ventas en tiempo real.
@@ -159,7 +159,7 @@ export default function OAuthSimulatePage() {
             <div className="flex gap-2.5 items-start text-[11px] text-zinc-400 leading-normal">
               <Shield className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
               <p>
-                Tu contraseña no se compartirá. Algoritmia solo accederá mediante tokens OAuth encriptados conforme a los estándares oficiales de Mercado Libre.
+                Tu contraseña no se compartirá. C.A.R solo accederá mediante tokens OAuth encriptados conforme a los estándares oficiales de Mercado Libre.
               </p>
             </div>
 
@@ -212,7 +212,7 @@ export default function OAuthSimulatePage() {
           {/* Title */}
           <div className="text-center space-y-1.5">
             <h1 className="text-xl font-bold text-zinc-900">Iniciar sesión con Google</h1>
-            <p className="text-zinc-500 text-[13px]">para continuar en <span className="font-semibold text-zinc-700">Algoritmia</span></p>
+            <p className="text-zinc-500 text-[13px]">para continuar en <span className="font-semibold text-zinc-700">C.A.R</span></p>
           </div>
 
           {/* Connected Profiles list (Google style) */}
@@ -222,7 +222,7 @@ export default function OAuthSimulatePage() {
                 A
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-bold text-zinc-800 truncate">Usuario Algoritmia</p>
+                <p className="text-[13px] font-bold text-zinc-800 truncate">Usuario C.A.R</p>
                 <p className="text-[11px] text-zinc-400 truncate">usuario@algoritmiadesarrollos.com.ar</p>
               </div>
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -232,7 +232,7 @@ export default function OAuthSimulatePage() {
           {/* Scopes description */}
           <div className="space-y-4 pt-1">
             <p className="text-[12px] text-zinc-500 leading-relaxed">
-              Algoritmia podrá acceder a la siguiente información en tu cuenta de Google:
+              C.A.R podrá acceder a la siguiente información en tu cuenta de Google:
             </p>
 
             <div className="space-y-3 bg-zinc-50 border border-zinc-150 p-4 rounded-xl">
@@ -302,7 +302,7 @@ export default function OAuthSimulatePage() {
           <div className="space-y-2">
             <h1 className="text-lg font-extrabold text-white">Autorizar Conexión</h1>
             <p className="text-zinc-400 text-xs leading-relaxed">
-              <span className="text-white font-bold">Algoritmia</span> solicita acceso de lectura a tu Business Center de TikTok para sincronizar campañas y reportes.
+              <span className="text-white font-bold">C.A.R</span> solicita acceso de lectura a tu Business Center de TikTok para sincronizar campañas y reportes.
             </p>
           </div>
 
@@ -333,7 +333,7 @@ export default function OAuthSimulatePage() {
           {/* Security alert */}
           <div className="flex gap-2.5 items-start text-[10.5px] text-zinc-500 bg-zinc-900/20 border border-zinc-800 p-3 rounded-xl">
             <Lock className="w-4 h-4 text-[#ff0050] shrink-0 mt-0.5" />
-            <p>Algoritmia no compartirá tu clave y solo procesará métricas de conversión con la API segura de TikTok.</p>
+            <p>C.A.R no compartirá tu clave y solo procesará métricas de conversión con la API segura de TikTok.</p>
           </div>
 
           {/* Actions */}

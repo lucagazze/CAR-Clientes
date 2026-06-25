@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "221d5468a33cf991a51d988ccf1244f9"
-name = "Algoritmia"
+name = "C.A.R"
 application_url = "https://app.algoritmiadesarrollos.com.ar"
 embedded = false
 

@@ -31,14 +31,14 @@ const FAQ = [
   },
   {
     q: "¿Puedo conectar más de una tienda?",
-    a: "Sí. Cada cuenta de Algoritmia puede tener una plataforma de ecommerce principal conectada (Shopify, Tiendanube o WooCommerce) más las integraciones de publicidad.",
+    a: "Sí. Cada cuenta de C.A.R puede tener una plataforma de ecommerce principal conectada (Shopify, Tiendanube o WooCommerce) más las integraciones de publicidad.",
   },
   {
     q: "¿Cómo desconecto una integración?",
     a: "Andá a Integraciones → hacé clic en Configurar sobre la plataforma conectada → Desconectar. El estado se actualizará automáticamente.",
   },
   {
-    q: "¿La IA de Algoritmia tiene acceso a mis datos privados de clientes?",
+    q: "¿La IA de C.A.R tiene acceso a mis datos privados de clientes?",
     a: "El asistente de IA solo accede a los datos de tu negocio que estén dentro de la plataforma. No comparte esa información con terceros y procesa todo de forma segura.",
   },
   {
@@ -57,7 +57,7 @@ export default function SoportePage() {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     // Open mailto with prefilled subject/body
-    const subject = encodeURIComponent(`[Soporte Algoritmia] ${formName}`);
+    const subject = encodeURIComponent(`[Soporte C.A.R] ${formName}`);
     const body = encodeURIComponent(`Nombre: ${formName}\nEmail: ${formEmail}\n\n${formMsg}`);
     window.open(`mailto:hola@algoritmiadesarrollos.com.ar?subject=${subject}&body=${body}`, '_blank');
     setSent(true);
@@ -78,7 +78,7 @@ export default function SoportePage() {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">Centro de Soporte</h1>
-            <p className="text-emerald-100 text-sm mt-1.5 font-medium">Algoritmia — Estamos para ayudarte</p>
+            <p className="text-emerald-100 text-sm mt-1.5 font-medium">C.A.R — Estamos para ayudarte</p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-white/70 bg-white/10 border border-white/10 px-2.5 py-1 rounded-full">
               <Clock className="w-3 h-3" />
               Respuesta habitual en menos de 24 hs

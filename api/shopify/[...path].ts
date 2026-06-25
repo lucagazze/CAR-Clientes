@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const targetUrl = `https://api.tiendanube.com/v1/${tnStoreId}/${tnPathAndQuery}`;
     try {
       const tnRes = await fetch(targetUrl, {
-        headers: { Authentication: `bearer ${tnToken}`, 'User-Agent': 'Algoritmia (lucagazze@gmail.com)', 'Content-Type': 'application/json' },
+        headers: { Authentication: `bearer ${tnToken}`, 'User-Agent': 'C.A.R (lucagazze@gmail.com)', 'Content-Type': 'application/json' },
       });
       const linkHeader = tnRes.headers.get('Link');
       if (linkHeader) res.setHeader('Link', linkHeader);

@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_car_clients_user_id ON public.car_clients(user_id
 INSERT INTO public.car_clients (user_id, business_name, industry, plan, is_admin)
 VALUES (
   'c9cff993-01d3-4523-b6ea-105d57d048d5',
-  'Algoritmia Admin',
+  'C.A.R Admin',
   'Agencia',
   'CAR Full',
   true

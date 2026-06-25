@@ -359,7 +359,7 @@ async function handleWooCommerce(req: VercelRequest, res: VercelResponse) {
 
     const authorizeUrl =
       `${shop}/wc-auth/v1/authorize` +
-      `?app_name=${encodeURIComponent('Algoritmia')}` +
+      `?app_name=${encodeURIComponent('C.A.R')}` +
       `&scope=read_write` +
       `&user_id=${encodeURIComponent(clientId)}` +
       `&return_url=${encodeURIComponent(returnUrl)}` +
@@ -842,7 +842,7 @@ function handlePreview(req: VercelRequest, res: VercelResponse) {
 <meta property="og:description" content="${esc(description)}"/>
 <meta property="og:url" content="${esc(previewUrl)}"/>
 <meta property="og:image" content="${esc(imageUrl)}"/>
-<meta property="og:site_name" content="Algoritmia — Email Preview"/>
+<meta property="og:site_name" content="C.A.R — Email Preview"/>
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="${esc(title)}"/>
 <meta name="twitter:description" content="${esc(description)}"/>
@@ -2258,7 +2258,7 @@ async function assertClientAccess(supabase: any, accessToken: string, clientId: 
   const { data: userData, error: userErr } = await supabase.auth.getUser(accessToken);
   const authUserId = userData?.user?.id || '';
   const authEmail = (userData?.user?.email || '').trim().toLowerCase();
-  if (userErr || !authUserId) throw new Error('Tu sesión de Algoritmia expiró. Cerrá sesión y volvé a entrar.');
+  if (userErr || !authUserId) throw new Error('Tu sesión de C.A.R expiró. Cerrá sesión y volvé a entrar.');
 
   const { data: client, error } = await supabase
     .from('car_clients')
@@ -2299,7 +2299,7 @@ async function resolveClientAccess(supabase: any, accessToken: string, requested
   const { data: userData, error: userErr } = await supabase.auth.getUser(accessToken);
   const authUserId = userData?.user?.id || '';
   const authEmail = (userData?.user?.email || '').trim().toLowerCase();
-  if (userErr || !authUserId) throw new Error('Tu sesión de Algoritmia expiró. Cerrá sesión y volvé a entrar.');
+  if (userErr || !authUserId) throw new Error('Tu sesión de C.A.R expiró. Cerrá sesión y volvé a entrar.');
 
   let clientId = requestedClientId && requestedClientId !== 'default' ? requestedClientId : '';
 
