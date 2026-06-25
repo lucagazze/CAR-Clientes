@@ -121,6 +121,8 @@ export default function SocialPublisherPage() {
   const [videoMeta, setVideoMeta] = useState<VideoMeta | null>(null);
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [creativeDescription, setCreativeDescription] = useState('');
+  const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
+  const [selectedCalendarItem, setSelectedCalendarItem] = useState<any | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [productMode, setProductMode] = useState<'single' | 'multiple' | 'none'>('none');
@@ -385,11 +387,11 @@ export default function SocialPublisherPage() {
     if (!activeClientId) return;
     supabase
       .from('car_social_publications')
-      .select('id, caption, selected_channels, results, status, created_at')
+      .select('id, caption, selected_channels, results, status, created_at, video_url, scheduled_at, published_at')
       .eq('client_id', activeClientId)
       .in('status', ['scheduled', 'published', 'processing'])
       .order('created_at', { ascending: false })
-      .limit(40)
+      .limit(150)
       .then(({ data }) => {
         if (active) setScheduledItems(data || []);
       });
