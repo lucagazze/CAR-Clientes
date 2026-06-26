@@ -758,6 +758,27 @@ export const metaAds = {
     timeRange?: TimeRange,
     datePreset?: DatePreset
   ) => {
+    if (isDemoMeta(accountId)) {
+      const camps = buildDemoMetaCampaigns();
+      const out: any[] = [];
+      camps.forEach((c: any, ci: number) => {
+        for (let k = 1; k <= 2; k++) {
+          const spend = 90000 + ci * 40000 + k * 25000;
+          const reach = 180000 + ci * 60000 + k * 20000;
+          const purchases = 22 + ci * 9 + k * 5;
+          const revenue = purchases * 40000;
+          out.push({
+            adset_id: `as_${ci}_${k}`, adset_name: `${c.name} | Set ${k}`,
+            campaign_id: c.id, campaign_name: c.name,
+            spend: String(spend), reach: String(reach),
+            actions: [{ action_type: 'purchase', value: String(purchases) }],
+            action_values: [{ action_type: 'purchase', value: String(revenue) }],
+            purchase_roas: [{ action_type: 'omni_purchase', value: (revenue / spend).toFixed(2) }],
+          });
+        }
+      });
+      return out;
+    }
     const params: Record<string, string> = { fields, level: 'adset', limit: '200' };
     if (timeRange) {
       params.time_range = JSON.stringify(timeRange);
@@ -775,6 +796,23 @@ export const metaAds = {
     timeRange?: TimeRange,
     datePreset?: DatePreset
   ) => {
+    if (isDemoMeta(accountId)) {
+      const camps = buildDemoMetaCampaigns();
+      return camps.map((c: any, i: number) => {
+        const spend = 180000 + i * 75000;
+        const reach = 320000 + i * 90000;
+        const impressions = reach * 1.6;
+        const purchases = 42 + i * 18;
+        const revenue = purchases * 42000;
+        return {
+          campaign_id: c.id, campaign_name: c.name, objective: c.objective,
+          spend: String(spend), reach: String(reach), impressions: String(Math.round(impressions)),
+          actions: [{ action_type: 'purchase', value: String(purchases) }],
+          action_values: [{ action_type: 'purchase', value: String(revenue) }],
+          purchase_roas: [{ action_type: 'omni_purchase', value: (revenue / spend).toFixed(2) }],
+        };
+      });
+    }
     const params: Record<string, string> = { fields, level: 'campaign', limit: '200' };
     if (timeRange) {
       params.time_range = JSON.stringify(timeRange);
@@ -786,11 +824,19 @@ export const metaAds = {
   },
 
   // ── ALL ADSETS FOR ACCOUNT (for optimization_goal lookup) ─
-  getAccountAdsets: (accountId: string) =>
-    apiGet(`${accountId}/adsets`, {
+  getAccountAdsets: (accountId: string) => {
+    if (isDemoMeta(accountId)) {
+      const camps = buildDemoMetaCampaigns();
+      return Promise.resolve({ data: camps.flatMap((c: any, i: number) => [
+        { id: `as_${i}_1`, name: `${c.name} | Lookalike 1%`, campaign_id: c.id, status: 'ACTIVE', daily_budget: '3500', optimization_goal: i >= 2 ? 'OFFSITE_CONVERSIONS' : 'LINK_CLICKS', targeting: { age_min: 22, age_max: 38, geo_locations: { countries: ['AR'] } } },
+        { id: `as_${i}_2`, name: `${c.name} | Interés Moda`, campaign_id: c.id, status: 'ACTIVE', daily_budget: '2500', optimization_goal: i >= 2 ? 'OFFSITE_CONVERSIONS' : 'LINK_CLICKS', targeting: { age_min: 22, age_max: 38, geo_locations: { countries: ['AR'] } } },
+      ]) });
+    }
+    return apiGet(`${accountId}/adsets`, {
       fields: 'id,name,campaign_id,optimization_goal,targeting,status,daily_budget,lifetime_budget',
       limit: '200',
-    }),
+    });
+  },
 
   // ── INSIGHTS WITH DEMOGRAPHIC BREAKDOWN ──────────────────
   getInsightsBreakdown: async (

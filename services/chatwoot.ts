@@ -122,6 +122,18 @@ export const chatwoot = {
   },
 
   async getReportsSummary(url: string, token: string, since: number, until: number, type = 'account', id?: number) {
+    if (isDemoChatwoot(token)) {
+      const days = Math.max(1, Math.round((until - since) / 86400));
+      return {
+        conversations_count: 8 * days + 12,
+        incoming_messages_count: 22 * days + 30,
+        outgoing_messages_count: 19 * days + 24,
+        avg_first_response_time: 540 + (id || 0) * 10,
+        avg_resolution_time: 3200,
+        resolutions_count: 6 * days,
+        previous: { conversations_count: Math.floor((8 * days + 12) * 0.92) },
+      };
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     let path = `/api/v2/accounts/${accountId}/reports/summary?since=${since}&until=${until}&type=${type}`;
     if (id !== undefined) {
@@ -131,6 +143,27 @@ export const chatwoot = {
   },
 
   async getReportsTimeSeries(url: string, token: string, metric: string, since: number, until: number, type = 'account', id?: number) {
+    if (isDemoChatwoot(token)) {
+      const out: any[] = [];
+      const dayMs = 86400;
+      const baseByMetric: Record<string, number> = {
+        conversations_count: 8,
+        incoming_messages_count: 22,
+        outgoing_messages_count: 19,
+        avg_first_response_time: 540,
+        avg_resolution_time: 3200,
+        resolutions_count: 6,
+      };
+      const base = baseByMetric[metric] || 5;
+      let cur = since;
+      let i = 0;
+      while (cur <= until && i++ < 200) {
+        const wobble = ((i * 37) % 11) - 5;
+        out.push({ value: Math.max(0, base + wobble), timestamp: cur });
+        cur += dayMs;
+      }
+      return out;
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     let path = `/api/v2/accounts/${accountId}/reports?metric=${metric}&since=${since}&until=${until}&type=${type}`;
     if (id !== undefined) {
@@ -140,6 +173,21 @@ export const chatwoot = {
   },
 
   async getHeatmapData(url: string, token: string, since: number, until: number, inboxId?: string) {
+    if (isDemoChatwoot(token)) {
+      const out: any[] = [];
+      const dayMs = 86400;
+      let cur = since;
+      let i = 0;
+      while (cur <= until && i++ < 30) {
+        for (let h = 0; h < 24; h++) {
+          // higher activity 9-13 and 18-22
+          const intensity = (h >= 9 && h <= 13) ? 14 : (h >= 18 && h <= 22) ? 16 : (h < 7 ? 1 : 4);
+          out.push({ value: intensity + ((i + h) % 5), timestamp: cur + h * 3600 });
+        }
+        cur += dayMs;
+      }
+      return out;
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     const inboxParam = inboxId && inboxId !== 'all' ? `&type=inbox&id=${inboxId}` : '&type=account';
     const path = `/api/v2/accounts/${accountId}/reports?metric=conversations_count&since=${since}&until=${until}${inboxParam}&group_by=hour`;
