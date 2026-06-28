@@ -4,6 +4,7 @@
 // hitting Shopify / Meta / Klaviyo / Chatwoot.
 
 export const DEMO_SHOPIFY_DOMAIN = 'demo-store.myshopify.com';
+export const DEMO_EMAIL = 'demo@car.app';
 export const DEMO_META_ACCOUNT = 'act_999000111';
 export const DEMO_KLAVIYO_PREFIX = 'pk_demo_fake';
 export const DEMO_CHATWOOT_TOKEN = 'demo_chatwoot_fake_token';
@@ -11,6 +12,8 @@ export const DEMO_IG_ID = '17841400000000001';
 export const DEMO_FB_PAGE_ID = '100000000000000';
 export const DEMO_TIENDANUBE_STORE = 'demo_tn_store';
 
+export const isDemoEmail = (email?: string | null) =>
+  String(email || '').trim().toLowerCase() === DEMO_EMAIL;
 export const isDemoShopify = (domain?: string | null) =>
   !!domain && (domain.includes('demo-store.myshopify.com') || domain.startsWith('demo-store'));
 export const isDemoMeta = (accountId?: string | null) =>
@@ -21,6 +24,61 @@ export const isDemoChatwoot = (token?: string | null) =>
   !!token && token === DEMO_CHATWOOT_TOKEN;
 export const isDemoIG = (id?: string | null) => !!id && id === DEMO_IG_ID;
 export const isDemoFBPage = (id?: string | null) => !!id && id === DEMO_FB_PAGE_ID;
+export const isDemoProfile = (profile?: any | null) =>
+  Boolean(profile && (
+    profile.plan === 'demo' ||
+    isDemoShopify(profile.shopify_domain) ||
+    isDemoMeta(profile.meta_account_id) ||
+    isDemoKlaviyo(profile.klaviyo_api_key)
+  ));
+
+export const withDemoProfileDefaults = <T extends Record<string, any> | null>(
+  profile: T,
+  email?: string | null,
+  userId?: string | null,
+): T => {
+  if (!profile || (!isDemoEmail(email) && !isDemoProfile(profile))) return profile;
+  const now = new Date().toISOString();
+  return {
+    ...profile,
+    id: profile.id || 'demo-car-client',
+    user_id: profile.user_id || userId || 'demo-user',
+    business_name: 'Demo Store',
+    business_logo_url: profile.business_logo_url || 'https://api.dicebear.com/7.x/initials/svg?seed=Demo',
+    industry: 'Moda ecommerce',
+    plan: 'demo',
+    active: true,
+    ecommerce_platform: 'shopify',
+    shopify_domain: DEMO_SHOPIFY_DOMAIN,
+    shopify_access_token: profile.shopify_access_token || 'demo_shopify_token',
+    meta_account_id: DEMO_META_ACCOUNT,
+    meta_pixel_id: profile.meta_pixel_id || 'demo_pixel_999000111',
+    facebook_access_token: profile.facebook_access_token || 'demo_meta_token',
+    klaviyo_api_key: `${DEMO_KLAVIYO_PREFIX}_dashboard`,
+    klaviyo_list_id: profile.klaviyo_list_id || 'demo_list_001',
+    chatwoot_url: profile.chatwoot_url || 'https://demo.chatwoot.local',
+    chatwoot_token: DEMO_CHATWOOT_TOKEN,
+    fb_page_id: DEMO_FB_PAGE_ID,
+    fb_page_name: 'Demo Store Oficial',
+    fb_page_access_token: profile.fb_page_access_token || 'demo_page_token',
+    ig_business_id: DEMO_IG_ID,
+    ig_username: 'demostore',
+    website_url: profile.website_url || 'https://demostore.example.com',
+    business_description: profile.business_description || 'Tienda demo con datos simulados para presentar C.A.R.',
+    client_tags: ['tienda_online', 'meta_ads', 'email_marketing', 'mensajeria', 'demo'],
+    connection_statuses: {
+      ...(profile.connection_statuses || {}),
+      shopify: 'ok',
+      ecommerce: 'connected',
+      meta: 'ok',
+      instagram: 'ok',
+      facebook: 'ok',
+      klaviyo: 'ok',
+      chatwoot: 'ok',
+    },
+    created_at: profile.created_at || now,
+  } as T;
+};
 
 const seedFromStr = (s: string) => {
   let h = 2166136261;

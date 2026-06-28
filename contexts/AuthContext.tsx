@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
 import { db, ClientProfile } from '../services/db';
+import { withDemoProfileDefaults } from '../services/demoData';
 
 interface AuthContextType {
   session: Session | null;
@@ -57,15 +58,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           }
 
-          setProfile(p);
-          if (p) {
-            db.activity.log(userId, p.id, 'session_start', {
+          const normalizedProfile = withDemoProfileDefaults(p, email, userId);
+          setProfile(normalizedProfile);
+          if (normalizedProfile) {
+            db.activity.log(userId, normalizedProfile.id, 'session_start', {
               user_email: email,
               ua: navigator.userAgent,
               screen: `${window.innerWidth}x${window.innerHeight}`,
             });
           }
-          return p;
+          return normalizedProfile;
         } catch (err) {
           console.error(`Error loading profile (attempt ${i + 1}/${retries}):`, err);
           if (i === retries - 1) {

@@ -18,6 +18,7 @@ import { klaviyo } from "../services/klaviyo";
 import { ecommerce } from "../services/ecommerce";
 import { chatwoot } from "../services/chatwoot";
 import { db } from "../services/db";
+import { isDemoProfile } from "../services/demoData";
 import {
   BarChart2,
   Mail,
@@ -943,6 +944,7 @@ export default function DashboardPage() {
 
   const savePlatformErrorToDB = async (platformKey: string, errorMessage: string) => {
     if (!profile?.id) return;
+    if (isDemoProfile(profile as any)) return;
     try {
       const { data: clientRow } = await supabase
         .from('car_clients')
