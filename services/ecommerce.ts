@@ -23,6 +23,14 @@ function ecSetCache(key: string, data: any) {
 
 const BASE = '/api/shopify';
 
+export const normalizeEcommercePlatform = (platform?: string | null) => {
+  const value = String(platform || '').trim().toLowerCase();
+  if (value === 'woocommerce' || value === 'woo' || value === 'wordpress') return 'wordpress';
+  if (value === 'tiendanube' || value === 'tienda_nube' || value === 'nuvemshop') return 'tiendanube';
+  if (value === 'shopify') return 'shopify';
+  return value || null;
+};
+
 // ─── Order attribution ────────────────────────────────────────────────────────
 
 export type OrderAttribution = {
@@ -771,6 +779,9 @@ export const ecommerce = {
       });
       if (!res.ok) {
         if (res.status === 404) break;
+        if (res.status === 401 || res.status === 403) {
+          throw new Error('Tiendanube rechazó la conexión. Reconectá la tienda desde Integraciones.');
+        }
         throw new Error(`Tiendanube API Error: ${res.status}`);
       }
       const data: any[] = await res.json();
@@ -1031,7 +1042,12 @@ export const ecommerce = {
             'x-tn-token': token,
           },
         });
-        if (!res.ok) break;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            throw new Error('Tiendanube rechazó la conexión. Reconectá la tienda desde Integraciones.');
+          }
+          break;
+        }
         const data: any[] = await res.json();
         if (!Array.isArray(data) || data.length === 0) break;
         allProducts = allProducts.concat(data);

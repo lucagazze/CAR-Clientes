@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
-import { ecommerce } from '../services/ecommerce';
+import { ecommerce, normalizeEcommercePlatform } from '../services/ecommerce';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 import {
   ShoppingCart, Search, ChevronDown, ChevronUp, Package,
@@ -442,9 +442,11 @@ export default function PedidosPage() {
   const wooConsumerSecret   = profile?.woo_consumer_secret || '';
   const tiendanubeStoreId   = profile?.tiendanube_store_id || '';
   const tiendanubeToken     = profile?.tiendanube_access_token || '';
-  const isShopify           = !!(shopifyDomain && shopifyToken);
-  const isWoo               = !!(wordpressUrl && wooConsumerKey && wooConsumerSecret);
-  const isTiendaNube        = !!(tiendanubeStoreId && tiendanubeToken);
+  const configuredPlatform  = normalizeEcommercePlatform(profile?.ecommerce_platform);
+  const inferredPlatform    = configuredPlatform || (wordpressUrl && wooConsumerKey && wooConsumerSecret ? 'wordpress' : tiendanubeStoreId && tiendanubeToken ? 'tiendanube' : shopifyDomain && shopifyToken ? 'shopify' : null);
+  const isShopify           = inferredPlatform === 'shopify' && !!(shopifyDomain && shopifyToken);
+  const isWoo               = inferredPlatform === 'wordpress' && !!(wordpressUrl && wooConsumerKey && wooConsumerSecret);
+  const isTiendaNube        = inferredPlatform === 'tiendanube' && !!(tiendanubeStoreId && tiendanubeToken);
   const hasEcommerce        = isShopify || isWoo || isTiendaNube;
 
   const [orders, setOrders]               = useState<any[]>([]);

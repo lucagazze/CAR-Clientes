@@ -15,7 +15,7 @@ import {
   daysAgo,
 } from "../services/metaAds";
 import { klaviyo } from "../services/klaviyo";
-import { ecommerce } from "../services/ecommerce";
+import { ecommerce, normalizeEcommercePlatform } from "../services/ecommerce";
 import { chatwoot } from "../services/chatwoot";
 import { db } from "../services/db";
 import { isDemoProfile, withDemoProfileDefaults } from "../services/demoData";
@@ -933,7 +933,7 @@ export default function DashboardPage() {
   );
 
   const detectedPlatform = useMemo(() => {
-    let platform = (profile as any)?.ecommerce_platform;
+    let platform = normalizeEcommercePlatform((profile as any)?.ecommerce_platform);
     if (profile && !platform) {
       if ((profile as any).shopify_domain && (profile as any).shopify_access_token) {
         platform = 'shopify';
@@ -970,6 +970,12 @@ export default function DashboardPage() {
       console.error(`Error saving platform error for ${platformKey} to DB:`, err);
     }
   };
+
+  const storeStatusKey = useMemo(() => {
+    if (detectedPlatform === 'tiendanube') return 'tiendanube';
+    if (detectedPlatform === 'wordpress') return 'wordpress';
+    return 'shopify';
+  }, [detectedPlatform]);
 
   const [links, setLinks] = useState<any[]>([]);
   const [metaDaily, setMetaDaily] = useState<any[]>([]);
@@ -1175,10 +1181,9 @@ export default function DashboardPage() {
       (detectedPlatform === 'tiendanube' && prof?.tiendanube_store_id && prof?.tiendanube_access_token)
     );
     
-    // Shopify Error
-    const shopifyVal = statuses.shopify;
-    if (!hasStoreConfig && typeof shopifyVal === 'string' && shopifyVal.startsWith('error')) {
-      setShopifyError(shopifyVal.replace(/^error:\s*/, '') || 'Error de conexión');
+    const storeVal = statuses[storeStatusKey] || statuses.shopify;
+    if (!hasStoreConfig && typeof storeVal === 'string' && storeVal.startsWith('error')) {
+      setShopifyError(storeVal.replace(/^error:\s*/, '') || 'Error de conexión');
     } else {
       setShopifyError(null);
     }
@@ -1198,7 +1203,7 @@ export default function DashboardPage() {
     } else {
       setKlaviyoError(null);
     }
-  }, [profile?.connection_statuses, detectedPlatform, profile]);
+  }, [profile?.connection_statuses, detectedPlatform, profile, storeStatusKey]);
 
   useEffect(() => {
     if (detectedPlatform === 'shopify' && (profile as any)?.shopify_domain && (profile as any)?.shopify_access_token) {
@@ -1212,8 +1217,17 @@ export default function DashboardPage() {
           setProductImages(map);
         })
         .catch(e => console.error("Error loading products for images:", e));
-    } else if (detectedPlatform === 'wordpress') {
-      setProductImages({});
+    } else if (detectedPlatform === 'wordpress' && (profile as any)?.wordpress_url && (profile as any)?.woo_consumer_key && (profile as any)?.woo_consumer_secret) {
+      ecommerce.getWooCommerceProducts((profile as any).wordpress_url, (profile as any).woo_consumer_key, (profile as any).woo_consumer_secret)
+        .then(prods => {
+          const map: Record<string, string> = {};
+          for (const p of prods) {
+            const src = typeof p.image === 'string' ? p.image : p.image?.src || p.images?.[0]?.src;
+            if (src) map[String(p.id)] = src;
+          }
+          setProductImages(map);
+        })
+        .catch(e => console.error("Error loading WooCommerce products for images:", e));
     } else if (detectedPlatform === 'tiendanube' && (profile as any)?.tiendanube_store_id && (profile as any)?.tiendanube_access_token) {
       ecommerce.getTiendaNubeProducts((profile as any).tiendanube_store_id, (profile as any).tiendanube_access_token)
         .then(prods => {
@@ -1309,7 +1323,7 @@ export default function DashboardPage() {
           if (myFetchId === fetchIdRef.current) {
             const errMsg = err?.message || "Error al conectar con Shopify";
             setShopifyError(errMsg);
-            savePlatformErrorToDB("shopify", errMsg);
+            savePlatformErrorToDB(storeStatusKey, errMsg);
           }
         } finally {
           if (myFetchId === fetchIdRef.current) setFetchingStore(false);

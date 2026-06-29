@@ -4,7 +4,7 @@ import { useViewAs } from '../contexts/ViewAsContext';
 import { supabase } from '../services/supabase';
 import { Package, ShoppingBag, ArrowUpRight, AlertTriangle, Search, ChevronDown, TrendingUp } from 'lucide-react';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
-import { ecommerce } from '../services/ecommerce';
+import { ecommerce, normalizeEcommercePlatform } from '../services/ecommerce';
 import { presetToRange } from '../services/metaAds';
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -43,7 +43,7 @@ export default function InventarioPage() {
   const profile = (isViewingAs ? viewAsProfile : authProfile) as any;
 
   const platform = useMemo(() => {
-    let plat = profile?.ecommerce_platform;
+    let plat = normalizeEcommercePlatform(profile?.ecommerce_platform);
     if (profile && !plat) {
       if (profile.shopify_domain && profile.shopify_access_token) {
         plat = 'shopify';

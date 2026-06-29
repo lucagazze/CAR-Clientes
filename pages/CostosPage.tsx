@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
-import { ecommerce } from '../services/ecommerce';
+import { ecommerce, normalizeEcommercePlatform } from '../services/ecommerce';
 import { 
   ShoppingBag, Percent, CreditCard, Truck, FileText, Calendar, Plus, 
   Search, Trash2, Edit3, Save, AlertCircle, X, ChevronLeft, ChevronRight, 
@@ -20,6 +20,7 @@ interface CatalogVariant {
 interface CatalogProduct {
   id: string;
   title: string;
+  image?: string | null;
   variants: CatalogVariant[];
 }
 
@@ -43,9 +44,13 @@ export default function CostosPage() {
   const { showToast } = useToast();
   const detectedPlatform = useMemo(() => {
     const p: any = profile;
-    if (p?.ecommerce_platform === 'shopify' && p.shopify_domain && p.shopify_access_token) return 'shopify';
-    if (p?.ecommerce_platform === 'wordpress' && p.wordpress_url && p.woo_consumer_key && p.woo_consumer_secret) return 'wordpress';
-    if (p?.ecommerce_platform === 'tiendanube' && p.tiendanube_store_id && p.tiendanube_access_token) return 'tiendanube';
+    const configuredPlatform = normalizeEcommercePlatform(p?.ecommerce_platform);
+    if (configuredPlatform === 'shopify' && p.shopify_domain && p.shopify_access_token) return 'shopify';
+    if (configuredPlatform === 'wordpress' && p.wordpress_url && p.woo_consumer_key && p.woo_consumer_secret) return 'wordpress';
+    if (configuredPlatform === 'tiendanube' && p.tiendanube_store_id && p.tiendanube_access_token) return 'tiendanube';
+    if (!configuredPlatform && p?.shopify_domain && p.shopify_access_token) return 'shopify';
+    if (!configuredPlatform && p?.wordpress_url && p.woo_consumer_key && p.woo_consumer_secret) return 'wordpress';
+    if (!configuredPlatform && p?.tiendanube_store_id && p.tiendanube_access_token) return 'tiendanube';
     return null;
   }, [profile]);
 
@@ -113,6 +118,7 @@ export default function CostosPage() {
   const mapShopifyProducts = (products: any[]): CatalogProduct[] => products.map((p: any) => ({
     id: String(p.id),
     title: p.title || p.name || 'Producto',
+    image: typeof p.image === 'string' ? p.image : p.image?.src || p.images?.[0]?.src || null,
     variants: (p.variants && p.variants.length > 0 ? p.variants : [p]).map((v: any) => ({
       id: String(v.id || p.id),
       title: v.title && v.title !== 'Default Title' ? v.title : 'Único',
@@ -132,7 +138,12 @@ export default function CostosPage() {
           title: 'Único',
           price: parseFloat(p.price || p.regular_price || 0) || 0
         }];
-    return { id: String(p.id), title: p.name || p.title || 'Producto', variants: variations };
+    return {
+      id: String(p.id),
+      title: p.name || p.title || 'Producto',
+      image: typeof p.image === 'string' ? p.image : p.image?.src || p.images?.[0]?.src || null,
+      variants: variations
+    };
   });
 
   const mapTiendaNubeProducts = (products: any[]): CatalogProduct[] => products.map((p: any) => {
@@ -141,6 +152,7 @@ export default function CostosPage() {
     return {
       id: String(p.id),
       title,
+      image: typeof p.image === 'string' ? p.image : p.image?.src || p.images?.[0]?.src || null,
       variants: variants.map((v: any) => ({
         id: String(v.id || p.id),
         title: [v.values?.[0]?.es || v.values?.[0]?.pt || v.values?.[0]?.en, v.values?.[1]?.es || v.values?.[1]?.pt || v.values?.[1]?.en].filter(Boolean).join(' / ') || 'Único',
@@ -158,16 +170,28 @@ export default function CostosPage() {
 
     setLoadingProducts(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (accessToken && profileId !== 'default') {
+        const res = await fetch('/api/scrape-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+          body: JSON.stringify({ clientId: profileId, type: 'products', platform: detectedPlatform })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCatalogProducts(mapShopifyProducts(data.products || []));
+          return;
+        }
+      }
+
       const p: any = profile;
       if (detectedPlatform === 'shopify') {
-        const products = await ecommerce.getProducts(p.shopify_domain, p.shopify_access_token);
-        setCatalogProducts(mapShopifyProducts(products));
+        setCatalogProducts(mapShopifyProducts(await ecommerce.getProducts(p.shopify_domain, p.shopify_access_token)));
       } else if (detectedPlatform === 'wordpress') {
-        const products = await ecommerce.getWooCommerceProducts(p.wordpress_url, p.woo_consumer_key, p.woo_consumer_secret);
-        setCatalogProducts(mapWooProducts(products));
+        setCatalogProducts(mapWooProducts(await ecommerce.getWooCommerceProducts(p.wordpress_url, p.woo_consumer_key, p.woo_consumer_secret)));
       } else if (detectedPlatform === 'tiendanube') {
-        const products = await ecommerce.getTiendaNubeProducts(p.tiendanube_store_id, p.tiendanube_access_token);
-        setCatalogProducts(mapTiendaNubeProducts(products));
+        setCatalogProducts(mapTiendaNubeProducts(await ecommerce.getTiendaNubeProducts(p.tiendanube_store_id, p.tiendanube_access_token)));
       }
     } catch (err) {
       console.error('Error fetching products:', err);
@@ -942,7 +966,13 @@ export default function CostosPage() {
                                 <tr className="bg-zinc-50/40 dark:bg-white/[0.005] select-none">
                                   <td colSpan={5} className="p-3.5 pl-5 font-bold text-zinc-800 dark:text-zinc-200">
                                     <div className="flex items-center gap-2">
-                                      <ShoppingBag className="w-3.5 h-3.5 text-zinc-450 dark:text-zinc-500" />
+                                      {p.image ? (
+                                        <img src={p.image} alt="" className="w-8 h-8 rounded-lg object-cover border border-zinc-100 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900" loading="lazy" />
+                                      ) : (
+                                        <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 flex items-center justify-center">
+                                          <ShoppingBag className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+                                        </div>
+                                      )}
                                       {p.title}
                                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-bold uppercase tracking-wider">
                                         {p.variants.length} variantes
@@ -977,7 +1007,13 @@ export default function CostosPage() {
                                         </div>
                                       ) : (
                                         <div className="flex items-center gap-2">
-                                          <ShoppingBag className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+                                          {p.image ? (
+                                            <img src={p.image} alt="" className="w-8 h-8 rounded-lg object-cover border border-zinc-100 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900" loading="lazy" />
+                                          ) : (
+                                            <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 flex items-center justify-center">
+                                              <ShoppingBag className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
+                                            </div>
+                                          )}
                                           <span className="font-bold text-zinc-800 dark:text-zinc-200">{p.title}</span>
                                         </div>
                                       )}

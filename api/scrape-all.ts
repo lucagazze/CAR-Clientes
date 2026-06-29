@@ -111,6 +111,14 @@ const SKIP_EXTENSIONS = /\.(css|js|jpg|jpeg|png|gif|svg|webp|ico|woff|woff2|ttf|
 const SKIP_PATHS = /\/(wp-content|wp-includes|wp-json|wp-admin|feed|tag|author|page\/\d+|cart|checkout|mi-cuenta|my-account|wishlist|compare|carrito)\//i;
 const SKIP_PRODUCT_PAGES = /\/(product|producto|shop\/|tienda\/|categoria-producto|product-category|collections\/|collection\/).+/i;
 
+function normalizePlatform(platform?: string | null) {
+  const value = String(platform || '').trim().toLowerCase();
+  if (value === 'woocommerce' || value === 'woo' || value === 'wordpress') return 'wordpress';
+  if (value === 'tiendanube' || value === 'tienda_nube' || value === 'nuvemshop') return 'tiendanube';
+  if (value === 'shopify') return 'shopify';
+  return value || null;
+}
+
 function normalizeOrder(o: any, platform: string) {
   if (platform === 'shopify') {
     // Parse string numeric fields so .toLocaleString() and arithmetic work correctly
@@ -152,7 +160,7 @@ function normalizeOrder(o: any, platform: string) {
       customer_name: o.customer ? `${o.customer.name || ''}`.trim() : 'Sin Cliente',
       email: o.customer?.email || null,
       phone: o.customer?.phone || null,
-      line_items: (o.line_items || []).map((it: any) => ({
+      line_items: (o.products || o.line_items || []).map((it: any) => ({
         product_id: it.product_id,
         variant_id: it.variant_id || it.product_id,
         title: it.name,
@@ -498,7 +506,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (type === 'run-analysis') {
     if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
     try {
-      let active_platform = platform;
+      let active_platform = normalizePlatform(platform);
       let active_shopify_domain = shopify_domain;
       let active_shopify_access_token = shopify_access_token;
       let active_wordpress_url = wordpress_url;
@@ -513,7 +521,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('id', clientId)
         .maybeSingle();
       if (cl) {
-        if (!active_platform) active_platform = cl.ecommerce_platform;
+        if (!active_platform) active_platform = normalizePlatform(cl.ecommerce_platform);
         if (!active_shopify_domain) active_shopify_domain = cl.shopify_domain;
         if (!active_shopify_access_token) active_shopify_access_token = cl.shopify_access_token;
         if (!active_wordpress_url) active_wordpress_url = cl.wordpress_url;
@@ -669,7 +677,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── PRODUCTS PROXY (merged from api/products.ts to stay under 12 function limit) ──
   if (type === 'products') {
     try {
-      let active_platform = platform;
+      let active_platform = normalizePlatform(platform);
       let active_shopify_domain = shopify_domain;
       let active_shopify_access_token = shopify_access_token;
       let active_wordpress_url = wordpress_url;
@@ -689,7 +697,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('id', clientId)
           .maybeSingle();
         if (cl) {
-          if (!active_platform) active_platform = cl.ecommerce_platform;
+          if (!active_platform) active_platform = normalizePlatform(cl.ecommerce_platform);
           if (!active_shopify_domain) active_shopify_domain = cl.shopify_domain;
           if (!active_shopify_access_token) active_shopify_access_token = cl.shopify_access_token;
           if (!active_wordpress_url) active_wordpress_url = cl.wordpress_url;
@@ -831,7 +839,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!active_tiendanube_store_id || !active_tiendanube_access_token) return res.status(400).json({ error: 'Tiendanube no configurado' });
         for (let page = 1; page <= 5; page++) {
           const r = await fetch(`https://api.tiendanube.com/v1/${active_tiendanube_store_id}/products?per_page=200&page=${page}`, { headers: { 'Authentication': `bearer ${active_tiendanube_access_token}`, 'User-Agent': 'AlgorBot/1.0' } });
-          if (!r.ok) break;
+          if (!r.ok) {
+            if (page === 1) {
+              const detail = r.status === 401 || r.status === 403
+                ? 'Tiendanube rechazó la conexión. Reconectá la tienda desde Integraciones.'
+                : `Tiendanube error ${r.status}`;
+              throw new Error(detail);
+            }
+            break;
+          }
           const data: any[] = await r.json();
           if (!data.length) break;
           products = products.concat(data.map((p: any) => ({
@@ -868,7 +884,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { since, until } = req.body as any;
       if (!since || !until) return res.status(400).json({ error: 'Faltan fechas since/until' });
 
-      let active_platform = platform;
+      let active_platform = normalizePlatform(platform);
       let active_shopify_domain = shopify_domain;
       let active_shopify_access_token = shopify_access_token;
       let active_wordpress_url = wordpress_url;
@@ -888,7 +904,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('id', clientId)
           .maybeSingle();
         if (cl) {
-          if (!active_platform) active_platform = cl.ecommerce_platform;
+          if (!active_platform) active_platform = normalizePlatform(cl.ecommerce_platform);
           if (!active_shopify_domain) active_shopify_domain = cl.shopify_domain;
           if (!active_shopify_access_token) active_shopify_access_token = cl.shopify_access_token;
           if (!active_wordpress_url) active_wordpress_url = cl.wordpress_url;
@@ -979,6 +995,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           fetch(`${tnBase}?per_page=40`, { headers: tnHeaders }),
           fetch(`${tnBase}?per_page=200&page=1`, { headers: tnHeaders }),
         ]);
+        if (!tRangeRes.ok) {
+          const msg = tRangeRes.status === 401 || tRangeRes.status === 403
+            ? 'Tiendanube rechazó la conexión. Reconectá la tienda desde Integraciones.'
+            : `Error al conectar con Tiendanube (HTTP ${tRangeRes.status})`;
+          return res.status(502).json({ error: msg });
+        }
         const [tRangeData, tRecentData, tHistData] = await Promise.all([
           tRangeRes.ok ? tRangeRes.json() : [],
           tRecentRes.ok ? tRecentRes.json() : [],
@@ -1003,6 +1025,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'shipping_total',
           'discount_total',
           'total_tax',
+          'line_items',
+          'shipping_lines',
+          'coupon_lines',
           'billing',
           'shipping'
         ].join(',');
