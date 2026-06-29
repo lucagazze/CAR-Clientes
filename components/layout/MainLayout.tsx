@@ -66,6 +66,7 @@ import { TopLoadingBar } from '../ui/TopLoadingBar';
 import { CenteredPageLoader } from '../ui/CenteredPageLoader';
 import { useUnread } from '../../contexts/UnreadContext';
 import { useToast } from '../Toast';
+import { isDemoEmail, isDemoProfile, withDemoProfileDefaults } from '../../services/demoData';
 
 // Retry wrapper — automatically retries downloading a lazy chunk up to 3 times
 // (1 s delay between attempts). Protects against transient network drops and
@@ -152,7 +153,11 @@ export const MainLayout = () => {
   const { darkMode, toggleDarkMode } = useTheme();
   const { profile, signOut, user, loading, refreshProfile } = useAuth();
   const { isViewingAs, viewAsProfile } = useViewAs();
-  const activeProfile = isViewingAs ? viewAsProfile : profile;
+  const rawActiveProfile = isViewingAs ? viewAsProfile : profile;
+  const activeProfile = React.useMemo(
+    () => withDemoProfileDefaults(rawActiveProfile as any, user?.email, user?.id),
+    [rawActiveProfile, user?.email, user?.id],
+  );
   const hasEcommerce = !!(
     ((activeProfile as any)?.ecommerce_platform === 'shopify' && (activeProfile as any)?.shopify_domain && (activeProfile as any)?.shopify_access_token) ||
     ((activeProfile as any)?.ecommerce_platform === 'wordpress' && (activeProfile as any)?.wordpress_url && (activeProfile as any)?.woo_consumer_key && (activeProfile as any)?.woo_consumer_secret) ||
@@ -192,16 +197,20 @@ export const MainLayout = () => {
   useEffect(() => {
     if (location.pathname !== '/mensajeria') return;
     const chatwootStatus = (activeProfile as any)?.connection_statuses?.chatwoot;
+    const isDemoMessaging = isDemoEmail(user?.email) || isDemoProfile(activeProfile);
     const hasHealthyChatwoot = !!(
-      activeProfile?.chatwoot_url &&
-      activeProfile?.chatwoot_token &&
-      (chatwootStatus === 'ok' || chatwootStatus === 'connected') &&
-      chatwootAvailable !== false
+      isDemoMessaging ||
+      (
+        activeProfile?.chatwoot_url &&
+        activeProfile?.chatwoot_token &&
+        (chatwootStatus === 'ok' || chatwootStatus === 'connected') &&
+        chatwootAvailable !== false
+      )
     );
     if (!hasHealthyChatwoot) {
       navigate(profile?.is_admin ? '/integraciones' : '/dashboard', { replace: true });
     }
-  }, [location.pathname, activeProfile, chatwootAvailable, navigate]);
+  }, [location.pathname, activeProfile, chatwootAvailable, navigate, user?.email]);
 
   // Listen for new orders to show global notification
   useEffect(() => {

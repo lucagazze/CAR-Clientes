@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { ClientProfile } from '../services/db';
 import { useAuth } from './AuthContext';
+import { withDemoProfileDefaults } from '../services/demoData';
 
 interface ViewAsContextType {
   viewAsProfile: ClientProfile | null;
@@ -41,7 +42,7 @@ export const ViewAsProvider = ({ children }: { children: React.ReactNode }) => {
           .maybeSingle();
 
         if (data && !error) {
-          setViewAsProfile(data);
+          setViewAsProfile(withDemoProfileDefaults(data as ClientProfile, undefined, data.user_id));
         } else {
           localStorage.removeItem('view_as_client_id');
           setViewAsProfile(null);
@@ -72,7 +73,7 @@ export const ViewAsProvider = ({ children }: { children: React.ReactNode }) => {
         if (next) localStorage.setItem('view_as_client_id', next.id);
         else localStorage.removeItem('view_as_client_id');
       } catch (e) {}
-      return next;
+      return withDemoProfileDefaults(next, undefined, next?.user_id);
     });
   };
 
@@ -101,4 +102,3 @@ export const useViewAs = () => {
   }
   return ctx;
 };
-

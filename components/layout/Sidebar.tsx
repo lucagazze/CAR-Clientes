@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useViewAs } from '../../contexts/ViewAsContext';
 import { useUnread } from '../../contexts/UnreadContext';
 import { db } from '../../services/db';
+import { isDemoEmail, isDemoProfile } from '../../services/demoData';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -85,11 +86,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
 
   // Channel flags — based on real configured + healthy connection state
   const chatwootStatus = (activeProfile as any)?.connection_statuses?.chatwoot;
+  const isDemoClient = isDemoEmail(user?.email) || isDemoProfile(activeProfile);
   const hasChatwoot  = !!(
-    activeProfile?.chatwoot_url &&
-    activeProfile?.chatwoot_token &&
-    (chatwootStatus === 'ok' || chatwootStatus === 'connected') &&
-    chatwootAvailable !== false
+    isDemoClient ||
+    (
+      activeProfile?.chatwoot_url &&
+      activeProfile?.chatwoot_token &&
+      (chatwootStatus === 'ok' || chatwootStatus === 'connected') &&
+      chatwootAvailable !== false
+    )
   );
   const hasMeta      = !!(activeProfile?.meta_account_id);
   const hasKlaviyo   = !!(activeProfile?.klaviyo_api_key);

@@ -18,7 +18,7 @@ import { klaviyo } from "../services/klaviyo";
 import { ecommerce } from "../services/ecommerce";
 import { chatwoot } from "../services/chatwoot";
 import { db } from "../services/db";
-import { isDemoProfile } from "../services/demoData";
+import { isDemoProfile, withDemoProfileDefaults } from "../services/demoData";
 import {
   BarChart2,
   Mail,
@@ -923,10 +923,14 @@ const WordpressLogo = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default function DashboardPage() {
-  const { profile: authProfile } = useAuth();
+  const { profile: authProfile, user } = useAuth();
   const { darkMode } = useTheme();
   const { viewAsProfile, isViewingAs } = useViewAs();
-  const profile = isViewingAs ? viewAsProfile : authProfile;
+  const rawProfile = isViewingAs ? viewAsProfile : authProfile;
+  const profile = useMemo(
+    () => withDemoProfileDefaults(rawProfile as any, user?.email, user?.id),
+    [rawProfile, user?.email, user?.id],
+  );
 
   const detectedPlatform = useMemo(() => {
     let platform = (profile as any)?.ecommerce_platform;
@@ -1034,9 +1038,12 @@ export default function DashboardPage() {
   const [fulfillingOrder, setFulfillingOrder] = useState(false);
   const chatwootStatus = (profile as any)?.connection_statuses?.chatwoot;
   const hasChatwoot = !!(
-    (profile as any)?.chatwoot_url &&
-    (profile as any)?.chatwoot_token &&
-    (chatwootStatus === 'ok' || chatwootStatus === 'connected')
+    isDemoProfile(profile as any) ||
+    (
+      (profile as any)?.chatwoot_url &&
+      (profile as any)?.chatwoot_token &&
+      (chatwootStatus === 'ok' || chatwootStatus === 'connected')
+    )
   );
 
   const toggleFulfillment = async () => {
