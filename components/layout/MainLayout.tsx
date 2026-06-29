@@ -133,7 +133,6 @@ const PedidosPage        = lazyWithRetry(() => import('../../pages/PedidosPage')
 const PerfilPage         = lazyWithRetry(() => import('../../pages/PerfilPage'));
 const ClientePage        = lazyWithRetry(() => import('../../pages/ClientePage'));
 const AnalisisProductosPage = lazyWithRetry(() => import('../../pages/AnalisisProductosPage'));
-const IntegracionesPage  = lazyWithRetry(() => import('../../pages/IntegracionesPage'));
 const PrivacidadPage     = lazyWithRetry(() => import('../../pages/PrivacidadPage'));
 const SoportePage        = lazyWithRetry(() => import('../../pages/SoportePage'));
 const MercadoLibrePage      = lazyWithRetry(() => import('../../pages/MercadoLibrePage'));
@@ -184,13 +183,13 @@ export const MainLayout = () => {
     }
   }, [location.pathname]);
 
-  // Redirect to integrations page if Shopify or other oauth redirect lands on dashboard/other routes
+  // CAR-Clientes does not expose the Integraciones page; OAuth callbacks land safely on dashboard.
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const shop = searchParams.get('shop');
     const hasOauthParam = ['shopify', 'tiendanube', 'woocommerce', 'mercadolibre', 'tiktok', 'meta'].some(param => searchParams.has(param));
-    if (profile?.is_admin && (shop || hasOauthParam) && location.pathname !== '/integraciones') {
-      navigate(`/integraciones${window.location.search}`, { replace: true });
+    if (profile?.is_admin && (shop || hasOauthParam) && location.pathname !== '/dashboard') {
+      navigate('/dashboard', { replace: true });
     }
   }, [location, navigate]);
 
@@ -208,7 +207,7 @@ export const MainLayout = () => {
       )
     );
     if (!hasHealthyChatwoot) {
-      navigate(profile?.is_admin ? '/integraciones' : '/dashboard', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [location.pathname, activeProfile, chatwootAvailable, navigate, user?.email]);
 
@@ -395,7 +394,7 @@ export const MainLayout = () => {
               />
               <Route path="/perfil" element={<PerfilPage />} />
               <Route path="/cliente/:email" element={<ClientePage />} />
-              <Route path="/integraciones" element={profile?.is_admin ? <IntegracionesPage /> : <Navigate to="/dashboard" replace />} />
+              <Route path="/integraciones" element={<Navigate to="/dashboard" replace />} />
               <Route path="/mercadolibre" element={<MercadoLibrePage />} />
               <Route path="/analisis-creativo" element={profile?.is_admin ? <CreativeTesterPage /> : <Navigate to="/dashboard" replace />} />
               <Route path="/privacidad" element={<PrivacidadPage />} />

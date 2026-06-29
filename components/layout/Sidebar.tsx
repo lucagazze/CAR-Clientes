@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag,
-  AlertTriangle, Activity, Library, Workflow, Instagram, MessageSquare, Brain, Users, Package,
+  AlertTriangle, Activity, Library, Instagram, MessageSquare, Brain, Users, Package,
   Calculator, Coins, Target, Send, Zap, Building2, Loader2, User, ShoppingCart, UploadCloud, History
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -142,7 +142,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const configuracionItems = [
     { path: '/perfil',           icon: User,   label: 'Mi Perfil',      configured: true },
     { path: '/links',            icon: Link2,  label: 'Mis Accesos',    configured: hasLinks },
-    { path: '/integraciones',    icon: Workflow, label: 'Integraciones',  configured: true, adminOnly: true },
     { path: '/cerebro',          icon: Brain,  label: 'Cerebro IA',      configured: true },
   ].filter(i => (!i.adminOnly || isAdmin) && (isAdmin || i.configured));
 
@@ -263,7 +262,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
       '/pedidos': 'tour-pedidos',
       '/inventario': 'tour-inventario',
       '/analisis-creativo': 'tour-analisis-creativo',
-      '/integraciones': 'tour-integraciones',
       '/perfil': 'tour-perfil',
     };
 
