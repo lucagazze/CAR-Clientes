@@ -87,11 +87,17 @@ async function updateClientStatuses(
     .select('connection_statuses')
     .eq('id', clientId)
     .maybeSingle();
-  const updatedStatuses = { 
-    ...(data?.connection_statuses || {}), 
+  const updatedStatuses = {
+    ...(data?.connection_statuses || {}),
     [statusKey]: statusValue,
-    ...(extraStatuses || {})
   };
+  Object.entries(extraStatuses || {}).forEach(([key, value]) => {
+    if (value === null || value === undefined) {
+      delete (updatedStatuses as Record<string, any>)[key];
+    } else {
+      (updatedStatuses as Record<string, any>)[key] = value;
+    }
+  });
   const { error: updateErr } = await supabase
     .from('car_clients')
     .update({ ...fields, connection_statuses: updatedStatuses })
@@ -219,7 +225,15 @@ async function handleShopify(req: VercelRequest, res: VercelResponse) {
         ecommerce_platform: 'shopify',
         tiendanube_store_id: null, tiendanube_access_token: null,
         wordpress_url: null, woo_consumer_key: null, woo_consumer_secret: null
-      }, 'shopify', 'ok', { shopify_shop_name: shopName || undefined });
+      }, 'shopify', 'ok', {
+        tiendanube: null,
+        wordpress: null,
+        woocommerce: null,
+        tiendanube_store_name: null,
+        tiendanube_requested_domain: null,
+        tiendanube_domain: null,
+        shopify_shop_name: shopName || undefined
+      });
       return res.redirect(`${redirectBase}/#/integraciones?shopify=success`);
     } catch (err: any) {
       console.error('[Shopify OAuth]', err);
@@ -302,7 +316,10 @@ async function handleTiendanube(req: VercelRequest, res: VercelResponse) {
         ecommerce_platform: 'tiendanube',
         shopify_domain: null, shopify_access_token: null,
         wordpress_url: null, woo_consumer_key: null, woo_consumer_secret: null
-      }, 'shopify', 'ok', {
+      }, 'tiendanube', 'ok', {
+        shopify: null,
+        wordpress: null,
+        woocommerce: null,
         tiendanube_store_name: tnStoreName || undefined,
         tiendanube_requested_domain: requestedDomain || undefined,
         tiendanube_domain: tnConnectedDomain || undefined
@@ -397,7 +414,7 @@ async function handleWooCommerce(req: VercelRequest, res: VercelResponse) {
           woo_consumer_key: null,
           woo_consumer_secret: null,
           ecommerce_platform: null,
-        }, 'shopify', 'error');
+        }, 'wordpress', 'error', { shopify: null, tiendanube: null, woocommerce: null });
       }
       // Still return 200 so WC doesn't retry endlessly
       return res.status(200).json({ ok: false, error: 'missing_fields' });
@@ -417,7 +434,7 @@ async function handleWooCommerce(req: VercelRequest, res: VercelResponse) {
         woo_consumer_key: null,
         woo_consumer_secret: null,
         ecommerce_platform: null,
-      }, 'shopify', 'error');
+      }, 'wordpress', 'error', { shopify: null, tiendanube: null, woocommerce: null });
       return res.status(200).json({ ok: false, error: 'missing_wordpress_url' });
     }
 
@@ -436,11 +453,11 @@ async function handleWooCommerce(req: VercelRequest, res: VercelResponse) {
       // Clear competing platforms
       shopify_domain: null, shopify_access_token: null,
       tiendanube_store_id: null, tiendanube_access_token: null,
-    }, 'shopify', 'ok');
+    }, 'wordpress', 'ok', { shopify: null, tiendanube: null, woocommerce: null });
 
     const isVerified = await verifyWooCredentials(wordpressUrl, consumerKey, consumerSecret);
     if (!isVerified) {
-      await updateClientStatuses(clientId, {}, 'shopify', 'error');
+      await updateClientStatuses(clientId, {}, 'wordpress', 'error', { shopify: null, tiendanube: null, woocommerce: null });
     }
 
     // WC ignores our response body — just needs a 200
@@ -882,7 +899,13 @@ async function handleTiendanubeWebhook(req: VercelRequest, res: VercelResponse) 
 
       if (client) {
         console.log(`[Tiendanube Webhook] Disconnecting and clearing tokens for client ID: ${client.id}`);
-        const updatedStatuses = { ...(client.connection_statuses || {}), shopify: 'error' };
+        const updatedStatuses = { ...(client.connection_statuses || {}), tiendanube: 'error' };
+        delete (updatedStatuses as Record<string, any>).shopify;
+        delete (updatedStatuses as Record<string, any>).wordpress;
+        delete (updatedStatuses as Record<string, any>).woocommerce;
+        delete (updatedStatuses as Record<string, any>).tiendanube_store_name;
+        delete (updatedStatuses as Record<string, any>).tiendanube_domain;
+        delete (updatedStatuses as Record<string, any>).tiendanube_requested_domain;
         
         const { error: updateError } = await supabase
           .from('car_clients')
@@ -968,6 +991,10 @@ async function handleShopifyWebhook(req: VercelRequest, res: VercelResponse) {
         if (client) {
           console.log(`[Shopify Webhook] Disconnecting shop: ${shopDomain} (client: ${client.id})`);
           const updatedStatuses = { ...(client.connection_statuses || {}), shopify: 'error' };
+          delete (updatedStatuses as Record<string, any>).tiendanube;
+          delete (updatedStatuses as Record<string, any>).wordpress;
+          delete (updatedStatuses as Record<string, any>).woocommerce;
+          delete (updatedStatuses as Record<string, any>).shopify_shop_name;
           await supabase
             .from('car_clients')
             .update({
