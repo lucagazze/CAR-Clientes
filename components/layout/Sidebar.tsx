@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag,
-  AlertTriangle, Activity, Library, Instagram, MessageSquare, Brain, Users, Package,
+  AlertTriangle, Activity, Library, Workflow, Instagram, MessageSquare, Brain, Users, Package,
   Calculator, Coins, Target, Send, Zap, Building2, Loader2, User, ShoppingCart, UploadCloud, History
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
