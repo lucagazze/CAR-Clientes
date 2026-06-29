@@ -5,7 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { chatwoot } from '../services/chatwoot';
 import { metaAds } from '../services/metaAds';
 import { ecommerce } from '../services/ecommerce';
-import { isDemoChatwoot } from '../services/demoData';
+import { isDemoChatwoot, isDemoProfile } from '../services/demoData';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +81,16 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Load cached count or reset when switching profiles to prevent flash of wrong client
   useEffect(() => {
     if (profile?.id) {
+      if (isDemoProfile(profile)) {
+        setUnreadCount(3);
+        setPendingCommentsCount(99);
+        setPendingOrdersCount(7);
+        setCommentsLoading(false);
+        setUnreadLoading(false);
+        setOrdersLoading(false);
+        setChatwootAvailable(true);
+        return;
+      }
       const cachedUnread = localStorage.getItem(`car_unread_count_${profile.id}`);
       const cachedComments = localStorage.getItem(`car_pending_comments_count_${profile.id}`);
       setUnreadCount(cachedUnread ? parseInt(cachedUnread, 10) : 0);
@@ -110,6 +120,12 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     const url = profile?.chatwoot_url;
     const token = profile?.chatwoot_token;
+    if (isDemoProfile(profile)) {
+      setUnreadCount(3);
+      setUnreadLoading(false);
+      setChatwootAvailable(true);
+      return;
+    }
     if (!isChatwootConfigured(profile)) {
       setUnreadLoading(false);
       setUnreadCount(0);
@@ -368,6 +384,11 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const fetchCommentsCount = useCallback(async () => {
     // Skip requests when the tab is in the background
     if (document.visibilityState !== 'visible') return;
+    if (isDemoProfile(profile)) {
+      setPendingCommentsCount(99);
+      setCommentsLoading(false);
+      return;
+    }
     // Skip when the user is already on /comentarios — the page updates the count directly
     const isComentarios = window.location.hash.toLowerCase().startsWith('#/comentarios');
     if (isComentarios) {
@@ -557,6 +578,11 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const fetchOrdersCount = useCallback(async () => {
     if (document.visibilityState !== 'visible') return;
+    if (isDemoProfile(profile)) {
+      setPendingOrdersCount(7);
+      setOrdersLoading(false);
+      return;
+    }
     const shopifyDomain = (profile as any)?.shopify_domain;
     const shopifyToken  = (profile as any)?.shopify_access_token;
     const wordpressUrl  = (profile as any)?.wordpress_url;
@@ -600,6 +626,11 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   ]);
 
   useEffect(() => {
+    if (isDemoProfile(profile)) {
+      setPendingOrdersCount(7);
+      setOrdersLoading(false);
+      return;
+    }
     const shopifyDomain = (profile as any)?.shopify_domain;
     const shopifyToken  = (profile as any)?.shopify_access_token;
     const wordpressUrl  = (profile as any)?.wordpress_url;

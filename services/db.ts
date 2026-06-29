@@ -1,4 +1,5 @@
 import { supabase, supabaseAdmin } from './supabase';
+import { DEMO_CLIENT_ID } from './demoData';
 
 const dbClient = () => (typeof (supabaseAdmin as any)?.from === 'function' ? (supabaseAdmin as any) : supabase);
 
@@ -283,6 +284,7 @@ export const db = {
 
   links: {
     async getByClientId(clientId: string): Promise<ClientLink[]> {
+      if (clientId === DEMO_CLIENT_ID) return [];
       const client = dbClient();
       const { data, error } = await client
         .from('car_links')

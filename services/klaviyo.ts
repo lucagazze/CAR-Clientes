@@ -32,11 +32,18 @@ function buildDemoKlaviyoDashboard(since: string, until: string) {
     dailySent[d] = dSent; dailyOpens[d] = dOpens; dailyClicks[d] = dClicks; dailyRevenue[d] = dRev;
     sent += dSent; opens += dOpens; clicks += dClicks; revenue += dRev; conversions += dConv;
   }
+  const toSeries = (daily: Record<string, number>) =>
+    Object.entries(daily).map(([date, val]) => ({ date, val }));
+
   return {
     revenue, attributed: Math.floor(revenue * 0.62),
     opens, clicks, sent, conversions,
-    dailyRevenue, dailyAttributed: Object.fromEntries(Object.entries(dailyRevenue).map(([k,v]) => [k, Math.floor(v * 0.62)])),
-    dailyOpens, dailyClicks, dailySent, dailyConversions: Object.fromEntries(Object.entries(dailyClicks).map(([k,v]) => [k, Math.floor(v * 0.06)])),
+    dailyRevenue: toSeries(dailyRevenue),
+    dailyAttributed: toSeries(Object.fromEntries(Object.entries(dailyRevenue).map(([k,v]) => [k, Math.floor(v * 0.62)]))),
+    dailyOpens: toSeries(dailyOpens),
+    dailyClicks: toSeries(dailyClicks),
+    dailySent: toSeries(dailySent),
+    dailyConversions: toSeries(Object.fromEntries(Object.entries(dailyClicks).map(([k,v]) => [k, Math.floor(v * 0.06)]))),
   };
 }
 

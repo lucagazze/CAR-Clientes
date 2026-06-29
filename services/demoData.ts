@@ -5,6 +5,10 @@
 
 export const DEMO_SHOPIFY_DOMAIN = 'demo-store.myshopify.com';
 export const DEMO_EMAIL = 'demo@car.app';
+export const DEMO_PASSWORD = 'DemoCar2026!';
+export const DEMO_USER_ID = 'demo-user';
+export const DEMO_CLIENT_ID = 'demo-car-client';
+export const DEMO_SESSION_KEY = 'car-demo-session';
 export const DEMO_META_ACCOUNT = 'act_999000111';
 export const DEMO_KLAVIYO_PREFIX = 'pk_demo_fake';
 export const DEMO_CHATWOOT_TOKEN = 'demo_chatwoot_fake_token';
@@ -14,6 +18,8 @@ export const DEMO_TIENDANUBE_STORE = 'demo_tn_store';
 
 export const isDemoEmail = (email?: string | null) =>
   String(email || '').trim().toLowerCase() === DEMO_EMAIL;
+export const isDemoCredentials = (email?: string | null, password?: string | null) =>
+  isDemoEmail(email) && String(password || '') === DEMO_PASSWORD;
 export const isDemoShopify = (domain?: string | null) =>
   !!domain && (domain.includes('demo-store.myshopify.com') || domain.startsWith('demo-store'));
 export const isDemoMeta = (accountId?: string | null) =>
@@ -78,6 +84,43 @@ export const withDemoProfileDefaults = <T extends Record<string, any> | null>(
     },
     created_at: profile.created_at || now,
   } as T;
+};
+
+export const buildDemoProfile = (email: string = DEMO_EMAIL, userId: string = DEMO_USER_ID) =>
+  withDemoProfileDefaults({
+    id: DEMO_CLIENT_ID,
+    user_id: userId,
+    email,
+    business_name: 'Demo Store',
+    created_at: new Date().toISOString(),
+  } as any, email, userId);
+
+export const buildDemoUser = () => ({
+  id: DEMO_USER_ID,
+  aud: 'authenticated',
+  role: 'authenticated',
+  email: DEMO_EMAIL,
+  email_confirmed_at: new Date().toISOString(),
+  phone: '',
+  confirmed_at: new Date().toISOString(),
+  last_sign_in_at: new Date().toISOString(),
+  app_metadata: { provider: 'demo', providers: ['demo'] },
+  user_metadata: { name: 'Demo Store' },
+  identities: [],
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
+
+export const buildDemoSession = () => {
+  const user = buildDemoUser();
+  return {
+    access_token: 'demo-access-token',
+    refresh_token: 'demo-refresh-token',
+    expires_in: 60 * 60 * 24 * 365,
+    expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365,
+    token_type: 'bearer',
+    user,
+  };
 };
 
 const seedFromStr = (s: string) => {

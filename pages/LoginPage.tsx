@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { Loader2, Moon, Sun, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { DEMO_SESSION_KEY, isDemoCredentials } from '../services/demoData';
 
 const toAuthEmail = (input: string) => {
   const clean = input.trim().toLowerCase();
@@ -34,6 +35,12 @@ export default function LoginPage() {
     if (!email || !password) { showToast('Completá todos los campos', 'error'); return; }
     setLoading(true);
     try {
+      if (isDemoCredentials(toAuthEmail(email), password)) {
+        localStorage.setItem(DEMO_SESSION_KEY, '1');
+        window.dispatchEvent(new Event('car-demo-login'));
+        navigate('/dashboard', { replace: true });
+        return;
+      }
       const { error } = await supabase.auth.signInWithPassword({
         email: toAuthEmail(email),
         password,

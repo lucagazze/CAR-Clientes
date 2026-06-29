@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
 import { db, ClientProfile } from '../services/db';
-import { withDemoProfileDefaults } from '../services/demoData';
+import { buildDemoProfile, buildDemoSession, DEMO_EMAIL, DEMO_SESSION_KEY, DEMO_USER_ID, withDemoProfileDefaults } from '../services/demoData';
 
 interface AuthContextType {
   session: Session | null;
@@ -26,6 +26,25 @@ const clearSessionCacheByPrefix = (prefixes: string[]) => {
   } catch {
     // Safari private/session edge cases can block storage access.
   }
+};
+
+const readDemoSession = () => {
+  try {
+    return localStorage.getItem(DEMO_SESSION_KEY) === '1' ? buildDemoSession() : null;
+  } catch {
+    return null;
+  }
+};
+
+const setDemoAuthState = (
+  demoSession: any,
+  setSession: React.Dispatch<React.SetStateAction<Session | null>>,
+  setUser: React.Dispatch<React.SetStateAction<User | null>>,
+  setProfile: React.Dispatch<React.SetStateAction<ClientProfile | null>>,
+) => {
+  setSession(demoSession as Session);
+  setUser(demoSession.user as User);
+  setProfile(buildDemoProfile(DEMO_EMAIL, DEMO_USER_ID) as ClientProfile);
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -85,7 +104,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    const activateDemoSession = () => {
+      const demoSession = readDemoSession();
+      if (!demoSession) return;
+      setDemoAuthState(demoSession, setSession, setUser, setProfile);
+      setLoading(false);
+    };
+
+    const demoSession = readDemoSession();
+    if (demoSession) {
+      setDemoAuthState(demoSession, setSession, setUser, setProfile);
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const activeDemoSession = readDemoSession();
+      if (activeDemoSession) {
+        setDemoAuthState(activeDemoSession, setSession, setUser, setProfile);
+        setLoading(false);
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) loadProfile(session.user.id, session.user.email).finally(() => setLoading(false));
@@ -94,6 +133,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') return;
+
+      const activeDemoSession = readDemoSession();
+      if (activeDemoSession) {
+        setDemoAuthState(activeDemoSession, setSession, setUser, setProfile);
+        setLoading(false);
+        return;
+      }
 
       setSession(session);
       setUser(session?.user ?? null);
@@ -107,7 +153,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    window.addEventListener('car-demo-login', activateDemoSession);
+
+    return () => {
+      window.removeEventListener('car-demo-login', activateDemoSession);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const refreshProfile = async () => {
@@ -122,6 +173,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     localStorage.removeItem('view_as_client_id');
     localStorage.removeItem('current_facebook_access_token');
     localStorage.removeItem('active_fb_page_id');
+    localStorage.removeItem(DEMO_SESSION_KEY);
     await supabase.auth.signOut();
   };
 

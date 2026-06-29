@@ -1518,6 +1518,10 @@ export default function DashboardPage() {
     const timer = setTimeout(() => {
       fetchData(activePreset, activeSince, activeUntil);
       const loadLinks = async () => {
+        if (isDemoProfile(profile)) {
+          setLinks([]);
+          return;
+        }
         const data = await db.links.getByClientId(profile.id);
         if (data) setLinks(data as any);
       };
@@ -1548,6 +1552,10 @@ export default function DashboardPage() {
     const loadCostSummary = async () => {
       if (!profile?.id) {
         setCostSummary({ current: 0, previous: 0 });
+        return;
+      }
+      if (isDemoProfile(profile)) {
+        setCostSummary({ current: 1850, previous: 1625 });
         return;
       }
       const range = activePreset === "custom" ? { since: activeSince, until: activeUntil } : presetToRange(activePreset);
