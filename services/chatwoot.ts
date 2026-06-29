@@ -22,25 +22,29 @@ const DEMO_MESSAGES = [
 ];
 const buildDemoConversations = (status: string) => {
   const now = Date.now();
-  return DEMO_CONTACTS.map((c, i) => ({
-    id: 7000 + i,
-    status: status === 'all' ? (i % 3 === 0 ? 'resolved' : 'open') : status,
-    inbox_id: DEMO_INBOXES[i % DEMO_INBOXES.length].id,
-    contact: c,
-    contact_inbox: { contact: c },
-    meta: { sender: c, channel: DEMO_INBOXES[i % DEMO_INBOXES.length].channel_type, assignee: null },
-    messages: [{
-      id: 8000 + i, content: DEMO_MESSAGES[i % DEMO_MESSAGES.length],
-      message_type: 0, created_at: Math.floor((now - i * 3600 * 1000) / 1000),
-      sender: c, content_type: 'text',
-    }],
-    last_non_activity_message: { content: DEMO_MESSAGES[i % DEMO_MESSAGES.length], created_at: Math.floor((now - i * 3600 * 1000) / 1000) },
-    timestamp: Math.floor((now - i * 3600 * 1000) / 1000),
-    unread_count: i % 2 === 0 ? 1 : 0,
-    assignee: null, channel: DEMO_INBOXES[i % DEMO_INBOXES.length].channel_type,
-    created_at: Math.floor((now - i * 86400 * 1000) / 1000),
-    updated_at: Math.floor((now - i * 3600 * 1000) / 1000),
-  }));
+  return DEMO_CONTACTS.map((c, i) => {
+    const inbox = DEMO_INBOXES[i % DEMO_INBOXES.length];
+    return {
+      id: 7000 + i,
+      status: status === 'all' ? (i % 3 === 0 ? 'resolved' : 'open') : status,
+      inbox_id: inbox.id,
+      inbox,
+      contact: c,
+      contact_inbox: { contact: c },
+      meta: { sender: c, channel: inbox.channel_type, assignee: null },
+      messages: [{
+        id: 8000 + i, content: DEMO_MESSAGES[i % DEMO_MESSAGES.length],
+        message_type: 0, created_at: Math.floor((now - i * 3600 * 1000) / 1000),
+        sender: c, content_type: 'text',
+      }],
+      last_non_activity_message: { content: DEMO_MESSAGES[i % DEMO_MESSAGES.length], created_at: Math.floor((now - i * 3600 * 1000) / 1000) },
+      timestamp: Math.floor((now - i * 3600 * 1000) / 1000),
+      unread_count: i % 2 === 0 ? 1 : 0,
+      assignee: null, channel: inbox.channel_type,
+      created_at: Math.floor((now - i * 86400 * 1000) / 1000),
+      updated_at: Math.floor((now - i * 3600 * 1000) / 1000),
+    };
+  });
 };
 
 const proxy = async (chatwoot_url: string, chatwoot_token: string, path: string, body?: any, method?: string) => {
@@ -212,6 +216,17 @@ export const chatwoot = {
   },
 
   async sendMessage(url: string, token: string, conversationId: number, content: string) {
+    if (isDemoChatwoot(token)) {
+      return {
+        id: Date.now(),
+        conversation_id: conversationId,
+        content,
+        message_type: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        sender: { id: 1, name: 'Luca Demo', email: 'demo@car.app' },
+        content_type: 'text',
+      };
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`, {
       content,
@@ -222,23 +237,27 @@ export const chatwoot = {
 
   // PATCH status: open | resolved | pending | snoozed
   async updateStatus(url: string, token: string, conversationId: number, status: string, extra?: object) {
+    if (isDemoChatwoot(token)) return { id: conversationId, status, ...extra };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}`, { status, ...extra }, 'PATCH');
   },
 
   // PATCH priority: urgent | high | medium | low | none
   async updatePriority(url: string, token: string, conversationId: number, priority: string) {
+    if (isDemoChatwoot(token)) return { id: conversationId, priority };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}`, { priority }, 'PATCH');
   },
 
   async markAsUnread(url: string, token: string, conversationId: number) {
+    if (isDemoChatwoot(token)) return { id: conversationId, unread_count: 1 };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/unread`, {}, 'POST').catch(() => null);
   },
 
   // Mark conversation as read — tries update_last_seen (v3+), falls back to /read (v2)
   async markAsRead(url: string, token: string, conversationId: number) {
+    if (isDemoChatwoot(token)) return { id: conversationId, unread_count: 0 };
     const accountId = await chatwoot.getAccountId(url, token);
     const agentLastSeenAt = Math.floor(Date.now() / 1000);
     try {
@@ -251,12 +270,14 @@ export const chatwoot = {
 
   // POST labels
   async assignLabel(url: string, token: string, conversationId: number, labels: string[]) {
+    if (isDemoChatwoot(token)) return { id: conversationId, labels };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}/labels`, { labels });
   },
 
   // DELETE conversation
   async deleteConversation(url: string, token: string, conversationId: number) {
+    if (isDemoChatwoot(token)) return { id: conversationId, deleted: true };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/conversations/${conversationId}`, undefined, 'DELETE');
   },
@@ -271,6 +292,7 @@ export const chatwoot = {
 
   // POST inbox
   async createInbox(url: string, token: string, payload: any) {
+    if (isDemoChatwoot(token)) return { id: Date.now(), ...payload };
     const accountId = await chatwoot.getAccountId(url, token);
     const data = await proxy(url, token, `/api/v1/accounts/${accountId}/inboxes`, payload, 'POST');
     return data?.payload || data;
@@ -278,12 +300,14 @@ export const chatwoot = {
 
   // DELETE inbox
   async deleteInbox(url: string, token: string, inboxId: number) {
+    if (isDemoChatwoot(token)) return { id: inboxId, deleted: true };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/inboxes/${inboxId}`, undefined, 'DELETE');
   },
 
   // GET contacts
   async getContacts(url: string, token: string, page = 1) {
+    if (isDemoChatwoot(token)) return { payload: DEMO_CONTACTS, meta: { count: DEMO_CONTACTS.length, current_page: page } };
     const accountId = await chatwoot.getAccountId(url, token);
     const data = await proxy(url, token, `/api/v1/accounts/${accountId}/contacts?page=${page}`);
     return data || {};
@@ -291,6 +315,10 @@ export const chatwoot = {
 
   // GET search contacts
   async searchContacts(url: string, token: string, query: string, page = 1) {
+    if (isDemoChatwoot(token)) {
+      const q = query.toLowerCase();
+      return { payload: DEMO_CONTACTS.filter(c => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)), meta: { current_page: page } };
+    }
     const accountId = await chatwoot.getAccountId(url, token);
     const data = await proxy(url, token, `/api/v1/accounts/${accountId}/contacts/search?q=${encodeURIComponent(query)}&page=${page}`);
     return data || {};
@@ -298,6 +326,7 @@ export const chatwoot = {
 
   // GET contact conversations
   async getContactConversations(url: string, token: string, contactId: number) {
+    if (isDemoChatwoot(token)) return buildDemoConversations('all').filter(c => c.contact.id === contactId);
     const accountId = await chatwoot.getAccountId(url, token);
     const data = await proxy(url, token, `/api/v1/accounts/${accountId}/contacts/${contactId}/conversations`);
     return data?.payload || data || [];
@@ -305,8 +334,8 @@ export const chatwoot = {
 
   // PUT contact update
   async updateContact(url: string, token: string, contactId: number, payload: any) {
+    if (isDemoChatwoot(token)) return { id: contactId, ...payload };
     const accountId = await chatwoot.getAccountId(url, token);
     return proxy(url, token, `/api/v1/accounts/${accountId}/contacts/${contactId}`, payload, 'PUT');
   },
 };
-

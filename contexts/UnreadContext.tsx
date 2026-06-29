@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { chatwoot } from '../services/chatwoot';
 import { metaAds } from '../services/metaAds';
 import { ecommerce } from '../services/ecommerce';
+import { isDemoChatwoot } from '../services/demoData';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,8 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isFirstUnreadFetch.current = true;
       setCommentsLoading(true);
       setUnreadLoading(true);
-      setChatwootAvailable(isChatwootConfigured(profile) ? null : false);
+      const isDemoMessaging = isDemoChatwoot(profile?.chatwoot_token);
+      setChatwootAvailable(isChatwootConfigured(profile) ? (isDemoMessaging ? true : null) : false);
     } else {
       setUnreadCount(0);
       setPendingCommentsCount(0);
@@ -106,17 +108,18 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (document.visibilityState !== 'visible') {
       return;
     }
-    const isMensajeria = window.location.hash.toLowerCase().startsWith('#/mensajeria');
-    if (isMensajeria) {
-      setUnreadLoading(false);
-      return;
-    }
     const url = profile?.chatwoot_url;
     const token = profile?.chatwoot_token;
     if (!isChatwootConfigured(profile)) {
       setUnreadLoading(false);
       setUnreadCount(0);
       setChatwootAvailable(false);
+      return;
+    }
+    const isDemoMessaging = isDemoChatwoot(token);
+    const isMensajeria = window.location.hash.toLowerCase().startsWith('#/mensajeria');
+    if (isMensajeria && !isDemoMessaging) {
+      setUnreadLoading(false);
       return;
     }
 
@@ -241,6 +244,10 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const url = profile?.chatwoot_url;
     const token = profile?.chatwoot_token;
     if (!isChatwootConfigured(profile)) return;
+    if (isDemoChatwoot(token)) {
+      setChatwootAvailable(true);
+      return;
+    }
 
     let ws: WebSocket | null = null;
     let pingInterval: any = null;
@@ -320,6 +327,9 @@ export const UnreadProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setUnreadCount(0);
       setChatwootAvailable(false);
       return;
+    }
+    if (isDemoChatwoot(token)) {
+      setChatwootAvailable(true);
     }
 
     // Initial fetch immediately
