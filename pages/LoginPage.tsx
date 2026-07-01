@@ -7,9 +7,15 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { DEMO_SESSION_KEY, isDemoCredentials } from '../services/demoData';
 
-const toAuthEmail = (input: string) => {
+const USERNAME_EMAIL_DOMAINS = ['algoritmia.team', 'car.algoritmia.com'];
+
+const toAuthEmails = (input: string) => {
   const clean = input.trim().toLowerCase();
-  return clean.includes('@') ? clean : `${clean}@algoritmia.team`;
+  return clean.includes('@') ? [clean] : USERNAME_EMAIL_DOMAINS.map((domain) => `${clean}@${domain}`);
+};
+
+const toPrimaryAuthEmail = (input: string) => {
+  return toAuthEmails(input)[0];
 };
 
 type Mode = 'login' | 'reset';
@@ -35,17 +41,26 @@ export default function LoginPage() {
     if (!email || !password) { showToast('Completá todos los campos', 'error'); return; }
     setLoading(true);
     try {
-      if (isDemoCredentials(toAuthEmail(email), password)) {
+      const authEmails = toAuthEmails(email);
+      if (authEmails.some((authEmail) => isDemoCredentials(authEmail, password))) {
         localStorage.setItem(DEMO_SESSION_KEY, '1');
         window.dispatchEvent(new Event('car-demo-login'));
         navigate('/dashboard', { replace: true });
         return;
       }
-      const { error } = await supabase.auth.signInWithPassword({
-        email: toAuthEmail(email),
-        password,
-      });
-      if (error) throw error;
+      let lastError: any = null;
+      for (const authEmail of authEmails) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password,
+        });
+        if (!error) return;
+        lastError = error;
+        if (email.includes('@')) break;
+        const message = String(error.message || '').toLowerCase();
+        if (!message.includes('invalid')) break;
+      }
+      if (lastError) throw lastError;
     } catch (error: any) {
       showToast(error.message || 'Error al iniciar sesión', 'error');
       setLoading(false);
@@ -57,7 +72,7 @@ export default function LoginPage() {
     if (!email) { showToast('Ingresá tu email', 'error'); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(toAuthEmail(email), {
+      const { error } = await supabase.auth.resetPasswordForEmail(toPrimaryAuthEmail(email), {
         redirectTo: `${window.location.origin}/login`,
       });
       if (error) throw error;
