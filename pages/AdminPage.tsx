@@ -1604,10 +1604,15 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
         const text = savedValue(v);
         return text || null;
       };
+      const cleanTags = Array.isArray(editForm.client_tags)
+        ? editForm.client_tags.filter((tag: any) => typeof tag === 'string' && tag.trim())
+        : [];
       const corePayload: Record<string, any> = {
         business_name: clean(editForm.business_name),
+        industry: clean(editForm.industry),
         plan: clean(editForm.plan),
         active: editForm.active,
+        client_tags: cleanTags,
         meta_account_id: clean(editForm.meta_account_id),
         ig_business_id: clean(editForm.ig_business_id),
         ig_username: clean(editForm.ig_username),
