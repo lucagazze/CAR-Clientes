@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { supabase, supabaseAdmin } from "../services/supabase";
+import { callAdminUsersApi, supabase, supabaseAdmin } from "../services/supabase";
 import { metaAds } from "../services/metaAds";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../components/Toast";
@@ -250,6 +250,8 @@ export default function AdminPage() {
   const [showForm, setShowForm] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [clientContextMenu, setClientContextMenu] = useState<{ x: number; y: number; client: ClientRow } | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
   const [form, setForm] = useState(blank());
   const [metaAccounts, setMetaAccounts] = useState<any[]>([]);
   const [loadingMetaAccounts, setLoadingMetaAccounts] = useState(false);
@@ -771,12 +773,11 @@ export default function AdminPage() {
     if (!supabaseAdmin) return;
     setAssociatingUser(userId);
     try {
-      const { error } = await supabase.from('car_business_accounts').insert({
-        business_id: clientId,
-        user_id: userId,
+      await callAdminUsersApi('associateUserToBusiness', {
+        businessId: clientId,
+        userId,
         email: email
       });
-      if (error) throw error;
       showToast('Usuario asociado con éxito ✓', 'success');
       load(); // Reload to refresh unlinked list and clients
     } catch (err: any) {
@@ -848,24 +849,14 @@ export default function AdminPage() {
     }
     setCreating(true);
     try {
-      const { data: auth, error: authErr } =
-        await supabaseAdmin.auth.admin.createUser({
-          email: toAuthEmail(form.email),
-          password: form.password,
-          email_confirm: true,
-        });
-      if (authErr) throw authErr;
-
-      const { error: dbErr } = await supabase.from("car_clients").insert({
-        user_id: auth.user.id,
-        business_name: form.business_name,
+      await callAdminUsersApi('createBusiness', {
+        email: toAuthEmail(form.email),
+        password: form.password,
+        businessName: form.business_name,
         industry: form.industry || null,
         plan: form.plan,
-        website_url: form.website_url || null,
-        active: true,
-        is_admin: false,
+        websiteUrl: form.website_url || null,
       });
-      if (dbErr) throw dbErr;
 
       showToast(`✅ "${form.business_name}" creado`, "success");
       setShowForm(false);
@@ -923,29 +914,19 @@ export default function AdminPage() {
       const authEmail = toAuthEmail(newAccEmail);
 
       if (newAccGoogleOnly) {
-        // Pre-invitation: insert into car_business_accounts with user_id = null
-        // When the user signs in with Google OAuth for the first time, the system
-        // automatically links their user_id via the email fallback in db.profile.getByUserId
-        const { error: dbErr } = await supabase.from('car_business_accounts').insert({
-          business_id: clientId,
-          user_id: null,
+        await callAdminUsersApi('createBusinessAccount', {
+          businessId: clientId,
           email: authEmail,
+          googleOnly: true,
         });
-        if (dbErr) throw dbErr;
         showToast('Invitación Google registrada ✓', 'success');
       } else {
-        const { data: auth, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+        await callAdminUsersApi('createBusinessAccount', {
+          businessId: clientId,
           email: authEmail,
           password: newAccPwd,
-          email_confirm: true,
+          googleOnly: false,
         });
-        if (authErr) throw authErr;
-        const { error: dbErr } = await supabase.from('car_business_accounts').insert({
-          business_id: clientId,
-          user_id: auth.user.id,
-          email: authEmail,
-        });
-        if (dbErr) throw dbErr;
         showToast('Cuenta creada ✓', 'success');
       }
 
@@ -964,18 +945,13 @@ export default function AdminPage() {
     const accKey = acc.user_id ?? acc.email;
     setDeletingAccountKey(accKey);
     try {
-      if (acc.source === 'car_clients') {
-        const { error } = await supabase.from('car_clients').update({ user_id: null }).eq('id', clientId);
-        if (error) throw error;
-        load();
-      } else {
-        const { error } = await supabase.from('car_business_accounts').delete().eq('id', acc.id!);
-        if (error) throw error;
-      }
-      // Only delete from auth if the user has actually signed up (user_id is set)
-      if (acc.user_id) {
-        await supabaseAdmin.auth.admin.deleteUser(acc.user_id);
-      }
+      await callAdminUsersApi('deleteBusinessAccount', {
+        source: acc.source,
+        accountId: acc.id,
+        userId: acc.user_id,
+        clientId,
+      });
+      if (acc.source === 'car_clients') load();
       setBusinessAccounts((p) => p.filter((a) => (a.user_id ?? a.email) !== accKey));
       setConfirmDeleteKey(null);
       showToast('Cuenta eliminada ✓', 'success');
@@ -983,6 +959,23 @@ export default function AdminPage() {
       showToast('Error: ' + err.message, 'error');
     } finally {
       setDeletingAccountKey(null);
+    }
+  };
+
+  const handleDeleteClient = async (client: ClientRow) => {
+    if (!window.confirm(`¿Eliminar el negocio "${client.business_name}" y sus accesos? Esta acción no se puede deshacer.`)) return;
+    setDeletingClientId(client.id);
+    try {
+      await callAdminUsersApi('deleteBusiness', { clientId: client.id, deleteUsers: true });
+      if (viewAsProfile?.id === client.id) setViewAsProfile(null);
+      if (editingClient?.id === client.id) closeEdit();
+      setClients(prev => prev.filter(c => c.id !== client.id));
+      showToast('Negocio eliminado ✓', 'success');
+    } catch (err: any) {
+      showToast('Error al eliminar negocio: ' + (err.message || String(err)), 'error');
+    } finally {
+      setDeletingClientId(null);
+      setClientContextMenu(null);
     }
   };
 
@@ -1661,6 +1654,44 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
 
   return (
     <div className="space-y-6">
+      {clientContextMenu && (
+        <>
+          <button className="fixed inset-0 z-[70] cursor-default" onClick={() => setClientContextMenu(null)} aria-label="Cerrar menú" />
+          <div
+            className="fixed z-[80] min-w-[210px] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl shadow-black/15 p-1.5 animate-in fade-in zoom-in-95 duration-100"
+            style={{ left: clientContextMenu.x, top: clientContextMenu.y }}
+          >
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[12px] font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              onClick={() => { openEdit(clientContextMenu.client); setClientContextMenu(null); }}
+            >
+              <Pencil className="w-3.5 h-3.5" /> Editar negocio
+            </button>
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[12px] font-bold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+              onClick={() => {
+                setViewAsProfile({ ...clientContextMenu.client, is_admin: false } as any);
+                setClientContextMenu(null);
+                navigate("/dashboard");
+              }}
+            >
+              <MonitorPlay className="w-3.5 h-3.5" /> Ver como cliente
+            </button>
+            <button
+              type="button"
+              disabled={deletingClientId === clientContextMenu.client.id}
+              className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[12px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+              onClick={() => handleDeleteClient(clientContextMenu.client)}
+            >
+              {deletingClientId === clientContextMenu.client.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              Eliminar negocio
+            </button>
+          </div>
+        </>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -2060,6 +2091,14 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                 <div
                   key={c.id}
                   onClick={() => openEdit(c)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setClientContextMenu({
+                      x: Math.min(e.clientX, window.innerWidth - 230),
+                      y: Math.min(e.clientY, window.innerHeight - 150),
+                      client: c,
+                    });
+                  }}
                   className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 rounded-xl px-5 py-4 cursor-pointer hover:border-violet-300 dark:hover:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/[0.02] dark:hover:shadow-none transition-all flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3 min-w-0">

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { supabase, supabaseAdmin } from '../services/supabase';
+import { callAdminUsersApi, supabase, supabaseAdmin } from '../services/supabase';
 import {
   Users, Loader2, Search, RefreshCw, Building2, X,
   UserCheck, UserX, ChevronDown, ChevronUp, Link2,
@@ -81,6 +81,7 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('date_desc');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; user: UserRow } | null>(null);
 
   // Delete modal
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -219,15 +220,7 @@ export default function AdminUsersPage() {
     if (!supabaseAdmin || !confirmDeleteId) return;
     setDeleting(true);
     try {
-      // Remove from business accounts (regular client)
-      const { error: err1 } = await supabase.from('car_business_accounts').delete().eq('user_id', confirmDeleteId);
-      if (err1) throw err1;
-      // Remove as owner (regular client)
-      const { error: err2 } = await supabase.from('car_clients').update({ user_id: null }).eq('user_id', confirmDeleteId);
-      if (err2) throw err2;
-      // Delete from auth (remains admin client)
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(confirmDeleteId);
-      if (error) throw error;
+      await callAdminUsersApi('deleteUser', { userId: confirmDeleteId });
       setUsers(p => p.filter(u => u.id !== confirmDeleteId));
       setConfirmDeleteId(null);
       showToast('Usuario eliminado ✓');
@@ -243,11 +236,7 @@ export default function AdminUsersPage() {
     if (!confirmDeletePendingId) return;
     setDeletingPending(true);
     try {
-      const { error } = await supabase
-        .from('car_business_accounts')
-        .delete()
-        .eq('id', confirmDeletePendingId);
-      if (error) throw error;
+      await callAdminUsersApi('deleteInvitation', { invitationId: confirmDeletePendingId });
       setPendingInvites(p => p.filter(i => i.id !== confirmDeletePendingId));
       setConfirmDeletePendingId(null);
       showToast('Pre-invitación eliminada ✓');
@@ -267,13 +256,12 @@ export default function AdminUsersPage() {
       const user = users.find(u => u.id === acceptUserId);
       if (!user) throw new Error('Usuario no encontrado');
 
-      // Insert in car_business_accounts (linking by user_id AND email for Google fallback) using regular client (RLS)
-      const { error } = await supabase.from('car_business_accounts').insert({
-        business_id: acceptBizId,
+      await callAdminUsersApi('associateUserToBusiness', {
+        businessId: acceptBizId,
         user_id: acceptUserId,
+        userId: acceptUserId,
         email: user.email,
       });
-      if (error) throw error;
 
       showToast('Usuario asociado al negocio ✓');
       setAcceptUserId(null);
@@ -294,25 +282,10 @@ export default function AdminUsersPage() {
     try {
       const email = newEmail.trim().toLowerCase();
 
-      // Check if email already has an entry in business accounts for this biz (regular client)
-      const { data: existing, error: errExist } = await supabase
-        .from('car_business_accounts')
-        .select('id')
-        .eq('email', email)
-        .eq('business_id', newBizId)
-        .maybeSingle();
-
-      if (errExist) throw errExist;
-      if (existing) throw new Error('Ese email ya está asociado a este negocio');
-
-      // Insert pre-invitation with user_id = null (regular client)
-      // When user logs in with Google, the auth context matches by email
-      const { error } = await supabase.from('car_business_accounts').insert({
-        business_id: newBizId,
-        user_id: null,
+      await callAdminUsersApi('createInvitation', {
+        businessId: newBizId,
         email,
       });
-      if (error) throw error;
 
       showToast('Pre-invitación registrada ✓ — cuando ingrese con Google tendrá acceso automático');
       setNewEmail('');
@@ -351,20 +324,11 @@ export default function AdminUsersPage() {
         email,
         password: createPassword,
         email_confirm: true,
+        businessId: createBizId || undefined,
       });
       if (createErr) throw createErr;
       const newUserId = createdData?.user?.id;
       if (!newUserId) throw new Error('No se obtuvo el ID del usuario creado');
-
-      // 2. If a business was selected, associate the new user
-      if (createBizId) {
-        const { error: assocErr } = await supabase.from('car_business_accounts').insert({
-          business_id: createBizId,
-          user_id: newUserId,
-          email,
-        });
-        if (assocErr) throw assocErr;
-      }
 
       const displayName = createEmail.trim().includes('@') ? email : createEmail.trim();
       showToast(`Usuario "${displayName}" creado ✓`);
@@ -424,6 +388,37 @@ export default function AdminUsersPage() {
         <div className={`fixed top-16 right-5 sm:top-6 sm:right-6 z-[9999] px-4 py-3 rounded-2xl shadow-xl text-[13px] font-bold text-white animate-in slide-in-from-top-2 duration-300 ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
           {toast.msg}
         </div>
+      )}
+
+      {ctxMenu && (
+        <>
+          <button className="fixed inset-0 z-[190] cursor-default" onClick={() => setCtxMenu(null)} aria-label="Cerrar menú" />
+          <div
+            className="fixed z-[210] min-w-[190px] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl shadow-black/15 p-1.5 animate-in fade-in zoom-in-95 duration-100"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          >
+            <button
+              className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[12px] font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              onClick={() => { setExpandedId(ctxMenu.user.id); setCtxMenu(null); }}
+            >
+              <Eye className="w-3.5 h-3.5" /> Ver detalle
+            </button>
+            {ctxMenu.user.businesses.length === 0 && (
+              <button
+                className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[12px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                onClick={() => { setAcceptUserId(ctxMenu.user.id); setAcceptBizId(''); setCtxMenu(null); }}
+              >
+                <UserCheck className="w-3.5 h-3.5" /> Asociar negocio
+              </button>
+            )}
+            <button
+              className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[12px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+              onClick={() => { setConfirmDeleteId(ctxMenu.user.id); setCtxMenu(null); }}
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Eliminar usuario
+            </button>
+          </div>
+        </>
       )}
 
       {/* Delete confirmation modal */}
@@ -823,6 +818,10 @@ export default function AdminUsersPage() {
                     onDelete={() => setConfirmDeleteId(user.id)}
                     onAccept={() => { setAcceptUserId(user.id); setAcceptBizId(''); }}
                     onChangePassword={handleChangePassword}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 150), user });
+                    }}
                     showAccept
                   />
                 ))}
@@ -847,6 +846,10 @@ export default function AdminUsersPage() {
                     onDelete={() => setConfirmDeleteId(user.id)}
                     onAccept={() => { setAcceptUserId(user.id); setAcceptBizId(''); }}
                     onChangePassword={handleChangePassword}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 150), user });
+                    }}
                     showAccept={false}
                   />
                 ))}
@@ -870,6 +873,7 @@ export default function AdminUsersPage() {
 // ─── UserRowItem sub-component ────────────────────────────────────────────────
 function UserRowItem({
   user, isLast, expanded, onToggle, onDelete, onAccept, onChangePassword, showAccept,
+  onContextMenu,
 }: {
   user: UserRow;
   isLast: boolean;
@@ -878,6 +882,7 @@ function UserRowItem({
   onDelete: () => void;
   onAccept: () => void;
   onChangePassword: (userId: string, password: string) => Promise<string | null>;
+  onContextMenu: (e: React.MouseEvent) => void;
   showAccept: boolean;
 }) {
   const [newPwd, setNewPwd] = useState('');
@@ -904,7 +909,10 @@ function UserRowItem({
 
   return (
     <>
-      <div className={`flex items-center gap-3 px-4 py-3 transition-colors group ${!isLast ? 'border-b border-zinc-100 dark:border-zinc-800' : ''}`}>
+      <div
+        onContextMenu={onContextMenu}
+        className={`flex items-center gap-3 px-4 py-3 transition-colors group ${!isLast ? 'border-b border-zinc-100 dark:border-zinc-800' : ''}`}
+      >
         {/* Avatar */}
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-black flex-shrink-0 shadow-sm shadow-violet-500/20 cursor-pointer" onClick={onToggle}>
           {user.email.slice(0, 2).toUpperCase()}

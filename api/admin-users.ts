@@ -33,6 +33,14 @@ function isPrivateIp(ip: string): boolean {
   return false;
 }
 
+async function deleteAuthUserIfPresent(supabaseAdmin: any, userId?: string | null) {
+  if (!userId) return;
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (error && !String(error.message || '').toLowerCase().includes('not found')) {
+    throw error;
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -193,7 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(data);
       }
       case 'createUser': {
-        const { email, password } = payload || {};
+        const { email, password, businessId } = payload || {};
         if (!email || !password) return res.status(400).json({ error: 'Missing email or password' });
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
           email,
@@ -201,6 +209,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           email_confirm: true
         });
         if (error) throw error;
+        if (businessId && data?.user?.id) {
+          const { error: linkError } = await supabaseAdmin.from('car_business_accounts').insert({
+            business_id: businessId,
+            user_id: data.user.id,
+            email,
+          });
+          if (linkError) throw linkError;
+        }
         return res.status(200).json(data);
       }
       case 'updateUserById': {
@@ -213,9 +229,158 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'deleteUser': {
         const { userId } = payload || {};
         if (!userId) return res.status(400).json({ error: 'Missing userId' });
+        await supabaseAdmin.from('car_business_accounts').delete().eq('user_id', userId);
+        await supabaseAdmin.from('car_clients').update({ user_id: null }).eq('user_id', userId);
         const { data, error } = await supabaseAdmin.auth.admin.deleteUser(userId);
         if (error) throw error;
         return res.status(200).json(data);
+      }
+      case 'associateUserToBusiness': {
+        const { userId, email, businessId } = payload || {};
+        if (!userId || !email || !businessId) return res.status(400).json({ error: 'Missing userId, email or businessId' });
+        const { data: existing, error: existsError } = await supabaseAdmin
+          .from('car_business_accounts')
+          .select('id')
+          .eq('business_id', businessId)
+          .or(`user_id.eq.${userId},email.eq.${email}`)
+          .maybeSingle();
+        if (existsError) throw existsError;
+        if (existing) return res.status(200).json({ linked: true, existing: true });
+        const { data, error } = await supabaseAdmin.from('car_business_accounts').insert({
+          business_id: businessId,
+          user_id: userId,
+          email,
+        }).select().single();
+        if (error) throw error;
+        return res.status(200).json({ linked: true, data });
+      }
+      case 'createInvitation': {
+        const { email, businessId } = payload || {};
+        if (!email || !businessId) return res.status(400).json({ error: 'Missing email or businessId' });
+        const { data: existing, error: existsError } = await supabaseAdmin
+          .from('car_business_accounts')
+          .select('id')
+          .eq('email', email)
+          .eq('business_id', businessId)
+          .maybeSingle();
+        if (existsError) throw existsError;
+        if (existing) return res.status(409).json({ error: 'Ese email ya está asociado a este negocio' });
+        const { data, error } = await supabaseAdmin.from('car_business_accounts').insert({
+          business_id: businessId,
+          user_id: null,
+          email,
+        }).select().single();
+        if (error) throw error;
+        return res.status(200).json({ data });
+      }
+      case 'deleteInvitation': {
+        const { invitationId } = payload || {};
+        if (!invitationId) return res.status(400).json({ error: 'Missing invitationId' });
+        const { error } = await supabaseAdmin.from('car_business_accounts').delete().eq('id', invitationId).is('user_id', null);
+        if (error) throw error;
+        return res.status(200).json({ deleted: true });
+      }
+      case 'createBusiness': {
+        const { email, password, businessName, industry, plan, websiteUrl } = payload || {};
+        if (!email || !password || !businessName) return res.status(400).json({ error: 'Missing email, password or businessName' });
+        const { data: auth, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+        });
+        if (authErr) throw authErr;
+        const { data, error } = await supabaseAdmin.from('car_clients').insert({
+          user_id: auth.user.id,
+          business_name: businessName,
+          industry: industry || null,
+          plan: plan || 'CAR Growth',
+          website_url: websiteUrl || null,
+          active: true,
+          is_admin: false,
+        }).select().single();
+        if (error) {
+          await deleteAuthUserIfPresent(supabaseAdmin, auth.user.id);
+          throw error;
+        }
+        return res.status(200).json({ client: data, user: auth.user });
+      }
+      case 'deleteBusiness': {
+        const { clientId, deleteUsers = true } = payload || {};
+        if (!clientId) return res.status(400).json({ error: 'Missing clientId' });
+        const { data: client, error: clientErr } = await supabaseAdmin
+          .from('car_clients')
+          .select('id, user_id, is_admin')
+          .eq('id', clientId)
+          .maybeSingle();
+        if (clientErr) throw clientErr;
+        if (!client) return res.status(404).json({ error: 'Negocio no encontrado' });
+        if (client.is_admin) return res.status(400).json({ error: 'No se puede eliminar el negocio administrador' });
+
+        const { data: accounts, error: accountsErr } = await supabaseAdmin
+          .from('car_business_accounts')
+          .select('id, user_id')
+          .eq('business_id', clientId);
+        if (accountsErr) throw accountsErr;
+
+        const userIds = new Set<string>();
+        if (client.user_id) userIds.add(client.user_id);
+        for (const account of accounts || []) {
+          if (account.user_id) userIds.add(account.user_id);
+        }
+
+        const { error: assocDeleteErr } = await supabaseAdmin.from('car_business_accounts').delete().eq('business_id', clientId);
+        if (assocDeleteErr) throw assocDeleteErr;
+        const { error: clientDeleteErr } = await supabaseAdmin.from('car_clients').delete().eq('id', clientId);
+        if (clientDeleteErr) throw clientDeleteErr;
+
+        if (deleteUsers) {
+          for (const userId of userIds) await deleteAuthUserIfPresent(supabaseAdmin, userId);
+        }
+        return res.status(200).json({ deleted: true, deletedUsers: deleteUsers ? userIds.size : 0 });
+      }
+      case 'createBusinessAccount': {
+        const { businessId, email, password, googleOnly } = payload || {};
+        if (!businessId || !email) return res.status(400).json({ error: 'Missing businessId or email' });
+        if (googleOnly) {
+          const { data, error } = await supabaseAdmin.from('car_business_accounts').insert({
+            business_id: businessId,
+            user_id: null,
+            email,
+          }).select().single();
+          if (error) throw error;
+          return res.status(200).json({ account: data });
+        }
+        if (!password) return res.status(400).json({ error: 'Missing password' });
+        const { data: auth, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+        });
+        if (authErr) throw authErr;
+        const { data, error } = await supabaseAdmin.from('car_business_accounts').insert({
+          business_id: businessId,
+          user_id: auth.user.id,
+          email,
+        }).select().single();
+        if (error) {
+          await deleteAuthUserIfPresent(supabaseAdmin, auth.user.id);
+          throw error;
+        }
+        return res.status(200).json({ account: data, user: auth.user });
+      }
+      case 'deleteBusinessAccount': {
+        const { source, accountId, userId, clientId } = payload || {};
+        if (!source || !clientId) return res.status(400).json({ error: 'Missing source or clientId' });
+        if (source === 'car_clients') {
+          const { error } = await supabaseAdmin.from('car_clients').update({ user_id: null }).eq('id', clientId);
+          if (error) throw error;
+        } else {
+          if (!accountId) return res.status(400).json({ error: 'Missing accountId' });
+          const { error } = await supabaseAdmin.from('car_business_accounts').delete().eq('id', accountId);
+          if (error) throw error;
+        }
+        await deleteAuthUserIfPresent(supabaseAdmin, userId);
+        return res.status(200).json({ deleted: true });
       }
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });

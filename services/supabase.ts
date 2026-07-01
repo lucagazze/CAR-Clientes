@@ -15,7 +15,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // Custom helper to call the secure backend API
-async function callAdminUsersApi(action: string, payload?: any) {
+export async function callAdminUsersApi(action: string, payload?: any) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('No active session found. Please log in.');
 
