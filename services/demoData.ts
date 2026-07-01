@@ -32,6 +32,9 @@ export const isDemoIG = (id?: string | null) => !!id && id === DEMO_IG_ID;
 export const isDemoFBPage = (id?: string | null) => !!id && id === DEMO_FB_PAGE_ID;
 export const isDemoProfile = (profile?: any | null) =>
   Boolean(profile && (
+    profile.id === DEMO_CLIENT_ID ||
+    profile.user_id === DEMO_USER_ID ||
+    isDemoEmail(profile.email) ||
     profile.plan === 'demo' ||
     isDemoShopify(profile.shopify_domain) ||
     isDemoMeta(profile.meta_account_id) ||
@@ -71,6 +74,17 @@ export const withDemoProfileDefaults = <T extends Record<string, any> | null>(
     ig_username: 'demostore',
     website_url: profile.website_url || 'https://demostore.example.com',
     business_description: profile.business_description || 'Tienda demo con datos simulados para presentar C.A.R.',
+    scraped_content: profile.scraped_content || 'Cerebro demo entrenado con catalogo, tienda online, politicas comerciales, metricas de ecommerce, Meta Ads, email marketing y mensajeria.',
+    instagram_context: profile.instagram_context || 'Cuenta demo de Instagram y Facebook con publicaciones, comentarios y anuncios activos para responder consultas de clientes.',
+    custom_instructions: profile.custom_instructions || JSON.stringify({
+      tone: 'Claro, cercano y comercial',
+      rules: [
+        'Responder con informacion concreta del catalogo demo.',
+        'Priorizar conversion, confianza y seguimiento por mensaje.',
+        'No inventar stock, precios ni promociones fuera de los datos disponibles.'
+      ],
+    }),
+    brain_updated_at: profile.brain_updated_at || now,
     client_tags: ['tienda_online', 'meta_ads', 'email_marketing', 'mensajeria', 'demo'],
     connection_statuses: {
       ...(profile.connection_statuses || {}),
