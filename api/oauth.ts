@@ -601,6 +601,19 @@ async function fetchAllMetaAdAccounts(token: string) {
   return accounts;
 }
 
+async function fetchAllMetaPages(token: string) {
+  const pages: any[] = [];
+  let url: string | null = `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture{url},instagram_business_account{id,username,name,profile_picture_url}&limit=100&access_token=${encodeURIComponent(token)}`;
+  while (url) {
+    const response = await fetch(url);
+    const json = await response.json() as { data?: any[]; paging?: { next?: string }; error?: { message?: string } };
+    if (json.error) throw new Error(json.error.message || 'Meta rechazó el token de agencia');
+    if (Array.isArray(json.data)) pages.push(...json.data);
+    url = json.paging?.next || null;
+  }
+  return pages;
+}
+
 async function handleAdminMetaAccounts(req: VercelRequest, res: VercelResponse) {
   if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Server not configured' });
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -612,6 +625,22 @@ async function handleAdminMetaAccounts(req: VercelRequest, res: VercelResponse) 
     return res.status(200).json({ accounts });
   } catch (err: any) {
     const message = err?.message || 'No se pudieron cargar las cuentas de Meta.';
+    const status = /admin|permiso/i.test(message) ? 403 : /sesión/i.test(message) ? 401 : 400;
+    return res.status(status).json({ error: message });
+  }
+}
+
+async function handleAdminMetaPages(req: VercelRequest, res: VercelResponse) {
+  if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Server not configured' });
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  try {
+    await assertAdminUser(supabase, req);
+    const token = await getAgencyMetaToken(supabase);
+    if (!token) return res.status(404).json({ error: 'No hay token de agencia de Meta configurado.' });
+    const pages = await fetchAllMetaPages(token);
+    return res.status(200).json({ pages });
+  } catch (err: any) {
+    const message = err?.message || 'No se pudieron cargar las páginas de Meta.';
     const status = /admin|permiso/i.test(message) ? 403 : /sesión/i.test(message) ? 401 : 400;
     return res.status(status).json({ error: message });
   }
@@ -3658,6 +3687,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (action.startsWith('tiendanube')) return handleTiendanube(req, res);
   if (action.startsWith('woocommerce')) return handleWooCommerce(req, res);
   if (action === 'admin-meta-accounts') return handleAdminMetaAccounts(req, res);
+  if (action === 'admin-meta-pages') return handleAdminMetaPages(req, res);
   if (action === 'admin-meta-account') return handleAdminMetaAccount(req, res);
   if (action === 'meta-accounts') return handleMetaAccounts(req, res);
   if (action === 'meta-pages') return handleMetaPages(req, res);

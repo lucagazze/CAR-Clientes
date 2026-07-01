@@ -139,6 +139,11 @@ const toAuthEmail = (input: string) => {
   return clean.includes('@') ? clean : `${clean}@car.algoritmia.com`;
 };
 
+const savedValue = (value: any) => {
+  const text = value == null ? "" : String(value).trim();
+  return ["", "null", "undefined", "none"].includes(text.toLowerCase()) ? "" : text;
+};
+
 const inputCls =
   "w-full h-10 rounded-[9px] border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 px-3.5 text-[13px] text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all";
 const labelCls =
@@ -511,12 +516,35 @@ export default function AdminPage() {
   const loadDiscoveredIgAccounts = async (quiet = true) => {
     setLoadingIgAccounts(true);
     try {
-      const res = await metaAds.getDiscoverableInstagramAccounts();
-      setDiscoveredIgAccounts(res?.data || []);
-      if (!quiet) showToast("¡Cuentas de Instagram sincronizadas! ✓", "success");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Sesión inválida');
+      const response = await fetch('/api/oauth?action=admin-meta-pages', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || 'No se pudieron cargar cuentas de Instagram.');
+      const accounts = (json.pages || [])
+        .filter((page: any) => page.instagram_business_account)
+        .map((page: any) => ({
+          pageName: page.name,
+          pageId: page.id,
+          pageAccessToken: page.access_token,
+          igId: page.instagram_business_account.id,
+          username: page.instagram_business_account.username,
+          name: page.instagram_business_account.name,
+          profilePictureUrl: page.instagram_business_account.profile_picture_url,
+        }));
+      setDiscoveredIgAccounts(accounts);
+      if (!quiet) showToast(`Cuentas de Instagram disponibles: ${accounts.length}`, 'success');
     } catch (err: any) {
-      if (!quiet) {
-        showToast("Error al sincronizar Instagram: " + (err.message || "token inválido"), "error");
+      try {
+        const fallback = await metaAds.getDiscoverableInstagramAccounts();
+        setDiscoveredIgAccounts(fallback?.data || []);
+        if (!quiet) showToast(`Cuentas de Instagram disponibles: ${(fallback?.data || []).length}`, 'success');
+      } catch {
+        setDiscoveredIgAccounts([]);
+        if (!quiet) showToast("Error al sincronizar Instagram: " + (err.message || "token inválido"), "error");
       }
     } finally {
       setLoadingIgAccounts(false);
@@ -526,12 +554,31 @@ export default function AdminPage() {
   const loadDiscoveredFbPages = async (quiet = true) => {
     setLoadingFbPages(true);
     try {
-      const res = await metaAds.getDiscoverableFacebookPages();
-      setDiscoveredFbPages(res?.data || []);
-      if (!quiet) showToast("¡Páginas de Facebook sincronizadas! ✓", "success");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Sesión inválida');
+      const response = await fetch('/api/oauth?action=admin-meta-pages', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || 'No se pudieron cargar páginas de Facebook.');
+      const pages = (json.pages || []).map((page: any) => ({
+        id: page.id,
+        name: page.name,
+        access_token: page.access_token,
+        pictureUrl: page.picture?.data?.url,
+        instagram_business_account: page.instagram_business_account,
+      }));
+      setDiscoveredFbPages(pages);
+      if (!quiet) showToast(`Páginas de Facebook disponibles: ${pages.length}`, 'success');
     } catch (err: any) {
-      if (!quiet) {
-        showToast("Error al sincronizar Facebook: " + (err.message || "token inválido"), "error");
+      try {
+        const fallback = await metaAds.getDiscoverableFacebookPages();
+        setDiscoveredFbPages(fallback?.data || []);
+        if (!quiet) showToast(`Páginas de Facebook disponibles: ${(fallback?.data || []).length}`, 'success');
+      } catch {
+        setDiscoveredFbPages([]);
+        if (!quiet) showToast("Error al sincronizar Facebook: " + (err.message || "token inválido"), "error");
       }
     } finally {
       setLoadingFbPages(false);
@@ -680,6 +727,27 @@ export default function AdminPage() {
     handleMetaLogin(); // Same OAuth flow, but the redirect handler checks fb_pending_client_id
   };
 
+  const handleOpenClientPagesModal = async () => {
+    if (!editingClient) return;
+    setLoadingFbPages(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Sesión inválida');
+      const response = await fetch('/api/oauth?action=admin-meta-pages', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || 'No se pudieron cargar páginas de Meta.');
+      setClientPagesModal({ pages: json.pages || [], clientId: editingClient.id });
+      if (!(json.pages || []).length) showToast('No se encontraron páginas con el token de agencia.', 'warning');
+    } catch (err: any) {
+      showToast('Error al cargar páginas: ' + (err.message || 'token inválido'), 'error');
+    } finally {
+      setLoadingFbPages(false);
+    }
+  };
+
   // Save the selected page as the client's connected Facebook page
   const handleSaveClientPage = async (page: any, clientId: string) => {
     try {
@@ -692,8 +760,24 @@ export default function AdminPage() {
       };
       if (igId) { updateData.ig_business_id = igId; updateData.ig_username = igUsername; }
 
-      const { error } = await supabase.from('car_clients').update(updateData).eq('id', clientId);
-      if (error) throw error;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Sesión inválida');
+      const response = await fetch('/api/oauth?action=meta-save-selection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          clientId,
+          approveAds: false,
+          approveMessaging: true,
+          selectedPage: page,
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || 'No se pudo guardar la página.');
 
       metaAds.setClientPageToken(page.id, page.access_token);
       setClientPagesModal(null);
@@ -1011,30 +1095,30 @@ export default function AdminPage() {
 
     setActiveTab("general");
     setEditForm({
-      business_name: c.business_name || "",
-      industry: c.industry || "",
-      plan: c.plan || "",
+      business_name: savedValue(c.business_name),
+      industry: savedValue(c.industry),
+      plan: savedValue(c.plan),
       active: c.active,
-      meta_account_id: c.meta_account_id || "",
-      ig_business_id: c.ig_business_id || "",
-      ig_username: c.ig_username || "",
-      klaviyo_api_key: c.klaviyo_api_key || "",
-      chatwoot_url: c.chatwoot_url || "",
-      chatwoot_token: c.chatwoot_token || "",
-      ecommerce_platform: c.ecommerce_platform || "",
-      shopify_domain: c.shopify_domain || "",
-      shopify_access_token: c.shopify_access_token || "",
-      tiendanube_store_id: c.tiendanube_store_id || "",
-      tiendanube_access_token: c.tiendanube_access_token || "",
-      wordpress_url: c.wordpress_url || "",
-      woo_consumer_key: c.woo_consumer_key || "",
-      woo_consumer_secret: c.woo_consumer_secret || "",
+      meta_account_id: savedValue(c.meta_account_id),
+      ig_business_id: savedValue(c.ig_business_id),
+      ig_username: savedValue(c.ig_username),
+      klaviyo_api_key: savedValue(c.klaviyo_api_key),
+      chatwoot_url: savedValue(c.chatwoot_url),
+      chatwoot_token: savedValue(c.chatwoot_token),
+      ecommerce_platform: savedValue(c.ecommerce_platform),
+      shopify_domain: savedValue(c.shopify_domain),
+      shopify_access_token: savedValue(c.shopify_access_token),
+      tiendanube_store_id: savedValue(c.tiendanube_store_id),
+      tiendanube_access_token: savedValue(c.tiendanube_access_token),
+      wordpress_url: savedValue(c.wordpress_url),
+      woo_consumer_key: savedValue(c.woo_consumer_key),
+      woo_consumer_secret: savedValue(c.woo_consumer_secret),
       client_tags: c.client_tags || [],
       new_password: "",
-      fb_page_id: c.fb_page_id || "",
-      fb_page_name: c.fb_page_name || "",
-      fb_page_access_token: (c as any).fb_page_access_token || "",
-      website_url: c.website_url || "",
+      fb_page_id: savedValue(c.fb_page_id),
+      fb_page_name: savedValue(c.fb_page_name),
+      fb_page_access_token: savedValue((c as any).fb_page_access_token),
+      website_url: savedValue(c.website_url),
     });
     setStatuses({});
     setEditingClient(c);
@@ -1349,7 +1433,8 @@ setStatuses((p) => ({ ...p, facebook: "error" }));
         ig_business_id: selected.igId,
         ig_username: selected.username,
         fb_page_id: selected.pageId || p.fb_page_id || "",
-        fb_page_name: selected.pageName || p.fb_page_name || ""
+        fb_page_name: selected.pageName || p.fb_page_name || "",
+        fb_page_access_token: selected.pageAccessToken || p.fb_page_access_token || "",
       }));
     } else {
       setEditForm((p: any) => ({
@@ -1366,7 +1451,12 @@ setStatuses((p) => ({ ...p, facebook: "error" }));
       setEditForm((p: any) => ({
         ...p,
         fb_page_id: selected.id,
-        fb_page_name: selected.name
+        fb_page_name: selected.name,
+        fb_page_access_token: selected.access_token || p.fb_page_access_token || "",
+        ...(selected.instagram_business_account ? {
+          ig_business_id: selected.instagram_business_account.id || p.ig_business_id || "",
+          ig_username: selected.instagram_business_account.username || p.ig_username || "",
+        } : {}),
       }));
     } else {
       setEditForm((p: any) => ({
@@ -1510,28 +1600,32 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
     try {
       // Core fields — definitely exist in DB
       // Core fields confirmed in DB schema
+      const clean = (v: any) => {
+        const text = savedValue(v);
+        return text || null;
+      };
       const corePayload: Record<string, any> = {
-        business_name: editForm.business_name || null,
-        plan: editForm.plan || null,
+        business_name: clean(editForm.business_name),
+        plan: clean(editForm.plan),
         active: editForm.active,
-        meta_account_id: editForm.meta_account_id || null,
-        ig_business_id: editForm.ig_business_id || null,
-        ig_username: editForm.ig_username || null,
-        klaviyo_api_key: editForm.klaviyo_api_key || null,
-        chatwoot_url: editForm.chatwoot_url || null,
-        chatwoot_token: editForm.chatwoot_token || null,
-        ecommerce_platform: editForm.ecommerce_platform || null,
-        shopify_domain: editForm.shopify_domain || null,
-        shopify_access_token: editForm.shopify_access_token || null,
-        tiendanube_store_id: editForm.tiendanube_store_id || null,
-        tiendanube_access_token: editForm.tiendanube_access_token || null,
-        wordpress_url: editForm.wordpress_url || null,
-        woo_consumer_key: editForm.woo_consumer_key || null,
-        woo_consumer_secret: editForm.woo_consumer_secret || null,
-        fb_page_id: editForm.fb_page_id || null,
-        fb_page_name: editForm.fb_page_name || null,
-        fb_page_access_token: editForm.fb_page_access_token || null,
-        website_url: editForm.website_url || null,
+        meta_account_id: clean(editForm.meta_account_id),
+        ig_business_id: clean(editForm.ig_business_id),
+        ig_username: clean(editForm.ig_username),
+        klaviyo_api_key: clean(editForm.klaviyo_api_key),
+        chatwoot_url: clean(editForm.chatwoot_url),
+        chatwoot_token: clean(editForm.chatwoot_token),
+        ecommerce_platform: clean(editForm.ecommerce_platform),
+        shopify_domain: clean(editForm.shopify_domain),
+        shopify_access_token: clean(editForm.shopify_access_token),
+        tiendanube_store_id: clean(editForm.tiendanube_store_id),
+        tiendanube_access_token: clean(editForm.tiendanube_access_token),
+        wordpress_url: clean(editForm.wordpress_url),
+        woo_consumer_key: clean(editForm.woo_consumer_key),
+        woo_consumer_secret: clean(editForm.woo_consumer_secret),
+        fb_page_id: clean(editForm.fb_page_id),
+        fb_page_name: clean(editForm.fb_page_name),
+        fb_page_access_token: clean(editForm.fb_page_access_token),
+        website_url: clean(editForm.website_url),
       };
 
       const { error } = await supabase
@@ -2763,6 +2857,31 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                               Token activo · {(editingClient as any).fb_page_name || editingClient.fb_page_id}{(editingClient as any).ig_username ? ` · @${(editingClient as any).ig_username}` : ""}
                             </div>
                           )}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={handleOpenClientPagesModal}
+                              disabled={loadingFbPages || !editingClient}
+                              className="h-10 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 text-[11px] font-black flex items-center justify-center gap-2 hover:bg-blue-100 dark:hover:bg-blue-950/35 transition-all disabled:opacity-50"
+                            >
+                              {loadingFbPages ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Facebook className="w-3.5 h-3.5" />}
+                              Ver páginas disponibles
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleConnectFacebookForClient}
+                              disabled={!editingClient}
+                              className="h-10 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[11px] font-black flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50"
+                            >
+                              <Instagram className="w-3.5 h-3.5" />
+                              Conectar otra cuenta Meta
+                            </button>
+                          </div>
+                          {!loadingFbPages && discoveredFbPages.length === 0 && discoveredIgAccounts.length === 0 && (
+                            <p className="text-[11px] text-zinc-400 leading-relaxed">
+                              Si no aparece ninguna página, actualizá o conectá Facebook con una cuenta que sea administradora de las páginas del cliente.
+                            </p>
+                          )}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <Field label="Página de Facebook">
                               <div className="flex gap-1.5">
@@ -2840,7 +2959,7 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                         </div>
                         <div className="p-5 space-y-3">
                           <Field label="Klaviyo Private API Key (pk_...)">
-                            <input type="password" value={editForm.klaviyo_api_key} onChange={e => ef("klaviyo_api_key", e.target.value)} placeholder="pk_xxxxxxxxxxxxxxxxxxxx" className={inputCls} />
+                            <input type="password" value={editForm.klaviyo_api_key} onChange={e => ef("klaviyo_api_key", e.target.value)} className={inputCls} />
                           </Field>
                           <button type="button" onClick={testKlaviyo} disabled={testingKlaviyo || !editForm.klaviyo_api_key}
                             className={`w-full h-10 rounded-xl text-[12px] font-black flex items-center justify-center gap-2 transition-all disabled:opacity-40 ${statuses.klaviyo === "ok" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-yellow-500 hover:bg-yellow-600 text-white"}`}>
@@ -2871,10 +2990,10 @@ setStatuses((p) => ({ ...p, chatwoot: "error" }));
                         <div className="p-5 space-y-3">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <Field label="URL Chatwoot (ej: https://chat.tuempresa.com)">
-                              <input type="text" value={editForm.chatwoot_url} onChange={e => ef("chatwoot_url", e.target.value)} placeholder="https://chatwoot.com" className={inputCls} />
+                              <input type="text" value={editForm.chatwoot_url} onChange={e => ef("chatwoot_url", e.target.value)} className={inputCls} />
                             </Field>
                             <Field label="User Access Token">
-                              <input type="password" value={editForm.chatwoot_token} onChange={e => ef("chatwoot_token", e.target.value)} placeholder="Token de acceso personal" className={inputCls} />
+                              <input type="password" value={editForm.chatwoot_token} onChange={e => ef("chatwoot_token", e.target.value)} className={inputCls} />
                             </Field>
                           </div>
                           <button type="button" onClick={testChatwoot} disabled={testingChatwoot || !editForm.chatwoot_url || !editForm.chatwoot_token}
