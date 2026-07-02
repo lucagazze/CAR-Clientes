@@ -103,7 +103,7 @@ export default function PrivacidadPage() {
       {/* Intro */}
       <div className="card-premium space-y-3">
         <p className="text-[14px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-          En <span className="font-bold text-zinc-900 dark:text-white">C.A.R</span> tomamos muy en serio la privacidad de tu información. Esta política describe qué datos recopilamos, cómo los usamos y qué derechos tenés sobre ellos.
+          En <span className="font-bold text-zinc-900 dark:text-white">Algoritmia</span> tomamos muy en serio la privacidad de tu información. Esta política describe qué datos recopilamos, cómo los usamos y qué derechos tenés sobre ellos.
         </p>
         <p className="text-[13px] text-zinc-500 dark:text-zinc-500 leading-relaxed">
           Al usar nuestra plataforma y conectar tus cuentas, aceptás los términos descritos en esta política. Si tenés alguna duda, podés contactarnos en cualquier momento.

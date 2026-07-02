@@ -1045,6 +1045,8 @@ export default function DashboardPage() {
   const [currentStore, setCurrentStore] = useState<any>(null);
   const [prevStore, setPrevStore] = useState<any>(null);
   const [costSummary, setCostSummary] = useState({ current: 0, previous: 0 });
+  const [variantCostMap, setVariantCostMap] = useState<Record<string, { cost: number; packagingCost: number }>>({});
+  const [costsConfig, setCostsConfig] = useState<any>(null);
   const [productImages, setProductImages] = useState<Record<string, string>>({});
   const [fetchingStore, setFetchingStore] = useState(true);
   const [shopifyError, setShopifyError] = useState<string | null>(null);
@@ -1608,21 +1610,44 @@ export default function DashboardPage() {
       }
       const range = activePreset === "custom" ? { since: activeSince, until: activeUntil } : presetToRange(activePreset);
       const prevRange = getPrevPeriod(range.since, range.until);
-      const { data, error } = await supabase
-        .from('car_additional_costs')
-        .select('start_date,end_date,cost,daily_cost')
-        .eq('client_id', profile.id);
-      if (error) {
-        console.error('Dashboard cost summary error:', error);
+      const [additionalRes, variantRes] = await Promise.all([
+        supabase
+          .from('car_additional_costs')
+          .select('name,platform,start_date,end_date,cost,daily_cost')
+          .eq('client_id', profile.id),
+        supabase
+          .from('car_variant_costs')
+          .select('variant_id,cost,packaging_cost')
+          .eq('client_id', profile.id),
+      ]);
+      if (additionalRes.error) {
+        console.error('Dashboard cost summary error:', additionalRes.error);
         if (mounted) setCostSummary({ current: 0, previous: 0 });
         return;
       }
       if (mounted) {
-        const items = data || [];
+        const allRows = additionalRes.data || [];
+        // La fila __car_cost_settings__ guarda la config (comisiones/fees/envíos) como JSON
+        // en el campo platform — mismo formato que CAR-SaaS (comparten base de datos).
+        const settingsRow = allRows.find((row: any) => row.name === '__car_cost_settings__');
+        let parsedSettings: any = null;
+        if (settingsRow?.platform) {
+          try { parsedSettings = JSON.parse(settingsRow.platform); } catch { parsedSettings = null; }
+        }
+        setCostsConfig(parsedSettings);
+        const items = allRows.filter((row: any) => row.name !== '__car_cost_settings__');
         setCostSummary({
           current: calcCostForRange(items, range.since, range.until),
           previous: calcCostForRange(items, prevRange.since, prevRange.until)
         });
+        const vcMap: Record<string, { cost: number; packagingCost: number }> = {};
+        (variantRes.data || []).forEach((row: any) => {
+          vcMap[String(row.variant_id)] = {
+            cost: parseFloat(row.cost) || 0,
+            packagingCost: parseFloat(row.packaging_cost) || 0,
+          };
+        });
+        setVariantCostMap(vcMap);
       }
     };
 
@@ -1853,11 +1878,42 @@ export default function DashboardPage() {
 
   const currentSpend = currentMeta?.spend || 0;
   const prevSpend = prevMeta?.spend || 0;
-  const currentNetRevenue = Math.max(0, (currentStore?.revenue || 0) - costSummary.current - currentSpend);
-  const prevNetRevenue = Math.max(0, (prevStore?.revenue || 0) - costSummary.previous - prevSpend);
+
+  // Costos de productos (COGS): unidades vendidas por variante × (costo unitario + embalaje)
+  const calcCogs = (store: any): number => {
+    const variantOrders = store?.variantOrders || {};
+    return Object.entries(variantOrders).reduce((sum: number, [vid, qty]: [string, any]) => {
+      const vc = variantCostMap[vid];
+      return sum + (vc ? (vc.cost + vc.packagingCost) * (Number(qty) || 0) : 0);
+    }, 0);
+  };
+  // Comisiones de plataforma + fees de pago (% sobre ingresos) y envíos (por pedido), desde Costos
+  const calcConfigCosts = (store: any): number => {
+    if (!costsConfig || !store) return 0;
+    const revenue = store.revenue || 0;
+    const orders = store.orders || 0;
+    const platformKey = detectedPlatform === 'tiendanube' ? 'tiendanube' : detectedPlatform === 'shopify' ? 'shopify' : 'custom';
+    const commissionPct = Number(costsConfig.platformCommissions?.[platformKey]) || 0;
+    const paymentPct = (Number(costsConfig.paymentFees?.shopifyFees) || 0)
+      + (Number(costsConfig.paymentFees?.tiendanubeCPT) || 0)
+      + (Number(costsConfig.paymentFees?.iibb) || 0);
+    // Envíos solo si el usuario los configuró explícitamente en Costos (evita aplicar el default)
+    const shippingConfigured = Boolean(costsConfig.shipping?.configured || costsConfig.updatedSections?.shipping);
+    const shippingCost = shippingConfigured && costsConfig.shipping?.type === 'custom'
+      ? (Number(costsConfig.shipping?.customShippingCost) || 0) * orders
+      : 0;
+    return revenue * ((commissionPct + paymentPct) / 100) + shippingCost;
+  };
+  const currentCogs = calcCogs(currentStore);
+  const prevCogs = calcCogs(prevStore);
+  const currentConfigCosts = calcConfigCosts(currentStore);
+  const prevConfigCosts = calcConfigCosts(prevStore);
+
+  const currentNetRevenue = Math.max(0, (currentStore?.revenue || 0) - costSummary.current - currentSpend - currentCogs - currentConfigCosts);
+  const prevNetRevenue = Math.max(0, (prevStore?.revenue || 0) - costSummary.previous - prevSpend - prevCogs - prevConfigCosts);
   const realRoas = currentSpend > 0 ? currentNetRevenue / currentSpend : 0;
   const prevRealRoas = prevSpend > 0 ? prevNetRevenue / prevSpend : 0;
-  const showProfitMetrics = !!currentStore && (costSummary.current > 0 || currentSpend > 0);
+  const showProfitMetrics = !!currentStore && (costSummary.current > 0 || currentSpend > 0 || currentCogs > 0 || currentConfigCosts > 0);
 
   const prevMerDaily = (prevStore && prevStore.daily) ? prevStore.daily.map((d: any, idx: number) => {
     const metaDay = prevMetaDaily?.[idx];
@@ -2298,7 +2354,7 @@ export default function DashboardPage() {
                         loading={fetchingStore || fetchingMeta}
                         active={expandedMetric === "s-net-revenue"}
                         onClick={() => setExpandedMetric(expandedMetric === "s-net-revenue" ? null : "s-net-revenue")}
-                        info="Facturación neta descuenta de la facturación bruta los costos adicionales cargados en Costos y la inversión publicitaria del período. Los costos unitarios por producto quedan guardados para análisis de margen."
+                        info="Facturación neta descuenta de la facturación bruta todo lo cargado en Costos: costos de productos y embalaje (según unidades vendidas), comisiones de plataforma y pago, envíos, costos adicionales, más la inversión publicitaria del período."
                       />
                       <ShopifyMetric
                         icon={Zap}

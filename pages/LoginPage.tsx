@@ -103,12 +103,12 @@ export default function LoginPage() {
           <div className="flex items-center gap-2.5 md:gap-3.5">
             <img
               src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
-              alt="C.A.R"
+              alt="Algoritmia"
               className="w-8 h-8 md:w-9 md:h-9 object-contain"
             />
             <div>
               <span className={`text-[13px] md:text-[14px] font-bold tracking-tight uppercase leading-none block font-display ${darkMode ? 'text-white' : 'text-zinc-900'}`}>
-                C.A.R
+                Algoritmia
               </span>
               <span className="text-[8px] md:text-[9px] font-bold text-violet-500 tracking-[0.24em] uppercase block mt-0.5 md:mt-1">Gestión</span>
             </div>
@@ -137,7 +137,7 @@ export default function LoginPage() {
             }`}>
               <img
                 src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
-                alt="C.A.R"
+                alt="Algoritmia"
                 className="w-9 h-9 object-contain"
               />
             </div>
@@ -145,7 +145,7 @@ export default function LoginPage() {
               {mode === 'login' ? 'Iniciar sesión' : 'Recuperar contraseña'}
             </h1>
             <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400 mt-1.5 font-semibold">
-              Ecosistema de C.A.R.
+              Ecosistema de Algoritmia
             </p>
           </div>
 

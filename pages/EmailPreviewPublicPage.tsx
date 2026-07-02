@@ -172,7 +172,7 @@ export default function EmailPreviewPublicPage() {
       {/* Footer */}
       <div style={{ flexShrink: 0, paddingBottom: 16, textAlign: 'center' }}>
         <p style={{ fontSize: 11, color: '#71717a', fontFamily: 'Arial' }}>
-          Powered by <strong style={{ color: '#a1a1aa' }}>C.A.R</strong>
+          Powered by <strong style={{ color: '#a1a1aa' }}>Algoritmia</strong>
         </p>
       </div>
     </div>

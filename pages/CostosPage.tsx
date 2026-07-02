@@ -267,6 +267,17 @@ export default function CostosPage() {
           });
         }
 
+        // Config guardada en DB pisa el cache local (fuente de verdad cross-dispositivo)
+        const cfg = typeof costsData.costSettings === 'string'
+          ? (() => { try { return JSON.parse(costsData.costSettings); } catch { return null; } })()
+          : costsData.costSettings;
+        if (cfg && typeof cfg === 'object') {
+          if (cfg.platformCommissions) setPlatformCommissions((prev: any) => ({ ...prev, ...cfg.platformCommissions }));
+          if (cfg.paymentFees) setPaymentFees((prev: any) => ({ ...prev, ...cfg.paymentFees }));
+          if (cfg.gateways) setGateways((prev: any) => ({ ...prev, ...cfg.gateways }));
+          if (cfg.shipping) setShipping((prev: any) => ({ ...prev, ...cfg.shipping }));
+        }
+
         if (maxTime) {
           const formatted = (maxTime as Date).toLocaleString('es-AR', {
             timeZone: 'America/Argentina/Buenos_Aires',
@@ -303,7 +314,8 @@ export default function CostosPage() {
     fetchCosts();
   }, [profileId, loadProductCatalog]);
 
-  // Save helper
+  // Save helper — localStorage como cache + DB (mismo formato que CAR-SaaS, comparten base)
+  // para que el dashboard lo aplique desde cualquier dispositivo y usuario con acceso.
   const saveToLocalStorage = (updatedData: any) => {
     const currentData = {
       platformCommissions,
@@ -315,6 +327,10 @@ export default function CostosPage() {
     try {
       localStorage.setItem(`car_costs_${profileId}`, JSON.stringify(currentData));
     } catch (e) { /* ignore quota full */ }
+    callCostsApi('costs-save-settings', { settings: currentData }).catch((err) => {
+      console.error('Error saving cost settings to DB:', err);
+      showToast('La configuración se guardó localmente pero no en la base de datos.', 'warning');
+    });
   };
 
   const callCostsApi = async (action: string, payload: Record<string, any> = {}) => {
@@ -550,7 +566,10 @@ export default function CostosPage() {
 
   // ─── SECTION 4: SHIPPING COSTS ────────────────────────────────────────
   const handleSaveShipping = () => {
-    saveToLocalStorage({ shipping });
+    // configured: el dashboard solo descuenta envíos cuando el usuario los guardó explícitamente
+    const configuredShipping = { ...shipping, configured: true } as any;
+    setShipping(configuredShipping);
+    saveToLocalStorage({ shipping: configuredShipping });
     showToast('Costos de envíos configurados con éxito.', 'success');
   };
 
@@ -763,18 +782,6 @@ export default function CostosPage() {
       console.error('Error deleting additional cost from Supabase:', err);
       showToast('Error al eliminar costo de la base de datos.', 'error');
     }
-  };
-
-  // ─── SECTION 6: DASHBOARD SYNC ────────────────────────────────────────
-  const [syncing, setSyncing] = useState(false);
-  
-  const handleRequestDashboardSync = () => {
-    setSyncing(true);
-    setTimeout(() => {
-      setSyncing(false);
-      setOpenAccordions(prev => ({ ...prev, dashboard: false }));
-      showToast('¡Dashboard actualizado! Se cargaron los datos de costos del período (últimos 30 días).', 'success');
-    }, 1500);
   };
 
   return (
@@ -1901,28 +1908,19 @@ export default function CostosPage() {
           )}
         </div>
 
-        {/* Dashboard Sync Section */}
+        {/* Dashboard Section */}
         <div className="border-t border-zinc-200 dark:border-white/[0.05] pt-4">
           <p className="text-[13px] font-bold text-zinc-950 dark:text-zinc-50 mb-3">Dashboard</p>
-          <div className="bg-gradient-to-r from-amber-500/5 to-orange-500/5 dark:from-amber-500/10 dark:to-orange-500/10 border border-amber-500/20 rounded-[16px] overflow-hidden shadow-sm transition-all">
-            <button 
-              onClick={handleRequestDashboardSync}
-              disabled={syncing}
-              className="w-full flex items-center justify-between p-5 hover:bg-amber-500/5 dark:hover:bg-white/[0.02] transition-colors text-left disabled:opacity-70"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-500 shrink-0">
-                  {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-[14px] font-bold text-amber-600 dark:text-amber-400 block">
-                    Solicitar llenar tu dashboard (Ultimos 30 dias)
-                  </span>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">Sincroniza y recalcula los ingresos contra los costos del último mes.</p>
-                </div>
-              </div>
-              <ChevronLeft className="w-4 h-4 text-amber-500 -rotate-90 shrink-0 ml-4" />
-            </button>
+          <div className="bg-gradient-to-r from-emerald-500/5 to-teal-500/5 dark:from-emerald-500/10 dark:to-teal-500/10 border border-emerald-500/20 rounded-[16px] p-5 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-500 shrink-0">
+              <Check className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[14px] font-bold text-emerald-600 dark:text-emerald-400 block">
+                Los costos se aplican automáticamente en el Dashboard
+              </span>
+              <p className="text-[11px] text-zinc-400 mt-0.5">La Facturación neta y el ROAS real descuentan costos de productos, comisiones, envíos, costos adicionales y pauta según el período seleccionado.</p>
+            </div>
           </div>
         </div>
 

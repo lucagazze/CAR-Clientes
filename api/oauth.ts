@@ -2930,6 +2930,10 @@ async function handleCosts(req: VercelRequest, res: VercelResponse) {
     return res.status(isAuthSessionError(err) ? 401 : 403).json({ error: err?.message || 'Sin permisos' });
   }
 
+  // Config de comisiones/fees/envíos guardada como fila especial en car_additional_costs
+  // (JSON en el campo platform). MISMO mecanismo que CAR-SaaS: ambas apps comparten la DB.
+  const COST_SETTINGS_ROW_NAME = '__car_cost_settings__';
+
   if (action === 'costs-load') {
     const [variantRes, additionalRes] = await Promise.all([
       supabase
@@ -2943,7 +2947,54 @@ async function handleCosts(req: VercelRequest, res: VercelResponse) {
     ]);
     if (variantRes.error) return res.status(500).json({ error: variantRes.error.message });
     if (additionalRes.error) return res.status(500).json({ error: additionalRes.error.message });
-    return res.status(200).json({ variantCosts: variantRes.data || [], additionalCosts: additionalRes.data || [] });
+    const additionalRows = additionalRes.data || [];
+    const settingsRow = additionalRows.find((row: any) => row.name === COST_SETTINGS_ROW_NAME);
+    let costSettings = null;
+    if (settingsRow?.platform) {
+      try {
+        costSettings = JSON.parse(settingsRow.platform);
+      } catch {
+        costSettings = null;
+      }
+    }
+    return res.status(200).json({
+      variantCosts: variantRes.data || [],
+      additionalCosts: additionalRows.filter((row: any) => row.name !== COST_SETTINGS_ROW_NAME),
+      costSettings,
+      costSettingsUpdatedAt: settingsRow?.updated_at || null
+    });
+  }
+
+  if (action === 'costs-save-settings') {
+    const settings = body.settings || {};
+    const today = new Date().toISOString().slice(0, 10);
+    const dbRow = {
+      client_id: clientId,
+      category: 'otros',
+      name: COST_SETTINGS_ROW_NAME,
+      start_date: today,
+      end_date: today,
+      cost: 0,
+      daily_cost: 0,
+      currency: 'LOCAL',
+      ad_spend: false,
+      platform: JSON.stringify(settings),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error: deleteError } = await supabase
+      .from('car_additional_costs')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('name', COST_SETTINGS_ROW_NAME);
+    if (deleteError) return res.status(500).json({ error: deleteError.message });
+
+    const { data, error } = await supabase
+      .from('car_additional_costs')
+      .insert(dbRow)
+      .select();
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ row: data?.[0] || null });
   }
 
   if (action === 'costs-upsert-variants') {

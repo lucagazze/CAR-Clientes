@@ -62,7 +62,7 @@ export default function TerminosPage() {
 
       <div className="card-premium space-y-3">
         <p className="text-[14px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-          Estos términos regulan el uso de <span className="font-bold text-zinc-900 dark:text-white">C.A.R</span>. Al crear una cuenta o utilizar la plataforma, aceptás estas condiciones.
+          Estos términos regulan el uso de <span className="font-bold text-zinc-900 dark:text-white">Algoritmia Gestión</span>. Al crear una cuenta o utilizar la plataforma, aceptás estas condiciones.
         </p>
       </div>
 

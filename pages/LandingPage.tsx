@@ -1067,12 +1067,12 @@ export default function LandingPage() {
           <div className="flex items-center gap-2.5 md:gap-3.5">
             <img
               src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
-              alt="C.A.R"
+              alt="Algoritmia"
               className="w-8 h-8 md:w-9 md:h-9 object-contain"
             />
             <div>
               <span className="text-[13px] md:text-[14px] font-bold tracking-tight uppercase leading-none block font-display">
-                C.A.R
+                Algoritmia
               </span>
               <span className="text-[8px] md:text-[9px] font-bold text-violet-500 tracking-[0.24em] uppercase block mt-0.5 md:mt-1">Gestión</span>
             </div>
@@ -1146,12 +1146,12 @@ export default function LandingPage() {
           <div className="flex items-center gap-3.5">
             <img
               src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'}
-              alt="C.A.R"
+              alt="Algoritmia"
               className="w-10 h-10 object-contain"
             />
             <div className="flex flex-col">
               <span className={`text-[15px] font-black tracking-tighter leading-none uppercase font-display ${darkMode ? 'text-white' : 'text-zinc-900'}`}>
-                C.A.R
+                Algoritmia
               </span>
               <span className="text-[9.5px] font-bold text-violet-500 tracking-[0.2em] mt-1 uppercase">Gestión</span>
             </div>
@@ -2461,8 +2461,8 @@ export default function LandingPage() {
             {/* Brand */}
             <div className="col-span-2 sm:col-span-1 space-y-3">
               <div className="flex items-center gap-2">
-                <img src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'} alt="C.A.R" className="w-5 h-5 object-contain" />
-                <span className="text-[11px] font-bold font-display tracking-wider text-zinc-800 dark:text-zinc-300">C.A.R</span>
+                <img src={darkMode ? '/assets/logoSinFondo.png' : '/assets/logoAlgoritmia1.webp'} alt="Algoritmia" className="w-5 h-5 object-contain" />
+                <span className="text-[11px] font-bold font-display tracking-wider text-zinc-800 dark:text-zinc-300">Algoritmia</span>
               </div>
               <p className="text-[10.5px] leading-relaxed">
                 Ecosistema de control y automatización omnicanal para e-commerce.
@@ -2505,7 +2505,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className={`pt-6 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-[9.5px] font-medium ${darkMode ? 'border-white/[0.04]' : 'border-zinc-200/50'}`}>
-            <p>&copy; {new Date().getFullYear()} C.A.R Desarrollos. Todos los derechos reservados.</p>
+            <p>&copy; {new Date().getFullYear()} Algoritmia. Todos los derechos reservados.</p>
             <div className="flex items-center gap-4">
               <Link to="/privacidad" className="hover:underline">Privacidad</Link>
               <span className={darkMode ? 'text-zinc-700' : 'text-zinc-300'}>•</span>
