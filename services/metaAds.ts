@@ -420,16 +420,19 @@ const apiDeletePageActive = async (endpoint: string, params: Record<string, stri
   return json;
 };
 
-const collectPaginatedData = async (firstPage: any): Promise<any[]> => {
+// Pagina SIN fetchear las URLs crudas de paging.next: esas URLs contienen el access_token
+// del servidor y consumirlas desde el navegador lo expondría. fetchNext debe repetir la
+// misma consulta a través del proxy usando el cursor `after`.
+const collectPaginatedData = async (firstPage: any, fetchNext?: (after: string) => Promise<any>): Promise<any[]> => {
   const all = [...(firstPage?.data || [])];
-  let nextUrl: string | null = firstPage?.paging?.next || null;
-  while (nextUrl) {
+  let page = firstPage;
+  let guard = 0;
+  while (page?.paging?.next && fetchNext && guard++ < 50) {
+    const after = page?.paging?.cursors?.after;
+    if (!after) break;
     try {
-      const res = await fetch(nextUrl);
-      const json = await res.json();
-      if (json?.error) throw new Error(json.error.message || 'Meta API error');
-      if (json?.data) all.push(...json.data);
-      nextUrl = json?.paging?.next || null;
+      page = await fetchNext(after);
+      if (page?.data) all.push(...page.data);
     } catch {
       break;
     }
@@ -505,23 +508,12 @@ const hydrateCommentsWithAllReplies = async (
 export const metaAds = {
   // ── ALL AD ACCOUNTS (paginado) ─────────────────────────────
   getAllAdAccounts: async () => {
-    const all: any[] = [];
-    let url: string | null = null;
-    // Primera página
-    const first = await apiGet('me/adaccounts', {
+    const params = {
       fields: 'id,name,currency,account_status,amount_spent',
       limit: '50',
-    });
-    if (first?.data) all.push(...first.data);
-    url = first?.paging?.next || null;
-    // Páginas siguientes
-    while (url) {
-      try {
-        const res = await fetch(url).then(r => r.json());
-        if (res?.data) all.push(...res.data);
-        url = res?.paging?.next || null;
-      } catch { break; }
-    }
+    };
+    const first = await apiGet('me/adaccounts', params);
+    const all = await collectPaginatedData(first, (after) => apiGet('me/adaccounts', { ...params, after }));
     return { data: all };
   },
 
@@ -585,11 +577,19 @@ export const metaAds = {
   // ── ALL ADS FOR ACCOUNT ──────────────────────────────────
   getAccountAds: async (accountId = META_AD_ACCOUNT) => {
     if (isDemoMeta(accountId)) return buildDemoMetaAds();
-    const first = await apiGet(`${accountId}/ads`, {
+    const params = {
       fields: 'id,name,status,effective_status,configured_status,campaign_id,adset_id,preview_shareable_link,creative{id,name,body,title,thumbnail_url,image_url,image_hash,object_type,video_id,effective_object_story_id,effective_instagram_story_id,instagram_permalink_url}',
+      // Sin este filtering, la API excluye los archivados — y sus métricas históricas
+      // desaparecerían del listado al filtrar por fechas pasadas.
+      filtering: JSON.stringify([{
+        field: 'ad.effective_status',
+        operator: 'IN',
+        value: ['ACTIVE', 'PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES'],
+      }]),
       limit: '150',
-    });
-    return { ...first, data: await collectPaginatedData(first) };
+    };
+    const first = await apiGet(`${accountId}/ads`, params);
+    return { ...first, data: await collectPaginatedData(first, (after) => apiGet(`${accountId}/ads`, { ...params, after })) };
   },
 
   // ── AD-LEVEL INSIGHTS for a specific adset ────────────────
@@ -605,13 +605,14 @@ export const metaAds = {
 
   // ── AD-LEVEL INSIGHTS FOR ACCOUNT ────────────────────────
   getAdInsightsForAccount: async (accountId: string, fields: string, timeRange: TimeRange): Promise<any[]> => {
-    const res = await apiGet(`${accountId}/insights`, {
+    const params = {
       fields,
       level: 'ad',
       time_range: JSON.stringify(timeRange),
       limit: '150',
-    });
-    return collectPaginatedData(res);
+    };
+    const res = await apiGet(`${accountId}/insights`, params);
+    return collectPaginatedData(res, (after) => apiGet(`${accountId}/insights`, { ...params, after }));
   },
 
   // ── LIFETIME INSIGHTS FOR A SINGLE AD ───────────────────
@@ -951,7 +952,7 @@ export const metaAds = {
 
   getAllInstagramMedia: async (igId: string, fbPageId?: string) => {
     const first = await metaAds.getInstagramMedia(igId, 100, undefined, fbPageId);
-    return { ...first, data: await collectPaginatedData(first) };
+    return { ...first, data: await collectPaginatedData(first, (after) => metaAds.getInstagramMedia(igId, 100, after, fbPageId)) };
   },
 
   getInstagramMediaPermalink: (mediaId: string, fbPageId?: string) =>
@@ -1034,7 +1035,7 @@ export const metaAds = {
 
   getAllFacebookPageFeed: async (pageId: string) => {
     const first = await metaAds.getFacebookPageFeed(pageId, 100);
-    return { ...first, data: await collectPaginatedData(first) };
+    return { ...first, data: await collectPaginatedData(first, (after) => metaAds.getFacebookPageFeed(pageId, 100, after)) };
   },
 
   getFacebookPostComments: (postId: string, after?: string) => {
