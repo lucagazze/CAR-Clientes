@@ -68,7 +68,13 @@ import {
 } from "recharts";
 import EmailLoader from "../components/ui/EmailLoader";
 import { CenteredPageLoader } from "../components/ui/CenteredPageLoader";
-import DailyBriefCard from "../components/DailyBriefCard";
+import { useNavigate } from "react-router-dom";
+import {
+  DEFAULT_CURRENCY_SETTINGS,
+  normalizeCurrencySettings,
+  convertCurrency,
+  formatCurrencyValue,
+} from "../utils/currencySettings";
 
 
 const BLUE = "#3b82f6";
@@ -926,6 +932,7 @@ const WordpressLogo = (props: React.SVGProps<SVGSVGElement>) => (
 export default function DashboardPage() {
   const { profile: authProfile, user } = useAuth();
   const { darkMode } = useTheme();
+  const navigate = useNavigate();
   const { viewAsProfile, isViewingAs } = useViewAs();
   const rawProfile = isViewingAs ? viewAsProfile : authProfile;
   const profile = useMemo(
@@ -1048,6 +1055,7 @@ export default function DashboardPage() {
   const [costSummary, setCostSummary] = useState({ current: 0, previous: 0 });
   const [variantCostMap, setVariantCostMap] = useState<Record<string, { cost: number; packagingCost: number }>>({});
   const [costsConfig, setCostsConfig] = useState<any>(null);
+  const [currencySettings, setCurrencySettings] = useState(DEFAULT_CURRENCY_SETTINGS);
   const [productImages, setProductImages] = useState<Record<string, string>>({});
   const [fetchingStore, setFetchingStore] = useState(true);
   const [shopifyError, setShopifyError] = useState<string | null>(null);
@@ -1636,6 +1644,7 @@ export default function DashboardPage() {
           try { parsedSettings = JSON.parse(settingsRow.platform); } catch { parsedSettings = null; }
         }
         setCostsConfig(parsedSettings);
+        setCurrencySettings(normalizeCurrencySettings(parsedSettings || {}));
         const items = allRows.filter((row: any) => row.name !== '__car_cost_settings__');
         setCostSummary({
           current: calcCostForRange(items, range.since, range.until),
@@ -1858,11 +1867,14 @@ export default function DashboardPage() {
   const activePrevRange = getPrevPeriod(activeRange.since, activeRange.until);
 
   const showMER = false;
+  // MER con monedas mixtas: ingresos (moneda tienda) y pauta (moneda Meta) a base
+  const merStoreToBase = (n: number) => convertCurrency(n, currencySettings.storeCurrency, currencySettings.baseCurrency, currencySettings);
+  const merMetaToBase = (n: number) => convertCurrency(n, currencySettings.metaCurrency, currencySettings.baseCurrency, currencySettings);
   const currentMER = (currentStore && currentMeta && currentMeta.spend > 0)
-    ? currentStore.revenue / currentMeta.spend
+    ? merStoreToBase(currentStore.revenue) / merMetaToBase(currentMeta.spend)
     : 0;
   const prevMER = (prevStore && prevMeta && prevMeta.spend > 0)
-    ? prevStore.revenue / prevMeta.spend
+    ? merStoreToBase(prevStore.revenue) / merMetaToBase(prevMeta.spend)
     : 0;
   const merChange = (currentMER > 0 && prevMER > 0)
     ? ((currentMER - prevMER) / prevMER) * 100
@@ -1870,15 +1882,22 @@ export default function DashboardPage() {
 
   const merDaily = (currentStore && currentStore.daily) ? currentStore.daily.map((d: any) => {
     const metaDay = metaDaily?.find((md: any) => md.date === d.date);
-    const spend = metaDay ? metaDay.spend : 0;
+    const spend = metaDay ? merMetaToBase(metaDay.spend) : 0;
     return {
       date: d.date,
-      val: spend > 0 ? d.revenue / spend : 0
+      val: spend > 0 ? merStoreToBase(d.revenue) / spend : 0
     };
   }) : [];
 
-  const currentSpend = currentMeta?.spend || 0;
-  const prevSpend = prevMeta?.spend || 0;
+  // Conversión de moneda: cada fuente puede venir en una moneda distinta (config en /moneda).
+  // Todo lo que cruza fuentes (neto, MER, ROAS real) se lleva a la moneda base.
+  const convertStoreToDashboard = (amount: number) => convertCurrency(amount, currencySettings.storeCurrency, currencySettings.baseCurrency, currencySettings);
+  const convertMetaToDashboard = (amount: number) => convertCurrency(amount, currencySettings.metaCurrency, currencySettings.baseCurrency, currencySettings);
+  const convertCostToDashboard = (amount: number) => convertCurrency(amount, currencySettings.costsCurrency, currencySettings.baseCurrency, currencySettings);
+  const usdArsRate = convertCurrency(1, "USD", "ARS", currencySettings);
+
+  const currentSpend = convertMetaToDashboard(currentMeta?.spend || 0);
+  const prevSpend = convertMetaToDashboard(prevMeta?.spend || 0);
 
   // Costos de productos (COGS): unidades vendidas por variante × (costo unitario + embalaje)
   const calcCogs = (store: any): number => {
@@ -1888,10 +1907,11 @@ export default function DashboardPage() {
       return sum + (vc ? (vc.cost + vc.packagingCost) * (Number(qty) || 0) : 0);
     }, 0);
   };
-  // Comisiones de plataforma + fees de pago (% sobre ingresos) y envíos (por pedido), desde Costos
+  // Comisiones de plataforma + fees de pago (% sobre ingresos) y envíos (por pedido), desde Costos.
+  // El % se aplica sobre ingresos convertidos a base; los envíos vienen en moneda de costos.
   const calcConfigCosts = (store: any): number => {
     if (!costsConfig || !store) return 0;
-    const revenue = store.revenue || 0;
+    const revenueBase = convertStoreToDashboard(store.revenue || 0);
     const orders = store.orders || 0;
     const platformKey = detectedPlatform === 'tiendanube' ? 'tiendanube' : detectedPlatform === 'shopify' ? 'shopify' : 'custom';
     const commissionPct = Number(costsConfig.platformCommissions?.[platformKey]) || 0;
@@ -1901,27 +1921,27 @@ export default function DashboardPage() {
     // Envíos solo si el usuario los configuró explícitamente en Costos (evita aplicar el default)
     const shippingConfigured = Boolean(costsConfig.shipping?.configured || costsConfig.updatedSections?.shipping);
     const shippingCost = shippingConfigured && costsConfig.shipping?.type === 'custom'
-      ? (Number(costsConfig.shipping?.customShippingCost) || 0) * orders
+      ? convertCostToDashboard((Number(costsConfig.shipping?.customShippingCost) || 0) * orders)
       : 0;
-    return revenue * ((commissionPct + paymentPct) / 100) + shippingCost;
+    return revenueBase * ((commissionPct + paymentPct) / 100) + shippingCost;
   };
-  const currentCogs = calcCogs(currentStore);
-  const prevCogs = calcCogs(prevStore);
+  const currentCogs = convertCostToDashboard(calcCogs(currentStore));
+  const prevCogs = convertCostToDashboard(calcCogs(prevStore));
   const currentConfigCosts = calcConfigCosts(currentStore);
   const prevConfigCosts = calcConfigCosts(prevStore);
 
-  const currentNetRevenue = Math.max(0, (currentStore?.revenue || 0) - costSummary.current - currentSpend - currentCogs - currentConfigCosts);
-  const prevNetRevenue = Math.max(0, (prevStore?.revenue || 0) - costSummary.previous - prevSpend - prevCogs - prevConfigCosts);
+  const currentNetRevenue = Math.max(0, convertStoreToDashboard(currentStore?.revenue || 0) - convertCostToDashboard(costSummary.current) - currentSpend - currentCogs - currentConfigCosts);
+  const prevNetRevenue = Math.max(0, convertStoreToDashboard(prevStore?.revenue || 0) - convertCostToDashboard(costSummary.previous) - prevSpend - prevCogs - prevConfigCosts);
   const realRoas = currentSpend > 0 ? currentNetRevenue / currentSpend : 0;
   const prevRealRoas = prevSpend > 0 ? prevNetRevenue / prevSpend : 0;
   const showProfitMetrics = !!currentStore && (costSummary.current > 0 || currentSpend > 0 || currentCogs > 0 || currentConfigCosts > 0);
 
   const prevMerDaily = (prevStore && prevStore.daily) ? prevStore.daily.map((d: any, idx: number) => {
     const metaDay = prevMetaDaily?.[idx];
-    const spend = metaDay ? metaDay.spend : 0;
+    const spend = metaDay ? convertMetaToDashboard(metaDay.spend) : 0;
     return {
       date: d.date,
-      val: spend > 0 ? d.revenue / spend : 0
+      val: spend > 0 ? convertStoreToDashboard(d.revenue) / spend : 0
     };
   }) : [];
 
@@ -2054,6 +2074,15 @@ export default function DashboardPage() {
             </span>
           </h1>
         </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+        <button
+          onClick={() => navigate('/moneda')}
+          title="Configurar monedas y conversiones"
+          className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition-all"
+        >
+          <Coins className="w-4 h-4 text-emerald-500" />
+          <span className="whitespace-nowrap">1 USD = {formatCurrencyValue(usdArsRate, "ARS", 2)} ARS</span>
+        </button>
         <div
           className="flex items-center justify-between md:justify-start w-full md:w-auto bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-sm h-9 md:h-10 relative z-20"
           ref={datePickerRef}
@@ -2226,31 +2255,8 @@ export default function DashboardPage() {
             </span>
           </div>
         </div>
+        </div>
       </div>
-
-      {/* ── Analista IA: resumen ejecutivo con acciones ── */}
-      <DailyBriefCard
-        clientId={profile?.id}
-        ready={!loadingInitial && !fetchingStore && !fetchingMeta && (!!currentStore || !!currentMeta)}
-        signals={{
-          periodo: { desde: activeSince, hasta: activeUntil },
-          tienda: currentStore ? {
-            ingresos: currentStore.revenue, prevIngresos: prevStore?.revenue ?? null,
-            pedidos: currentStore.orders, prevPedidos: prevStore?.orders ?? null,
-            ticketPromedio: currentStore.aov,
-            topProductos: (currentStore.topProducts || []).slice(0, 3),
-          } : null,
-          metaAds: currentMeta ? {
-            gasto: currentMeta.spend, prevGasto: prevMeta?.spend ?? null,
-            compras: currentMeta.purchases, prevCompras: prevMeta?.purchases ?? null,
-            roas: currentMeta.roas, prevRoas: prevMeta?.roas ?? null,
-          } : null,
-          netRevenue: showProfitMetrics ? { curr: currentNetRevenue, prev: prevNetRevenue } : null,
-          costos: { adicionales: costSummary.current, productos: currentCogs, comisionesYEnvios: currentConfigCosts },
-          attribution: currentStore?.attribution?.summary || null,
-          email: currentKlaviyo ? { ingresos: (currentKlaviyo as any).revenue ?? null } : null,
-        }}
-      />
 
       <div className="flex flex-col gap-6">
         {/* Shopify Section */}

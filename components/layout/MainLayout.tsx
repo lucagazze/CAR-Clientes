@@ -126,6 +126,7 @@ const EntradasPage       = lazyWithRetry(() => import('../../pages/EntradasPage'
 const ContactosPage      = lazyWithRetry(() => import('../../pages/ContactosPage'));
 const InformesPage       = lazyWithRetry(() => import('../../pages/InformesPage'));
 const CostosPage         = lazyWithRetry(() => import('../../pages/CostosPage'));
+const MonedaPage         = lazyWithRetry(() => import('../../pages/MonedaPage'));
 const SocialPublisherPage = lazyWithRetry(() => import('../../pages/SocialPublisherPage'));
 const PublicacionesPage = lazyWithRetry(() => import('../../pages/PublicacionesPage'));
 const InventarioPage     = lazyWithRetry(() => import('../../pages/InventarioPage'));
@@ -388,10 +389,11 @@ export const MainLayout = () => {
               <Route path="/analisis-productos" element={<AnalisisProductosPage />} />
               <Route path="/clientes" element={<ContactosPage />} />
               <Route path="/informes" element={<InformesPage />} />
-              <Route 
-                path="/costos" 
-                element={hasEcommerce || profile?.is_admin ? <CostosPage /> : <Navigate to="/dashboard" replace />} 
+              <Route
+                path="/costos"
+                element={hasEcommerce || profile?.is_admin ? <CostosPage /> : <Navigate to="/dashboard" replace />}
               />
+              <Route path="/moneda" element={<MonedaPage />} />
               <Route path="/perfil" element={<PerfilPage />} />
               <Route path="/cliente/:email" element={<ClientePage />} />
               <Route path="/integraciones" element={<Navigate to="/dashboard" replace />} />

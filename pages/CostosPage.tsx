@@ -272,6 +272,7 @@ export default function CostosPage() {
           ? (() => { try { return JSON.parse(costsData.costSettings); } catch { return null; } })()
           : costsData.costSettings;
         if (cfg && typeof cfg === 'object') {
+          setRawSettings(cfg);
           if (cfg.platformCommissions) setPlatformCommissions((prev: any) => ({ ...prev, ...cfg.platformCommissions }));
           if (cfg.paymentFees) setPaymentFees((prev: any) => ({ ...prev, ...cfg.paymentFees }));
           if (cfg.gateways) setGateways((prev: any) => ({ ...prev, ...cfg.gateways }));
@@ -314,23 +315,43 @@ export default function CostosPage() {
     fetchCosts();
   }, [profileId, loadProductCatalog]);
 
-  // Save helper — localStorage como cache + DB (mismo formato que CAR-SaaS, comparten base)
-  // para que el dashboard lo aplique desde cualquier dispositivo y usuario con acceso.
-  const saveToLocalStorage = (updatedData: any) => {
-    const currentData = {
+  // Save helper — mismo patrón que CAR-SaaS (comparten base): guarda en DB y recién
+  // ahí confirma con toast. rawSettings preserva claves que administran otras páginas
+  // (ej. currency de /moneda) para no pisarlas al reescribir la fila de settings.
+  const [savingSettings, setSavingSettings] = useState<string | null>(null);
+  const [rawSettings, setRawSettings] = useState<any>({});
+
+  const saveCostSettings = async (updatedData: any, successMessage: string, key: string) => {
+    const mergedSettings = {
+      ...rawSettings,
       platformCommissions,
       paymentFees,
       gateways,
       shipping,
-      ...updatedData
+      ...updatedData,
+      updatedSections: {
+        ...(rawSettings?.updatedSections || {}),
+        [key]: new Date().toISOString(),
+      },
     };
     try {
-      localStorage.setItem(`car_costs_${profileId}`, JSON.stringify(currentData));
+      localStorage.setItem(`car_costs_${profileId}`, JSON.stringify(mergedSettings));
     } catch (e) { /* ignore quota full */ }
-    callCostsApi('costs-save-settings', { settings: currentData }).catch((err) => {
+    setSavingSettings(key);
+    try {
+      await callCostsApi('costs-save-settings', { settings: mergedSettings });
+      setRawSettings(mergedSettings);
+      setLastUpdatedTime(new Date().toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      }));
+      showToast(successMessage, 'success');
+    } catch (err: any) {
       console.error('Error saving cost settings to DB:', err);
-      showToast('La configuración se guardó localmente pero no en la base de datos.', 'warning');
-    });
+      showToast(err?.message || 'Error al guardar la configuración en la base de datos.', 'error');
+    } finally {
+      setSavingSettings(null);
+    }
   };
 
   const callCostsApi = async (action: string, payload: Record<string, any> = {}) => {
@@ -543,14 +564,12 @@ export default function CostosPage() {
 
   // ─── SECTION 2: PLATFORM COMMISSIONS ──────────────────────────────────
   const handleSavePlatformCommissions = () => {
-    saveToLocalStorage({ platformCommissions });
-    showToast('Comisiones de plataforma guardadas con éxito.', 'success');
+    saveCostSettings({ platformCommissions }, 'Comisiones de plataforma guardadas con éxito.', 'plataforma');
   };
 
   // ─── SECTION 3: PAYMENT GATEWAYS ──────────────────────────────────────
   const handleSavePaymentFees = () => {
-    saveToLocalStorage({ paymentFees });
-    showToast('Tasas de comisiones de pago guardadas con éxito.', 'success');
+    saveCostSettings({ paymentFees }, 'Tasas de comisiones de pago guardadas con éxito.', 'pago');
   };
 
   const toggleGatewayStatus = (gatewayKey: string) => {
@@ -560,8 +579,7 @@ export default function CostosPage() {
       [gatewayKey]: nextStatus
     };
     setGateways(updatedGateways);
-    saveToLocalStorage({ gateways: updatedGateways });
-    showToast(`${gatewayKey.toUpperCase()} cambiado a ${nextStatus === 'configured' ? 'Configurado' : 'Pendiente'}.`, 'success');
+    saveCostSettings({ gateways: updatedGateways }, `${gatewayKey.toUpperCase()} cambiado a ${nextStatus === 'configured' ? 'Configurado' : 'Pendiente'}.`, 'pago');
   };
 
   // ─── SECTION 4: SHIPPING COSTS ────────────────────────────────────────
@@ -569,8 +587,7 @@ export default function CostosPage() {
     // configured: el dashboard solo descuenta envíos cuando el usuario los guardó explícitamente
     const configuredShipping = { ...shipping, configured: true } as any;
     setShipping(configuredShipping);
-    saveToLocalStorage({ shipping: configuredShipping });
-    showToast('Costos de envíos configurados con éxito.', 'success');
+    saveCostSettings({ shipping: configuredShipping }, 'Costos de envíos configurados con éxito.', 'envios');
   };
 
   // ─── SECTION 5: ADDITIONAL COSTS ──────────────────────────────────────
