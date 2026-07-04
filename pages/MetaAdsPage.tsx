@@ -11,6 +11,7 @@ import { PortalOverlay } from '../components/ui/PortalOverlay';
 import SmoothImage from '../components/ui/SmoothImage';
 import { db } from '../services/db';
 import { supabase } from '../services/supabase';
+import { loadIgnoredComments, setIgnoredComment } from '../services/ignoredComments';
 
 import {
   Layers, Film, X, Loader2, ImageIcon, ChevronLeft, ChevronRight, Calendar, ChevronDown,
@@ -212,11 +213,14 @@ export default function MetaAdsPage() {
       setIgnoredIds({});
       return;
     }
-    try {
-      setIgnoredIds(JSON.parse(localStorage.getItem(`car_ignored_comments_${clientId}`) || '{}'));
-    } catch {
-      setIgnoredIds({});
-    }
+    let cancelled = false;
+    // Fuente de verdad: Supabase (persiste "para siempre" y cross-dispositivo)
+    loadIgnoredComments(clientId, (serverMap) => {
+      if (!cancelled) setIgnoredIds(serverMap);
+    }).then((map) => {
+      if (!cancelled) setIgnoredIds(map);
+    });
+    return () => { cancelled = true; };
   }, [clientId]);
 
   const analyzeCreativeUrl = async (imageUrl: string | null, isVideo: boolean, fatigueContext?: any): Promise<any> => {
@@ -817,9 +821,10 @@ export default function MetaAdsPage() {
       nextIgnored = !prev[commentId];
       const next = { ...prev, [commentId]: nextIgnored };
       if (!nextIgnored) delete next[commentId];
-      try { localStorage.setItem(`car_ignored_comments_${clientId}`, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
+    // Persiste en Supabase (+ cache local instantaneo dentro del helper)
+    setIgnoredComment(clientId, commentId, nextIgnored);
     setCommentsByPlatform(prev => ({
       ...prev,
       [activeCommentPlatform]: prev[activeCommentPlatform].map(c => c.id === commentId ? { ...c, _ignored: nextIgnored } : c),
