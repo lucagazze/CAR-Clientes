@@ -256,6 +256,7 @@ html.is-printing .recharts-surface {
     color: #18181b !important;
     overflow: visible !important;
     height: auto !important;
+    font-size: 11px !important;
   }
   * {
     -webkit-print-color-adjust: exact !important;
@@ -269,7 +270,46 @@ html.is-printing .recharts-surface {
     break-inside: avoid;
     page-break-inside: avoid;
   }
-  @page { margin: 1.5cm; size: A4 portrait; }
+  /* Compact print layout overrides */
+  .space-y-6, .space-y-8, .space-y-10 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  .space-y-6 > :not([hidden]) ~ :not([hidden]),
+  .space-y-8 > :not([hidden]) ~ :not([hidden]),
+  .space-y-10 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0 !important;
+    margin-top: 12px !important;
+    margin-bottom: 0 !important;
+  }
+  .grid, .gap-4, .gap-6, .gap-8 {
+    gap: 12px !important;
+  }
+  .p-4, .p-5, .p-6, .p-8, .p-10, .px-4, .px-5, .px-6, .px-8, .py-4, .py-5, .py-6, .py-8 {
+    padding: 10px !important;
+  }
+  .rounded-2xl, .rounded-3xl, .rounded-\[20px\], .rounded-\[32px\] {
+    border-radius: 8px !important;
+  }
+  /* Font size overrides for print */
+  .text-\[26px\], .text-\[30px\], .page-title, h1 {
+    font-size: 16px !important;
+  }
+  .text-xl, h2 {
+    font-size: 13px !important;
+  }
+  .text-lg, h3 {
+    font-size: 11px !important;
+  }
+  .text-\[15px\], .text-base, p, span, td, th, div {
+    font-size: 10.5px !important;
+  }
+  /* Force charts to fit */
+  .recharts-responsive-container {
+    height: 200px !important;
+    max-height: 200px !important;
+  }
+  @page { margin: 0.8cm; size: A4 portrait; }
 }
 
 /* Safe area padding utilities for mobile notch devices */

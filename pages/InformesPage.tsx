@@ -746,8 +746,20 @@ export default function InformesPage() {
 
     <div className="space-y-6 md:space-y-8 w-full pt-3 md:pt-6 animate-in fade-in duration-300 print:bg-white print:p-0 print:space-y-4">
       
+      {/* Print header */}
+      <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[22px] font-black text-zinc-900 tracking-tight">ALGORITMIA</span>
+          <span className="text-[11px] text-zinc-400">{new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+        </div>
+        <p className="text-[13px] text-zinc-500 font-medium">Métricas de Redes Sociales — Instagram & Facebook</p>
+        <p className="text-[15px] font-bold text-zinc-900">
+          Período: {fmtDateRange(range.since)} — {fmtDateRange(range.until)}
+        </p>
+      </div>
+
       {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5 print:border-b-2 print:pb-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5 print:hidden">
         <div>
           <h1 className="text-[26px] md:text-[30px] font-black tracking-tight text-zinc-900 dark:text-white leading-none flex items-center gap-2">
             Métricas de Redes Sociales

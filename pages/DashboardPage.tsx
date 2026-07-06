@@ -2087,7 +2087,7 @@ export default function DashboardPage() {
           </div>
       </div>
       )}
-      <div className="page-header relative">
+      <div className="page-header relative print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <img
