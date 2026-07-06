@@ -99,10 +99,17 @@ export default function AtencionPage() {
     const wasDark = html.classList.contains('dark');
     if (wasDark) html.classList.remove('dark');
     html.classList.add('is-printing');
+
+    const oldTitle = document.title;
+    const businessName = profile?.business_name || 'Mi Cliente';
+    const dateStr = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
+    document.title = `${businessName} - Informes de Atencion - ${dateStr}`;
+
     setTimeout(() => {
       window.print();
       html.classList.remove('is-printing');
       if (wasDark) html.classList.add('dark');
+      document.title = oldTitle;
     }, 350);
   };
 

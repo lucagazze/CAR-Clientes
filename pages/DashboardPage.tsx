@@ -935,24 +935,31 @@ export default function DashboardPage() {
   const { darkMode } = useTheme();
   const navigate = useNavigate();
   
-  const handleExportPDF = () => {
-    const html = document.documentElement;
-    const wasDark = html.classList.contains('dark');
-    if (wasDark) html.classList.remove('dark');
-    html.classList.add('is-printing');
-    setTimeout(() => {
-      window.print();
-      html.classList.remove('is-printing');
-      if (wasDark) html.classList.add('dark');
-    }, 350);
-  };
-
   const { viewAsProfile, isViewingAs } = useViewAs();
   const rawProfile = isViewingAs ? viewAsProfile : authProfile;
   const profile = useMemo(
     () => withDemoProfileDefaults(rawProfile as any, user?.email, user?.id),
     [rawProfile, user?.email, user?.id],
   );
+
+  const handleExportPDF = () => {
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    if (wasDark) html.classList.remove('dark');
+    html.classList.add('is-printing');
+
+    const oldTitle = document.title;
+    const businessName = profile?.business_name || 'Mi Cliente';
+    const dateStr = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
+    document.title = `${businessName} - Resumen General - ${dateStr}`;
+
+    setTimeout(() => {
+      window.print();
+      html.classList.remove('is-printing');
+      if (wasDark) html.classList.add('dark');
+      document.title = oldTitle;
+    }, 350);
+  };
 
   const detectedPlatform = useMemo(() => {
     let platform = normalizeEcommercePlatform((profile as any)?.ecommerce_platform);
