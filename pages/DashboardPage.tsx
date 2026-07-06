@@ -54,7 +54,8 @@ import {
   Clock,
   Loader2,
   User,
-  Coins
+  Coins,
+  FileDown
 } from "lucide-react";
 import {
   AreaChart,
@@ -933,6 +934,19 @@ export default function DashboardPage() {
   const { profile: authProfile, user } = useAuth();
   const { darkMode } = useTheme();
   const navigate = useNavigate();
+  
+  const handleExportPDF = () => {
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    if (wasDark) html.classList.remove('dark');
+    html.classList.add('is-printing');
+    setTimeout(() => {
+      window.print();
+      html.classList.remove('is-printing');
+      if (wasDark) html.classList.add('dark');
+    }, 350);
+  };
+
   const { viewAsProfile, isViewingAs } = useViewAs();
   const rawProfile = isViewingAs ? viewAsProfile : authProfile;
   const profile = useMemo(
@@ -1984,9 +1998,36 @@ export default function DashboardPage() {
     <CenteredPageLoader isLoading={false}>
 
     <div className="w-full space-y-6 sm:space-y-10 pt-4 md:pt-6">
+      {/* Print header */}
+      <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[22px] font-black text-zinc-900 tracking-tight">ALGORITMIA</span>
+          <span className="text-[11px] text-zinc-400">{new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+        </div>
+        <p className="text-[13px] text-zinc-500 font-medium">Resumen General — Panel de Control</p>
+        <p className="text-[15px] font-bold text-zinc-900">
+          Período: {activePreset === 'custom' 
+            ? `${fmtDateRange(activeSince, true)} — ${fmtDateRange(activeUntil, true)}` 
+            : ({
+                'today': 'Hoy',
+                'yesterday': 'Ayer',
+                'last_7d': 'Últimos 7 días',
+                'last_14d': 'Últimos 14 días',
+                'last_28d': 'Últimos 28 días',
+                'last_30d': 'Últimos 30 días',
+                'last_90d': 'Últimos 90 días',
+                'this_month': 'Este mes',
+                'last_month': 'Mes pasado',
+                'this_year': 'Este año',
+                'last_year': 'Año pasado'
+              } as any)[activePreset] || activePreset
+          }
+        </p>
+      </div>
+
       {/* Admin Client Picker */}
       {authProfile?.is_admin && allClients.length > 0 && (
-        <div className="bg-white dark:bg-zinc-900 rounded-[16px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm p-3">
+        <div className="bg-white dark:bg-zinc-900 rounded-[16px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm p-3 print:hidden">
           <div className="flex items-center gap-2 mb-3 px-1">
             <div className="w-2 h-2 rounded-full bg-violet-500" />
             <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
@@ -2078,10 +2119,18 @@ export default function DashboardPage() {
         <button
           onClick={() => navigate('/moneda')}
           title="Configurar monedas y conversiones"
-          className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition-all"
+          className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition-all print:hidden"
         >
           <Coins className="w-4 h-4 text-emerald-500" />
           <span className="whitespace-nowrap">1 USD = {formatCurrencyValue(usdArsRate, "ARS", 2)} ARS</span>
+        </button>
+        <button
+          onClick={handleExportPDF}
+          title="Exportar información a PDF"
+          className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all print:hidden"
+        >
+          <FileDown className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+          <span className="whitespace-nowrap">Exportar PDF</span>
         </button>
         <div
           className="flex items-center justify-between md:justify-start w-full md:w-auto bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-sm h-9 md:h-10 relative z-20"

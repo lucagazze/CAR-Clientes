@@ -16,7 +16,8 @@ import { loadIgnoredComments, setIgnoredComment } from '../services/ignoredComme
 import {
   Layers, Film, X, Loader2, ImageIcon, ChevronLeft, ChevronRight, Calendar, ChevronDown,
   Instagram, MessageCircle, Heart, Send, Sparkles, ArrowUpRight, Play, Facebook,
-  Share2, Eye, MousePointerClick, Users, Brain, AlertTriangle, EyeOff, TrendingDown
+  Share2, Eye, MousePointerClick, Users, Brain, AlertTriangle, EyeOff, TrendingDown,
+  FileDown
 } from 'lucide-react';
 
 // ── AutoResizeTextarea ────────────────────────────────────────────────────────
@@ -128,6 +129,18 @@ export default function MetaAdsPage() {
   const { profile: authProfile, loading: authLoading, user } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
+
+  const handleExportPDF = () => {
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    if (wasDark) html.classList.remove('dark');
+    html.classList.add('is-printing');
+    setTimeout(() => {
+      window.print();
+      html.classList.remove('is-printing');
+      if (wasDark) html.classList.add('dark');
+    }, 350);
+  };
 
   const fbPageId = (profile as any)?.fb_page_id;
   const igId = (profile as any)?.ig_business_id;
@@ -843,8 +856,20 @@ export default function MetaAdsPage() {
       {AIGate}
       <div className="w-full animate-fade-in pb-20 pt-3 md:pt-6">
 
+        {/* Print header */}
+        <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-[22px] font-black text-zinc-900 tracking-tight">ALGORITMIA</span>
+            <span className="text-[11px] text-zinc-400">{new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+          </div>
+          <p className="text-[13px] text-zinc-500 font-medium">Meta Ads — Creativos Activos</p>
+          <p className="text-[15px] font-bold text-zinc-900">
+            Período: {activePreset === 'custom' ? `${fmtD(activeSince)} — ${fmtD(activeUntil)}` : PRESETS.find(p => p.id === activePreset)?.label || activePreset}
+          </p>
+        </div>
+
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 print:hidden">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
               <Layers className="w-5 h-5 text-blue-500" />
@@ -855,8 +880,18 @@ export default function MetaAdsPage() {
             </div>
           </div>
 
-          {/* Date Picker (unifying design with CaptacionPage) */}
-          <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-sm h-9 md:h-10 relative z-50" ref={datePickerRef}>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportPDF}
+              title="Exportar información a PDF"
+              className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all print:hidden"
+            >
+              <FileDown className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+              <span className="whitespace-nowrap">Exportar PDF</span>
+            </button>
+
+            {/* Date Picker (unifying design with CaptacionPage) */}
+            <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-sm h-9 md:h-10 relative z-50" ref={datePickerRef}>
             <button 
               onClick={() => {
                 if (!showDatePicker) {
@@ -980,6 +1015,7 @@ export default function MetaAdsPage() {
                 </div>
               </div>
             )}
+          </div>
           </div>
         </div>
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import {
-  TrendingUp, MessageCircle, Inbox, Send, Clock, CheckCircle, Users, ChevronDown, Calendar, Loader2, AlertCircle, Activity, Globe, Mail
+  TrendingUp, MessageCircle, Inbox, Send, Clock, CheckCircle, Users, ChevronDown, Calendar, Loader2, AlertCircle, Activity, Globe, Mail, FileDown
 } from 'lucide-react';
 import { chatwoot } from '../services/chatwoot';
 import { getPrevPeriod, today, daysAgo, presetToRange } from '../services/metaAds';
@@ -93,6 +93,18 @@ export default function AtencionPage() {
   const { profile: authProfile } = useAuth();
   const { viewAsProfile, isViewingAs } = useViewAs();
   const profile = isViewingAs ? viewAsProfile : authProfile;
+
+  const handleExportPDF = () => {
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    if (wasDark) html.classList.remove('dark');
+    html.classList.add('is-printing');
+    setTimeout(() => {
+      window.print();
+      html.classList.remove('is-printing');
+      if (wasDark) html.classList.add('dark');
+    }, 350);
+  };
 
   // Active dates
   const [activePreset, setActivePreset] = useState<any>('last_14d');
@@ -540,8 +552,35 @@ export default function AtencionPage() {
     <CenteredPageLoader isLoading={false}>
 
     <div className="w-full animate-fade-in pb-20 pt-4 md:pt-6">
+      {/* Print header */}
+      <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[22px] font-black text-zinc-900 tracking-tight">ALGORITMIA</span>
+          <span className="text-[11px] text-zinc-400">{new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+        </div>
+        <p className="text-[13px] text-zinc-500 font-medium">Informes de Atención — Chatwoot</p>
+        <p className="text-[15px] font-bold text-zinc-900">
+          Período: {activePreset === 'custom' 
+            ? `${fmtDateRange(activeSince)} — ${fmtDateRange(activeUntil)}` 
+            : ({
+                'today': 'Hoy',
+                'yesterday': 'Ayer',
+                'last_7d': 'Últimos 7 días',
+                'last_14d': 'Últimos 14 días',
+                'last_28d': 'Últimos 28 días',
+                'last_30d': 'Últimos 30 días',
+                'last_90d': 'Últimos 90 días',
+                'this_month': 'Este mes',
+                'last_month': 'Mes pasado',
+                'this_year': 'Este año',
+                'last_year': 'Año pasado'
+              } as any)[activePreset] || activePreset
+          }
+        </p>
+      </div>
+
       {/* Header */}
-      <div className="page-header">
+      <div className="page-header print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800/50 flex items-center justify-center overflow-hidden shrink-0">
@@ -554,6 +593,14 @@ export default function AtencionPage() {
 
         {/* Date Selector */}
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleExportPDF}
+            title="Exportar información a PDF"
+            className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all print:hidden"
+          >
+            <FileDown className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+            <span className="whitespace-nowrap">Exportar PDF</span>
+          </button>
 
           {/* Datepicker trigger */}
           <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-sm h-9 md:h-10 relative" ref={datePickerRef}>

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from '
 import {
   RefreshCw, Mail, Workflow, ChevronDown, ChevronRight, ChevronLeft,
   Eye, Key, ExternalLink, AlertCircle, X, Monitor, Smartphone,
-  Clock, Send, CalendarClock, Zap, Check, Copy, ArrowUpDown, Trash2, Undo2
+  Clock, Send, CalendarClock, Zap, Check, Copy, ArrowUpDown, Trash2, Undo2,
+  FileDown
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
@@ -1058,6 +1059,18 @@ export default function EmailMarketingPage() {
   const { viewAsProfile, isViewingAs } = useViewAs();
   const activeProfile = isViewingAs ? viewAsProfile : profile;
 
+  const handleExportPDF = () => {
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    if (wasDark) html.classList.remove('dark');
+    html.classList.add('is-printing');
+    setTimeout(() => {
+      window.print();
+      html.classList.remove('is-printing');
+      if (wasDark) html.classList.add('dark');
+    }, 350);
+  };
+
   const apiKey = activeProfile?.klaviyo_api_key ?? '';
 
   // Original state (local library fallback)
@@ -1132,8 +1145,20 @@ export default function EmailMarketingPage() {
 
     return (
       <div className="w-full space-y-6 flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
+        {/* Print header */}
+        <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-[22px] font-black text-zinc-900 tracking-tight">ALGORITMIA</span>
+            <span className="text-[11px] text-zinc-400">{new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+          </div>
+          <p className="text-[13px] text-zinc-500 font-medium">Email Marketing — Campañas y Flujos</p>
+          <p className="text-[15px] font-bold text-zinc-900">
+            Klaviyo Monitor
+          </p>
+        </div>
+
         {/* Header */}
-        <div className="page-header">
+        <div className="page-header print:hidden">
           <div>
             <h1 className="page-title">Campañas y Flujos</h1>
             <p className="page-subtitle">
@@ -1141,7 +1166,16 @@ export default function EmailMarketingPage() {
               {lastSync && ` · sync ${lastSync.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
             </p>
           </div>
-          <div className="flex items-center gap-2" />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportPDF}
+              title="Exportar información a PDF"
+              className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
+            >
+              <FileDown className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+              <span className="whitespace-nowrap">Exportar PDF</span>
+            </button>
+          </div>
         </div>
 
         {/* Error banner */}
@@ -1290,23 +1324,45 @@ export default function EmailMarketingPage() {
   return (
     <CenteredPageLoader isLoading={loading}>
     <div className="w-full flex-1 min-w-0 flex flex-col relative animate-in fade-in duration-500">
+      {/* Print header */}
+      <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[22px] font-black text-zinc-900 tracking-tight">ALGORITMIA</span>
+          <span className="text-[11px] text-zinc-400">{new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+        </div>
+        <p className="text-[13px] text-zinc-500 font-medium">Email Marketing — Campañas y Flujos</p>
+        <p className="text-[15px] font-bold text-zinc-900">
+          Emails Preparados: {visible.length}
+        </p>
+      </div>
+
       {/* Header */}
-      <div className="page-header">
+      <div className="page-header print:hidden">
         <div>
           <h1 className="page-title">Campañas y Flujos</h1>
           <p className="page-subtitle">
             {visible.length} email{visible.length !== 1 ? 's' : ''} preparado{visible.length !== 1 ? 's' : ''} para tu cuenta
           </p>
         </div>
-        {visible.length > 0 && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10 transition-all"
+            onClick={handleExportPDF}
+            title="Exportar información a PDF"
+            className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
           >
-            <ArrowUpDown className="w-3.5 h-3.5" />
-            {sortDir === 'desc' ? 'Más recientes' : 'Más antiguos'}
+            <FileDown className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+            <span className="whitespace-nowrap">Exportar PDF</span>
           </button>
-        )}
+          {visible.length > 0 && (
+            <button
+              onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10 transition-all"
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              {sortDir === 'desc' ? 'Más recientes' : 'Más antiguos'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Empty state */}

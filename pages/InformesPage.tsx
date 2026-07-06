@@ -6,7 +6,7 @@ import {
   TrendingUp, Instagram, ArrowUpRight,
   Calendar, ChevronDown, ThumbsUp, MessageCircle,
   Image as ImageIcon, Facebook, Info,
-  BarChart2, RefreshCw, FileText, Download, Users, Loader2
+  BarChart2, RefreshCw, FileText, Download, Users, Loader2, FileDown
 } from 'lucide-react';
 import { metaAds, DatePreset, presetToRange, getPrevPeriod, today } from '../services/metaAds';
 import { 
@@ -723,7 +723,15 @@ export default function InformesPage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    if (wasDark) html.classList.remove('dark');
+    html.classList.add('is-printing');
+    setTimeout(() => {
+      window.print();
+      html.classList.remove('is-printing');
+      if (wasDark) html.classList.add('dark');
+    }, 350);
   };
 
   const igId = (profile as any)?.ig_business_id;
@@ -754,6 +762,14 @@ export default function InformesPage() {
 
         {/* Date picker + reload */}
         <div className="flex items-center gap-2 flex-wrap justify-start md:justify-end print:hidden">
+          <button
+            onClick={handlePrint}
+            title="Exportar información a PDF"
+            className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all print:hidden"
+          >
+            <FileDown className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+            <span className="whitespace-nowrap">Exportar PDF</span>
+          </button>
           
           {/* Platform Tab Selector */}
           <div className="flex items-center gap-1 bg-zinc-150/80 dark:bg-zinc-800/60 p-1 rounded-2xl border border-zinc-250/20 dark:border-zinc-700/60">

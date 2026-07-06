@@ -4,7 +4,7 @@ import { useViewAs } from '../contexts/ViewAsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 
-import { ShoppingBag, DollarSign, Package, Calendar, ChevronDown, Receipt, Tag, TrendingUp, CheckCircle, Clock, BarChart2, Download, X, Search, AlertCircle, XCircle, Loader2, RefreshCw, Users, ChevronRight, MapPin, Building } from 'lucide-react';
+import { ShoppingBag, DollarSign, Package, Calendar, ChevronDown, Receipt, Tag, TrendingUp, CheckCircle, Clock, BarChart2, Download, X, Search, AlertCircle, XCircle, Loader2, RefreshCw, Users, ChevronRight, MapPin, Building, FileDown } from 'lucide-react';
 import { ecommerce } from '../services/ecommerce';
 import { getPrevPeriod, today, daysAgo, presetToRange } from '../services/metaAds';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
@@ -287,6 +287,14 @@ export default function TiendaPage() {
         </div>
 
         <div className="flex items-center gap-3 print:hidden">
+          <button
+            onClick={handleExportPDF}
+            title="Exportar información a PDF"
+            className="h-9 md:h-10 px-3.5 rounded-full bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] shadow-sm flex items-center justify-center gap-2 text-[11px] md:text-[12px] font-black text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all print:hidden"
+          >
+            <FileDown className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
+            <span className="whitespace-nowrap">Exportar PDF</span>
+          </button>
           <div className="flex items-center bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-white/[0.06] rounded-full px-1 py-0.5 md:py-1 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] h-9 md:h-10 relative" ref={datePickerRef}>
               <button 
                 onClick={() => setShowDatePicker(!showDatePicker)} 
