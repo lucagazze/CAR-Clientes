@@ -266,7 +266,11 @@ html.is-printing .recharts-surface {
   main { overflow: visible !important; height: auto !important; }
   main > div { overflow: visible !important; height: auto !important; flex: none !important; }
   .recharts-wrapper, .recharts-surface { overflow: visible !important; }
-  .space-y-6 > div, .space-y-8 > div, .space-y-4 > div, .grid > div {
+  /* Only keep individual cards, charts and table rows intact */
+  tr,
+  .recharts-responsive-container,
+  .recharts-wrapper,
+  div[class*="rounded-"] {
     break-inside: avoid;
     page-break-inside: avoid;
   }
