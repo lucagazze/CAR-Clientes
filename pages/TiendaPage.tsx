@@ -266,6 +266,33 @@ export default function TiendaPage() {
     <CenteredPageLoader isLoading={false}>
 
     <div className="w-full animate-fade-in pb-20 pt-4 md:pt-6">
+      {/* Print header */}
+      <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-[22px] font-black text-zinc-900 tracking-tight">ALGORITMIA</span>
+          <span className="text-[11px] text-zinc-400">{new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+        </div>
+        <p className="text-[13px] text-zinc-500 font-medium">Rendimiento de Tienda — {detectedPlatform === 'shopify' ? 'Shopify' : detectedPlatform === 'tiendanube' ? 'Tiendanube' : detectedPlatform === 'wordpress' ? 'WooCommerce' : 'E-commerce'}</p>
+        <p className="text-[15px] font-bold text-zinc-900">
+          Período: {activePreset === 'custom' 
+            ? `${fmtDateRange(activeSince)} — ${fmtDateRange(activeUntil)}` 
+            : ({
+                'today': 'Hoy',
+                'yesterday': 'Ayer',
+                'last_7d': 'Últimos 7 días',
+                'last_14d': 'Últimos 14 días',
+                'last_28d': 'Últimos 28 días',
+                'last_30d': 'Últimos 30 días',
+                'last_90d': 'Últimos 90 días',
+                'this_month': 'Este mes',
+                'last_month': 'Mes pasado',
+                'this_year': 'Este año',
+                'last_year': 'Año pasado'
+              } as any)[activePreset] || activePreset
+          }
+        </p>
+      </div>
+
       {/* Header */}
       <div className="page-header print:hidden">
         <div>
