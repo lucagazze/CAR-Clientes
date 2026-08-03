@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, BarChart2, Mail, Link2, FileText, Sun, Moon, X, LogOut, MessageCircle, Shield, ShoppingBag,
-  AlertTriangle, Activity, Library, Workflow, Instagram, MessageSquare, Brain, Users, Package,
+  AlertTriangle, Activity, Library, Workflow, Instagram, MessageSquare, Brain, Users, Package, ChevronDown,
   Calculator, Coins, Target, Send, Zap, Building2, Loader2, User, ShoppingCart, UploadCloud, History, ArrowRightLeft
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useViewAs } from '../../contexts/ViewAsContext';
 import { useUnread } from '../../contexts/UnreadContext';
 import { db } from '../../services/db';
+import { supabase } from '../../services/supabase';
 import { isDemoEmail, isDemoProfile } from '../../services/demoData';
 
 interface SidebarProps {
@@ -56,9 +57,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const { unreadCount, pendingCommentsCount, commentsLoading, unreadLoading, chatwootAvailable, pendingOrdersCount, ordersLoading } = useUnread();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [hasLinks, setHasLinks] = useState(false);
+  const [allClients, setAllClients] = useState<any[]>([]);
+  const [showClientPicker, setShowClientPicker] = useState(false);
+  const clientPickerRef = useRef<HTMLDivElement>(null);
 
   // Use viewAsProfile if active, otherwise use real profile
   const activeProfile = isViewingAs ? viewAsProfile : profile;
+
+  useEffect(() => {
+    if (!profile?.is_admin) {
+      setAllClients([]);
+      setShowClientPicker(false);
+      return;
+    }
+
+    let cancelled = false;
+    supabase
+      .from('car_clients')
+      .select('*')
+      .order('business_name')
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        setAllClients((data ?? []).filter((client: any) => !client.is_admin));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.is_admin]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (clientPickerRef.current && !clientPickerRef.current.contains(event.target as Node)) {
+        setShowClientPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   React.useEffect(() => {
     if (!activeProfile?.id) {
@@ -358,20 +395,66 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
         ${isOpen ? 'translate-x-0 shadow-[20px_0_60px_rgba(0,0,0,0.2)]' : '-translate-x-full'}
       `}>
 
-        {/* View-as banner */}
-        {isViewingAs && profile?.is_admin && (
-          <div className="flex-shrink-0 mx-3 mt-3 bg-violet-600 rounded-[10px] px-3 py-2 flex items-center gap-2">
-            <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black text-violet-200 uppercase tracking-widest animate-in fade-in duration-200">Viendo como</p>
-              <p className="text-[12px] font-bold text-white truncate">{viewAsProfile?.business_name}</p>
+        {/* Admin client picker — kept in the sidebar so it never adds space to page content */}
+        {profile?.is_admin && allClients.length > 0 && (
+          <div ref={clientPickerRef} className="relative flex-shrink-0 px-3 pt-3 pb-2">
+            <div className="flex items-center gap-1.5 px-1 mb-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.16em]">
+                Cliente
+              </span>
+              {isViewingAs && (
+                <button
+                  onClick={exitViewAs}
+                  className="ml-auto text-[9px] font-bold text-zinc-400 hover:text-red-500 transition-colors"
+                >
+                  Volver a mi vista
+                </button>
+              )}
             </div>
-            <button
-              onClick={exitViewAs}
-              className="flex-shrink-0 p-1 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-all"
-              title="Volver al admin"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-expanded={showClientPicker}
+                onClick={() => setShowClientPicker(prev => !prev)}
+                className="w-full h-9 pl-3 pr-8 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/80 dark:bg-white/[0.035] text-left text-[11px] hover:border-violet-300 dark:hover:border-violet-500/50 transition-all flex items-center"
+              >
+                <span className={`truncate ${isViewingAs ? 'font-bold text-zinc-900 dark:text-white' : 'font-semibold text-zinc-500 dark:text-zinc-400'}`}>
+                  {viewAsProfile?.business_name || 'Mi vista'}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 absolute right-3 transition-transform duration-200 ${showClientPicker ? 'rotate-180' : ''}`} />
+              </button>
+              {showClientPicker && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl z-50 overflow-hidden animate-in slide-in-from-top-1 fade-in duration-150">
+                  <button
+                    type="button"
+                    onClick={exitViewAs}
+                    className="w-full px-3 py-2 text-left text-[11px] font-semibold text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    Mi vista
+                  </button>
+                  <div className="h-px bg-zinc-100 dark:bg-zinc-800" />
+                  {allClients.map(client => (
+                    <button
+                      type="button"
+                      key={client.id}
+                      onClick={() => {
+                        setViewAsProfile({ ...client, is_admin: false });
+                        setShowClientPicker(false);
+                        if (location.pathname !== '/dashboard') navigate('/dashboard');
+                      }}
+                      className={`w-full px-3 py-2 text-left text-[11px] font-bold truncate transition-colors ${
+                        viewAsProfile?.id === client.id
+                          ? 'bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                          : 'text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {client.business_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

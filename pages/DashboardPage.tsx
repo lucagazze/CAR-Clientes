@@ -1087,14 +1087,10 @@ export default function DashboardPage() {
   const [loadingInitial, setLoadingInitial] = useState(true);
   const isDateReloading = !loadingInitial && (fetchingStore || fetchingMeta || fetchingKlaviyo || fetchingChatwoot);
   const datePickerRef = useRef<HTMLDivElement>(null);
-  const clientPickerRef = useRef<HTMLDivElement>(null);
-  const [showClientPicker, setShowClientPicker] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fetchIdRef = useRef(0);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [allClients, setAllClients] = useState<any[]>([]);
-  const { setViewAsProfile } = useViewAs();
   const [selectedMetaGoal, setSelectedMetaGoal] = useState<'purchases' | 'leads' | 'messages'>('purchases');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [fulfillingOrder, setFulfillingOrder] = useState(false);
@@ -1183,25 +1179,10 @@ export default function DashboardPage() {
     else setSelectedMetaGoal('purchases'); // default to purchases for e-com or if empty
   }, [primaryTag]);
 
-  // Load all clients if admin
-  useEffect(() => {
-    if (authProfile?.is_admin) {
-      supabase
-        .from("car_clients")
-        .select("*")
-        .order("business_name")
-        .then(({ data }) => {
-          if (data) setAllClients(data.filter((c) => !c.is_admin));
-        });
-    }
-  }, [authProfile?.is_admin]);
-
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node))
         setShowDatePicker(false);
-      if (clientPickerRef.current && !clientPickerRef.current.contains(event.target as Node))
-        setShowClientPicker(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -2032,68 +2013,6 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Admin Client Picker */}
-      {authProfile?.is_admin && allClients.length > 0 && (
-        <div className="bg-white dark:bg-zinc-900 rounded-[16px] border border-black/[0.06] dark:border-white/[0.06] shadow-sm p-3 print:hidden">
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <div className="w-2 h-2 rounded-full bg-violet-500" />
-            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-              Seleccionar cliente
-            </span>
-            {isViewingAs && (
-              <button
-                onClick={() => setViewAsProfile(null)}
-                className="ml-auto text-[10px] font-bold text-zinc-400 hover:text-red-500 transition-colors"
-              >
-                Volver a mi vista
-              </button>
-            )}
-          </div>
-          <div className="relative mt-2" ref={clientPickerRef}>
-            <button
-              onClick={() => setShowClientPicker(!showClientPicker)}
-              className="w-full h-11 pl-4 pr-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-left text-[14px] cursor-pointer hover:border-violet-300 dark:hover:border-violet-500/50 transition-all shadow-sm flex items-center"
-            >
-              {viewAsProfile ? (
-                <span className="font-bold text-zinc-900 dark:text-white">{viewAsProfile.business_name}</span>
-              ) : (
-                <span className="font-normal text-zinc-400">Seleccionar cliente... (Mi Vista)</span>
-              )}
-              <ChevronDown className={`w-4 h-4 text-zinc-400 absolute right-4 transition-transform duration-200 ${showClientPicker ? 'rotate-180' : ''}`} />
-            </button>
-            {showClientPicker && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in slide-in-from-top-2 fade-in duration-150">
-                <button
-                  onClick={() => { setViewAsProfile(null); setShowClientPicker(false); }}
-                  className="w-full px-4 py-2.5 text-left text-[13px] font-normal text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  Seleccionar cliente... (Mi Vista)
-                </button>
-                <div className="h-px bg-zinc-100 dark:bg-zinc-800" />
-                {allClients.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      setViewAsProfile({
-                        ...c,
-                        is_admin: false,
-                      } as any);
-                      setShowClientPicker(false);
-                    }}
-                    className={`w-full px-4 py-2.5 text-left text-[13px] font-bold transition-colors ${
-                      viewAsProfile?.id === c.id
-                        ? 'bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400'
-                        : 'text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800'
-                    }`}
-                  >
-                    {c.business_name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-      </div>
-      )}
       <div className="page-header relative print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-2">
