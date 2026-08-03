@@ -2112,14 +2112,6 @@ export default function DashboardPage() {
           </div>
           <h1 className="page-title">
             Resumen General
-            <span className="text-zinc-400 dark:text-zinc-500 font-medium text-[16px] sm:text-[18px]">
-              •
-            </span>
-            <span className="text-zinc-550 dark:text-zinc-400 font-medium text-[16px] sm:text-[18px] truncate">
-              {(profile as any)?.business_name ||
-                (profile as any)?.full_name ||
-                "The Skirting Factory"}
-            </span>
           </h1>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
