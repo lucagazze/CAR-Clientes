@@ -203,7 +203,7 @@ export default function InventarioPage() {
 
   return (
     <CenteredPageLoader isLoading={loading}>
-    <div className="w-full pt-4 pb-20 md:pt-6 animate-fade-in space-y-4">
+    <div className="w-full pt-0 pb-20 animate-fade-in space-y-4">
       {/* Header */}
       <div className="page-header">
         <div className="flex items-center gap-3">

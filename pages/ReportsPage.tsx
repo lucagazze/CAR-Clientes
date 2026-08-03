@@ -20,7 +20,7 @@ export default function ReportsPage() {
   }, [profile]);
 
   return (
-    <div className="w-full space-y-8 pt-3 md:pt-6 animate-in fade-in slide-in-from-bottom-3 duration-400">
+    <div className="w-full space-y-8 pt-0 animate-in fade-in slide-in-from-bottom-3 duration-400">
       <div>
         <h1 className="text-[24px] font-bold tracking-tight text-zinc-900 dark:text-white">
           Reportes

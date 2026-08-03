@@ -751,7 +751,7 @@ export default function InformesPage() {
   return (
     <CenteredPageLoader isLoading={false}>
 
-    <div className="space-y-6 md:space-y-8 w-full pt-3 md:pt-6 animate-in fade-in duration-300 print:bg-white print:p-0 print:space-y-4">
+    <div className="space-y-6 md:space-y-8 w-full pt-0 animate-in fade-in duration-300 print:bg-white print:p-0 print:space-y-4">
       
       {/* Print header */}
       <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">

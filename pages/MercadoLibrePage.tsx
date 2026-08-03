@@ -399,7 +399,7 @@ export default function MercadoLibrePage() {
 
   return (
     <CenteredPageLoader isLoading={false}>
-      <div className="w-full animate-fade-in pb-20 pt-4 md:pt-6">
+      <div className="w-full animate-fade-in pb-20 pt-0">
         {/* Header */}
         <div className="page-header print:hidden">
           <div>

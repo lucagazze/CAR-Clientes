@@ -348,10 +348,10 @@ export const MainLayout = () => {
           location.pathname === '/mensajeria' || location.pathname === '/clientes'
             ? 'overflow-hidden p-0 h-[calc(100dvh-56px)] xl:h-screen flex flex-col'
             : location.pathname === '/admin/meta'
-              ? 'overflow-x-hidden overflow-y-auto px-2 py-3 sm:px-3 sm:py-4 md:p-5 xl:p-6 pb-8'
+              ? 'overflow-x-hidden overflow-y-auto px-2 pt-0 pb-8 sm:px-3 md:px-5 xl:px-6'
               : isFixedPage 
                 ? 'overflow-hidden p-4 md:p-6 h-[calc(100dvh-56px)] xl:h-screen flex flex-col'
-                : 'overflow-x-hidden overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 md:p-6 xl:p-8 2xl:p-10 pb-8'
+                : 'overflow-x-hidden overflow-y-auto px-3 pt-0 pb-8 sm:px-4 md:px-6 xl:px-8 2xl:px-10'
         }`}>
           {/* Spacer so content starts below the fixed mobile header */}
           <div className="h-14 xl:hidden" />

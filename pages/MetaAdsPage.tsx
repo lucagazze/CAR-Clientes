@@ -861,7 +861,7 @@ export default function MetaAdsPage() {
   return (
     <CenteredPageLoader isLoading={loading || authLoading}>
       {AIGate}
-      <div className="w-full animate-fade-in pb-20 pt-3 md:pt-6">
+      <div className="w-full animate-fade-in pb-20 pt-0">
 
         {/* Print header */}
         <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">

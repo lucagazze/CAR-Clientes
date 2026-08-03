@@ -165,7 +165,7 @@ export default function AnalisisProductosPage() {
 
   return (
     <CenteredPageLoader isLoading={false}>
-      <div className="w-full pt-4 pb-20 md:pt-6 animate-fade-in">
+      <div className="w-full pt-0 pb-20 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">

@@ -616,7 +616,7 @@ export default function PedidosPage() {
   if (!hasEcommerce) {
     return (
       <CenteredPageLoader isLoading={false}>
-        <div className="w-full pt-4 pb-20 md:pt-6 flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
+        <div className="w-full pt-0 pb-20 flex flex-col items-center justify-center min-h-[50vh] gap-4 text-center px-6">
           <div className="w-14 h-14 rounded-[18px] bg-pink-500/10 flex items-center justify-center">
             <ShoppingCart className="w-7 h-7 text-pink-500" />
           </div>
@@ -629,7 +629,7 @@ export default function PedidosPage() {
 
   return (
     <CenteredPageLoader isLoading={initialLoad && loading}>
-      <div className="w-full pt-4 pb-20 md:pt-6 space-y-4">
+      <div className="w-full pt-0 pb-20 space-y-4">
 
         <div className="page-header">
           <div className="flex items-center gap-3">

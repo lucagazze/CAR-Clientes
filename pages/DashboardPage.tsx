@@ -1985,7 +1985,7 @@ export default function DashboardPage() {
   return (
     <CenteredPageLoader isLoading={false}>
 
-    <div className="w-full space-y-6 sm:space-y-10 pt-4 md:pt-6">
+    <div className="w-full space-y-6 sm:space-y-10 pt-0">
       {/* Print header */}
       <div className="hidden print:block mb-6 pb-4 border-b-2 border-zinc-200">
         <div className="flex items-baseline justify-between mb-2">

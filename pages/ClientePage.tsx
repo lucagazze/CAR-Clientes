@@ -590,7 +590,7 @@ export default function ClientePage() {
   }
 
   return (
-    <div className="w-full pt-4 pb-20 md:pt-6 space-y-6">
+    <div className="w-full pt-0 pb-20 space-y-6">
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}

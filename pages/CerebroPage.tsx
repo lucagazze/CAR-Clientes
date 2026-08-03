@@ -383,7 +383,7 @@ export default function CerebroPage() {
 
   return (
     <CenteredPageLoader isLoading={loading || authLoading}>
-    <div className="w-full pt-3 pb-20 md:pt-6 animate-fade-in">
+    <div className="w-full pt-0 pb-20 animate-fade-in">
 
       <div className="page-header">
         <div className="flex items-center gap-4 min-w-0">
