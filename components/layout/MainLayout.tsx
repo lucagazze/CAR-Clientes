@@ -301,6 +301,7 @@ export const MainLayout = () => {
   }
 
   const isFixedPage = location.pathname === '/mensajeria';
+  const contentTopSpacing = location.pathname === '/dashboard' ? 'pt-0' : 'pt-3 md:pt-4';
 
   return (
     <div className="app-shell flex min-h-screen bg-[#f5f5f7] dark:bg-[#0a0a0a] text-zinc-900 dark:text-zinc-100 transition-colors duration-300 print:bg-white" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
@@ -348,10 +349,10 @@ export const MainLayout = () => {
           location.pathname === '/mensajeria' || location.pathname === '/clientes'
             ? 'overflow-hidden p-0 h-[calc(100dvh-56px)] xl:h-screen flex flex-col'
             : location.pathname === '/admin/meta'
-              ? 'overflow-x-hidden overflow-y-auto px-2 pt-0 pb-8 sm:px-3 md:px-5 xl:px-6'
+              ? `overflow-x-hidden overflow-y-auto px-2 ${contentTopSpacing} pb-8 sm:px-3 md:px-5 xl:px-6`
               : isFixedPage 
                 ? 'overflow-hidden p-4 md:p-6 h-[calc(100dvh-56px)] xl:h-screen flex flex-col'
-                : 'overflow-x-hidden overflow-y-auto px-3 pt-0 pb-8 sm:px-4 md:px-6 xl:px-8 2xl:px-10'
+                : `overflow-x-hidden overflow-y-auto px-3 ${contentTopSpacing} pb-8 sm:px-4 md:px-6 xl:px-8 2xl:px-10`
         }`}>
           {/* Spacer so content starts below the fixed mobile header */}
           <div className="h-14 xl:hidden" />
