@@ -2,7 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = "https://czocbnyoenjbpxmcqobn.supabase.co";
 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6b2NibnlvZW5qYnB4bWNxb2JuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4NDI5MTMsImV4cCI6MjA2ODQxODkxM30.pNgJnwAY8uxb6yCQilJfD92VNwsCkntr4Ie_os2lI44";
+// La clave pública sale de la variable de entorno, no del código.
+//
+// Estaba escrita acá como literal, así que cuando se rotaron las claves de
+// Supabase cambiar la variable en Vercel no hacía absolutamente nada: el bundle
+// seguía llevando la vieja y el login devolvía 401 para todo el mundo. Una clave
+// hardcodeada es una clave que no se puede rotar.
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+if (!SUPABASE_ANON_KEY) throw new Error('Falta VITE_SUPABASE_ANON_KEY');
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
