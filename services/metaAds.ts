@@ -203,7 +203,7 @@ export const INSIGHT_FIELDS = [
 
 export const DAILY_FIELDS = [
   'spend', 'reach', 'actions', 'action_values',
-  'purchase_roas',
+  'purchase_roas', 'account_currency',
 ].join(',');
 
 // Lighter fields for ad-level (creative) insights — sin campos que no existen a nivel de anuncio

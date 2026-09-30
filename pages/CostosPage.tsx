@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { useToast } from '../components/Toast';
@@ -10,8 +10,8 @@ import {
   Info, Coins, Sparkles, Loader2, Landmark, Check, HelpCircle, Package
 } from 'lucide-react';
 import { AppleLoader } from '../components/ui/AppleLoader';
-import { useNavigate } from 'react-router-dom';
 import { normalizeCurrencySettings } from '../utils/currencySettings';
+import { metaAds } from '../services/metaAds';
 import { DEFAULT_META_ONLY_COSTS, normalizeMetaOnlyCosts, metaOnlyPerSale, metaOnlyPct, type MetaOnlyCosts } from '../utils/metaCosts';
 
 interface CatalogVariant {
@@ -59,7 +59,6 @@ export default function CostosPage() {
   // Sin tienda pero con Meta Ads: los costos se cargan por venta y se aplican sobre
   // las compras y el retorno que informa Meta.
   const metaOnly = !detectedPlatform && !!(profile as any)?.meta_account_id;
-  const navigate = useNavigate();
 
   // Accordion Open/Close states
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
@@ -114,6 +113,9 @@ export default function CostosPage() {
   const [metaCosts, setMetaCosts] = useState<MetaOnlyCosts>(DEFAULT_META_ONLY_COSTS);
   // Guardar reescribe toda la config: no se permite hasta haberla leído de la base.
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  // La carga se repite cada vez que se refresca el perfil; los costos por venta solo se pisan
+  // la primera vez por cliente, para no borrar lo que se está escribiendo.
+  const metaCostsLoadedFor = useRef<string | null>(null);
 
   // Additional costs lists
   const [additionalCosts, setAdditionalCosts] = useState<{
@@ -216,12 +218,16 @@ export default function CostosPage() {
   // Load from localStorage and Supabase
   useEffect(() => {
     if (!profileId) return;
+    // Si cambia el cliente mientras carga, la respuesta vieja no debe pisar la del nuevo:
+    // rawSettings se reescribe entero al guardar.
+    let cancelled = false;
 
     const fetchCosts = async () => {
       setLoadingProducts(true);
-      setSettingsLoaded(false);
+      if (metaCostsLoadedFor.current !== profileId) setSettingsLoaded(false);
       try {
         const costsData = await callCostsApi('costs-load');
+        if (cancelled) return;
         const varData = costsData.variantCosts || [];
         
         let maxTime: Date | null = null;
@@ -283,14 +289,17 @@ export default function CostosPage() {
         const cfg = typeof costsData.costSettings === 'string'
           ? (() => { try { return JSON.parse(costsData.costSettings); } catch { return null; } })()
           : costsData.costSettings;
+        setRawSettings(cfg && typeof cfg === 'object' ? cfg : {});
         if (cfg && typeof cfg === 'object') {
-          setRawSettings(cfg);
           if (cfg.platformCommissions) setPlatformCommissions((prev: any) => ({ ...prev, ...cfg.platformCommissions }));
           if (cfg.paymentFees) setPaymentFees((prev: any) => ({ ...prev, ...cfg.paymentFees }));
           if (cfg.gateways) setGateways((prev: any) => ({ ...prev, ...cfg.gateways }));
           if (cfg.shipping) setShipping((prev: any) => ({ ...prev, ...cfg.shipping }));
         }
-        setMetaCosts(normalizeMetaOnlyCosts(cfg?.metaCosts));
+        if (metaCostsLoadedFor.current !== profileId) {
+          setMetaCosts(normalizeMetaOnlyCosts(cfg?.metaCosts));
+          metaCostsLoadedFor.current = profileId;
+        }
         setSettingsLoaded(true);
 
         if (maxTime) {
@@ -305,11 +314,12 @@ export default function CostosPage() {
           setLastUpdatedTime(formatted);
         }
       } catch (err) {
+        if (cancelled) return;
         console.error('Error fetching costs from Supabase:', err);
         showToast('Error al cargar costos de la base de datos.', 'error');
         setVariantCosts({});
       } finally {
-        setLoadingProducts(false);
+        if (!cancelled) setLoadingProducts(false);
       }
     };
 
@@ -327,6 +337,7 @@ export default function CostosPage() {
     }
 
     fetchCosts();
+    return () => { cancelled = true; };
   }, [profileId, loadProductCatalog]);
 
   // Save helper — mismo patrón que CAR-SaaS (comparten base): guarda en DB y recién
@@ -606,7 +617,20 @@ export default function CostosPage() {
     setMetaCosts(normalized);
     saveCostSettings({ metaCosts: normalized }, 'Costos por venta guardados con éxito.', 'meta', false);
   };
-  const metaCurrency = normalizeCurrencySettings(rawSettings);
+  // Los montos fijos por venta van en la moneda de la cuenta publicitaria, la misma en que
+  // Meta informa la inversión y el valor generado. La de Moneda queda como respaldo.
+  const [accountCurrency, setAccountCurrency] = useState<string | null>(null);
+  const metaAccountId = (profile as any)?.meta_account_id as string | undefined;
+  useEffect(() => {
+    setAccountCurrency(null);
+    if (!metaOnly || !metaAccountId) return;
+    let cancelled = false;
+    metaAds.getAccount(metaAccountId)
+      .then((account: any) => { if (!cancelled) setAccountCurrency(account?.currency || null); })
+      .catch(() => { /* queda el respaldo de Moneda */ });
+    return () => { cancelled = true; };
+  }, [metaOnly, metaAccountId]);
+  const metaCostsCurrency = accountCurrency || normalizeCurrencySettings(rawSettings).metaCurrency;
   const metaCostField = (key: keyof MetaOnlyCosts, label: string, hint: string, suffix: string) => (
     <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/[0.04]">
       <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 block">{label}</span>
@@ -904,14 +928,14 @@ export default function CostosPage() {
           {openAccordions.meta && (
             <div className="p-6 border-t border-zinc-100 dark:border-white/[0.03] space-y-6">
               <p className="text-[13px] text-zinc-500 dark:text-zinc-400 max-w-2xl">
-                Esta cuenta no tiene una tienda conectada, así que la ganancia se calcula con las compras y el retorno que informa Meta Ads. Cargá lo que te cuesta cada venta y el Inicio descuenta eso y la pauta.
+                Esta cuenta no tiene una tienda conectada, así que el beneficio se calcula con las compras y el valor generado que informa Meta Ads. Cargá lo que te cuesta cada venta y el Inicio lo descuenta junto con la inversión.
               </p>
 
               <div>
                 <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400 mb-3">Por cada venta</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {metaCostField('productCostPerSale', 'Costo del producto', 'Lo que te cuesta cada venta. En productos digitales suele ser 0.', metaCurrency.costsCurrency)}
-                  {metaCostField('otherPerSale', 'Otros costos por venta', 'Envío, embalaje o un cargo fijo por transacción.', metaCurrency.costsCurrency)}
+                  {metaCostField('productCostPerSale', 'Costo del producto', 'Lo que te cuesta cada venta. En productos digitales suele ser 0.', metaCostsCurrency)}
+                  {metaCostField('otherPerSale', 'Otros costos por venta', 'Envío, embalaje o un cargo fijo por transacción.', metaCostsCurrency)}
                 </div>
               </div>
 
@@ -927,11 +951,10 @@ export default function CostosPage() {
 
               <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-white/[0.04] p-4 text-[12px] text-zinc-500 dark:text-zinc-400 space-y-1">
                 <p className="text-zinc-800 dark:text-zinc-200 font-bold">
-                  Por cada venta se descuentan {metaCurrency.costsCurrency} {metaOnlyPerSale(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })} más el {metaOnlyPct(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })}% de lo facturado.
+                  Por cada venta se descuentan {metaCostsCurrency} {metaOnlyPerSale(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })} más el {metaOnlyPct(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })}% del valor generado.
                 </p>
                 <p>
-                  Los montos fijos van en {metaCurrency.costsCurrency}. Meta Ads está cargado en {metaCurrency.metaCurrency} y el Inicio muestra {metaCurrency.baseCurrency}.{' '}
-                  <button onClick={() => navigate('/moneda')} className="font-bold text-zinc-800 dark:text-zinc-200 underline underline-offset-2">Cambiar en Moneda</button>
+                  Los montos fijos van en {metaCostsCurrency}, la moneda de tu cuenta de Meta Ads: es la misma en que se muestran la inversión, el valor generado y el beneficio.
                 </p>
               </div>
 
@@ -2058,7 +2081,7 @@ export default function CostosPage() {
               </span>
               <p className="text-[11px] text-zinc-400 mt-0.5">
                 {metaOnly
-                  ? 'La Ganancia neta del bloque Meta Ads descuenta los costos por venta, los costos adicionales y la pauta según el período seleccionado.'
+                  ? 'El Beneficio del bloque Meta Ads descuenta los costos por venta, los costos adicionales y la inversión según el período seleccionado.'
                   : 'La Facturación neta y el ROAS real descuentan costos de productos, comisiones, envíos, costos adicionales y pauta según el período seleccionado.'}
               </p>
             </div>

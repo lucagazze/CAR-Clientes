@@ -25,7 +25,6 @@ import {
   ExternalLink,
   TrendingUp,
   DollarSign,
-  Users,
   Link2,
   AlertCircle,
   Calendar,
@@ -1075,6 +1074,8 @@ export default function DashboardPage() {
   const [currentStore, setCurrentStore] = useState<any>(null);
   const [prevStore, setPrevStore] = useState<any>(null);
   const [costSummary, setCostSummary] = useState({ current: 0, previous: 0 });
+  // Costos adicionales del período agrupados por la moneda en que se cargó cada uno.
+  const [additionalByCurrency, setAdditionalByCurrency] = useState<{ current: Record<string, number>; previous: Record<string, number> }>({ current: {}, previous: {} });
   const [variantCostMap, setVariantCostMap] = useState<Record<string, { cost: number; packagingCost: number }>>({});
   const [costsConfig, setCostsConfig] = useState<any>(null);
   const [currencySettings, setCurrencySettings] = useState(DEFAULT_CURRENCY_SETTINGS);
@@ -1452,7 +1453,9 @@ export default function DashboardPage() {
             );
           };
 
-          const currSummary = sumInsights(rawDaily);
+          // Moneda real de la cuenta publicitaria, tal como la informa Meta.
+          const accountCurrency: string | null = rawDaily[0]?.account_currency || rawPrevDaily[0]?.account_currency || null;
+          const currSummary = { ...sumInsights(rawDaily), currency: accountCurrency };
           if (rawDaily.length > 0) {
             currSummary.roas = currSummary.spend ? currSummary.purchase_value / currSummary.spend : 0;
           }
@@ -1625,7 +1628,7 @@ export default function DashboardPage() {
       const [additionalRes, variantRes] = await Promise.all([
         supabase
           .from('car_additional_costs')
-          .select('name,platform,start_date,end_date,cost,daily_cost')
+          .select('name,platform,start_date,end_date,cost,daily_cost,currency')
           .eq('client_id', profile.id),
         supabase
           .from('car_variant_costs')
@@ -1634,7 +1637,10 @@ export default function DashboardPage() {
       ]);
       if (additionalRes.error) {
         console.error('Dashboard cost summary error:', additionalRes.error);
-        if (mounted) setCostSummary({ current: 0, previous: 0 });
+        if (mounted) {
+          setCostSummary({ current: 0, previous: 0 });
+          setAdditionalByCurrency({ current: {}, previous: {} });
+        }
         return;
       }
       if (mounted) {
@@ -1652,6 +1658,15 @@ export default function DashboardPage() {
         setCostSummary({
           current: calcCostForRange(items, range.since, range.until),
           previous: calcCostForRange(items, prevRange.since, prevRange.until)
+        });
+        const byCurrency = (since: string, until: string) => items.reduce((acc: Record<string, number>, item: any) => {
+          const code = item.currency || 'LOCAL';
+          acc[code] = (acc[code] || 0) + calcCostForRange([item], since, until);
+          return acc;
+        }, {});
+        setAdditionalByCurrency({
+          current: byCurrency(range.since, range.until),
+          previous: byCurrency(prevRange.since, prevRange.until),
         });
         const vcMap: Record<string, { cost: number; packagingCost: number }> = {};
         (variantRes.data || []).forEach((row: any) => {
@@ -1895,7 +1910,9 @@ export default function DashboardPage() {
   // Conversión de moneda: cada fuente puede venir en una moneda distinta (config en /moneda).
   // Todo lo que cruza fuentes (neto, MER, ROAS real) se lleva a la moneda base.
   const convertStoreToDashboard = (amount: number) => convertCurrency(amount, currencySettings.storeCurrency, currencySettings.baseCurrency, currencySettings);
-  const convertMetaToDashboard = (amount: number) => convertCurrency(amount, currencySettings.metaCurrency, currencySettings.baseCurrency, currencySettings);
+  // La moneda de Meta es la que informa la propia cuenta publicitaria; la de Moneda es el respaldo.
+  const metaAccountCurrency: string = currentMeta?.currency || currencySettings.metaCurrency;
+  const convertMetaToDashboard = (amount: number) => convertCurrency(amount, metaAccountCurrency, currencySettings.baseCurrency, currencySettings);
   const convertCostToDashboard = (amount: number) => convertCurrency(amount, currencySettings.costsCurrency, currencySettings.baseCurrency, currencySettings);
   const usdArsRate = convertCurrency(1, "USD", "ARS", currencySettings);
 
@@ -1939,31 +1956,31 @@ export default function DashboardPage() {
   const prevRealRoas = prevSpend > 0 ? prevNetRevenue / prevSpend : 0;
   const showProfitMetrics = !!currentStore && (costSummary.current > 0 || currentSpend > 0 || currentCogs > 0 || currentConfigCosts > 0);
 
-  // Clientes sin tienda conectada: la ganancia se estima solo con Meta Ads (retorno y compras
-  // atribuidas) menos la pauta y lo cargado en Costos. Todo en moneda base.
+  // Beneficio del bloque Meta Ads, en la moneda de la cuenta publicitaria igual que la inversión
+  // y el valor generado: así no depende de ninguna cotización.
+  // Sin tienda conectada descuenta lo cargado en Costos (costos por venta, en la moneda de la
+  // cuenta, y costos adicionales). Con tienda los costos reales están en Facturación neta.
+  const isMetaOnly = !detectedPlatform;
   const metaOnlyCosts = normalizeMetaOnlyCosts(costsConfig?.metaCosts);
-  const calcMetaOnlyProfit = (meta: any, additionalCosts: number) => {
-    const revenue = convertMetaToDashboard(meta?.purchase_value || 0);
-    const costs = revenue * (metaOnlyPct(metaOnlyCosts) / 100)
-      + convertCostToDashboard(metaOnlyPerSale(metaOnlyCosts) * (meta?.purchases || 0) + additionalCosts);
-    const net = revenue - costs - convertMetaToDashboard(meta?.spend || 0);
-    return { costs, net, margin: revenue > 0 ? (net / revenue) * 100 : 0 };
+  const additionalInMetaCurrency = (byCurrency: Record<string, number>) =>
+    Object.entries(byCurrency).reduce((sum, [code, amount]) =>
+      sum + convertCurrency(amount, code === 'LOCAL' ? currencySettings.costsCurrency : code, metaAccountCurrency, currencySettings), 0);
+  const calcMetaProfit = (meta: any, additionalCosts: number) => {
+    const value = meta?.purchase_value || 0;
+    const costs = isMetaOnly
+      ? value * (metaOnlyPct(metaOnlyCosts) / 100) + metaOnlyPerSale(metaOnlyCosts) * (meta?.purchases || 0) + additionalCosts
+      : 0;
+    const profit = value - costs - (meta?.spend || 0);
+    return { costs, profit, margin: value > 0 ? (profit / value) * 100 : 0 };
   };
-  const showMetaOnlyProfit = !detectedPlatform && selectedMetaGoal === 'purchases';
-  const metaProfit = calcMetaOnlyProfit(currentMeta, costSummary.current);
-  const prevMetaProfit = calcMetaOnlyProfit(prevMeta, costSummary.previous);
+  const metaAdditional = additionalInMetaCurrency(additionalByCurrency.current);
+  const prevMetaAdditional = additionalInMetaCurrency(additionalByCurrency.previous);
+  const metaProfit = calcMetaProfit(currentMeta, metaAdditional);
+  const prevMetaProfit = calcMetaProfit(prevMeta, prevMetaAdditional);
   // Los costos adicionales del período se reparten parejo entre los días.
   const metaProfitByDay = (daily: any[] | null | undefined, additionalCosts: number) =>
-    (daily || []).map((d: any) => ({ date: d.date, ...calcMetaOnlyProfit(d, additionalCosts / (daily?.length || 1)) }));
-  const metaProfitDaily = metaProfitByDay(metaDaily, costSummary.current);
-  const prevMetaProfitDaily = metaProfitByDay(prevMetaDaily, costSummary.previous);
-  const metaProfitSeries: Record<string, { label: string; key: 'costs' | 'net' | 'margin' }> = {
-    'meta-costos': { label: 'Costos', key: 'costs' },
-    'meta-neto': { label: 'Ganancia neta', key: 'net' },
-    'meta-margen': { label: 'Margen neto', key: 'margin' },
-  };
-  const expandedMetaProfit = expandedMetric ? metaProfitSeries[expandedMetric] : undefined;
-  const fmtBaseMoney = (amount: number) => `${amount < 0 ? '-' : ''}${formatCurrencyValue(Math.abs(amount), currencySettings.baseCurrency)}`;
+    (daily || []).map((d: any) => ({ date: d.date, val: calcMetaProfit(d, additionalCosts / (daily?.length || 1)).profit }));
+  const fmtMetaMoney = (amount: number) => `${amount < 0 ? '-' : ''}$ ${Math.abs(amount).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
 
   const prevMerDaily = (prevStore && prevStore.daily) ? prevStore.daily.map((d: any, idx: number) => {
     const metaDay = prevMetaDaily?.[idx];
@@ -2515,9 +2532,17 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 <img src="/assets/meta (1).webp" alt="Meta" className="w-5 h-5 object-contain shrink-0" />
                 <h2 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                  Meta Ads
+                  Meta Ads{currentMeta?.currency ? ` · ${currentMeta.currency}` : ''}
                 </h2>
               </div>
+              {isMetaOnly && selectedMetaGoal === 'purchases' && (
+                <button
+                  onClick={() => navigate('/costos')}
+                  className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2 print:hidden"
+                >
+                  {metaProfit.costs > 0 || hasMetaOnlyCosts(metaOnlyCosts) ? 'Editar costos' : 'Cargar costos'}
+                </button>
+              )}
               {metaError && (
                 <div className="flex items-center gap-1.5 text-red-500 dark:text-red-400 text-[10px] font-semibold bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-full border border-red-200/50 dark:border-red-900/50">
                   <AlertCircle className="w-3 h-3" />
@@ -2532,12 +2557,12 @@ export default function DashboardPage() {
               duration={700}
               labels={
                 selectedMetaGoal === 'purchases'
-                  ? ['Inversión', 'Alcance', 'Compras', 'ROAS', 'Retorno']
+                  ? ['Inversión', 'Compras', 'ROAS', 'Valor generado', 'Beneficio']
                   : selectedMetaGoal === 'leads'
-                  ? ['Inversión', 'Alcance', 'Leads', 'CPL']
+                  ? ['Inversión', 'Leads', 'CPL']
                   : selectedMetaGoal === 'messages'
-                  ? ['Inversión', 'Alcance', 'Mensajes', 'Costo x Msj']
-                  : ['Inversión', 'Alcance']
+                  ? ['Inversión', 'Mensajes', 'Costo x Msj']
+                  : ['Inversión']
               }
             >
               {currentMeta ? (
@@ -2569,33 +2594,7 @@ export default function DashboardPage() {
                     }
                     info="La Inversión publicitaria es la suma total del presupuesto gastado en pauta dentro de Meta Ads durante el período seleccionado."
                   />
-                  <ShopifyMetric
-                    icon={Users}
-                    label="Alcance"
-                    value={currentMeta.reach?.toLocaleString("es-AR") || 0}
-                    change={getMetaChange(currentMeta?.reach, prevMeta?.reach)}
-                    trend={
-                      (currentMeta?.reach || 0) >= (prevMeta?.reach || 0)
-                        ? "up"
-                        : "down"
-                    }
-                    data={metaDaily?.map((d: any) => ({
-                      val: d.reach,
-                      date: d.date,
-                    }))}
-                    color={MAIN_COLOR}
-                    loading={fetchingMeta}
-                    active={expandedMetric === "meta-alcance"}
-                    onClick={() =>
-                      setExpandedMetric(
-                        expandedMetric === "meta-alcance"
-                          ? null
-                          : "meta-alcance",
-                      )
-                    }
-                    info="El Alcance representa el número total de personas (usuarios únicos) que vieron tus anuncios al menos una vez en las plataformas de Meta."
-                  />
-                  
+
                   {selectedMetaGoal === 'purchases' && (
                     <>
                       <ShopifyMetric
@@ -2622,14 +2621,27 @@ export default function DashboardPage() {
                       />
                       <ShopifyMetric
                         icon={DollarSign}
-                        label="Retorno"
+                        label="Valor generado"
                         value={`$ ${currentMeta.purchase_value?.toLocaleString("es-AR", { maximumFractionDigits: 0 }) || 0}`}
                         change={getMetaChange(currentMeta?.purchase_value, prevMeta?.purchase_value)}
                         trend={(currentMeta?.purchase_value || 0) >= (prevMeta?.purchase_value || 0) ? "up" : "down"}
                         data={metaDaily?.map((d: any) => ({ val: d.purchase_value, date: d.date }))}
                         color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-roas-v"}
                         onClick={() => setExpandedMetric(expandedMetric === "meta-roas-v" ? null : "meta-roas-v")}
-                        info="Retorno es el valor monetario (ingresos) generado por las compras que son atribuidas directamente a tus campañas de anuncios en Meta."
+                        info="Valor generado es el total facturado por las compras que Meta atribuye a tus anuncios."
+                      />
+                      <ShopifyMetric
+                        icon={Coins}
+                        label="Beneficio"
+                        value={fmtMetaMoney(metaProfit.profit)}
+                        change={getMetaChange(metaProfit.profit, prevMetaProfit.profit)}
+                        trend={metaProfit.profit >= prevMetaProfit.profit ? "up" : "down"}
+                        data={metaProfitByDay(metaDaily, metaAdditional)}
+                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-beneficio"}
+                        onClick={() => setExpandedMetric(expandedMetric === "meta-beneficio" ? null : "meta-beneficio")}
+                        info={isMetaOnly
+                          ? "Beneficio es el valor generado menos la inversión publicitaria y los costos cargados en Costos (costos por venta y costos adicionales). Solo cuenta las compras que Meta atribuye a tus anuncios."
+                          : "Beneficio es el valor generado menos la inversión publicitaria. No descuenta costos de producto ni comisiones: eso está en Facturación neta, dentro de Tienda Online."}
                       />
                     </>
                   )}
@@ -2694,65 +2706,19 @@ export default function DashboardPage() {
                     </>
                   )}
                 </div>
-                {showMetaOnlyProfit && (
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                        Ganancia estimada · {currencySettings.baseCurrency}
-                      </span>
-                      <button
-                        onClick={() => navigate('/costos')}
-                        className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline underline-offset-2 print:hidden"
-                      >
-                        {hasMetaOnlyCosts(metaOnlyCosts) || costSummary.current > 0 ? 'Editar costos' : 'Cargar costos'}
-                      </button>
-                    </div>
-                    <div className="bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.06)] overflow-hidden grid grid-cols-2 lg:flex lg:overflow-x-auto scrollbar-hide">
-                      <ShopifyMetric
-                        icon={Receipt}
-                        label="Costos"
-                        value={fmtBaseMoney(metaProfit.costs)}
-                        change={getMetaChange(metaProfit.costs, prevMetaProfit.costs)}
-                        trend={metaProfit.costs >= prevMetaProfit.costs ? "up" : "down"}
-                        data={metaProfitDaily.map((d: any) => ({ val: d.costs, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-costos"}
-                        onClick={() => setExpandedMetric(expandedMetric === "meta-costos" ? null : "meta-costos")}
-                        info="Costos suma lo cargado en Costos: el monto fijo por cada compra, los porcentajes sobre lo facturado y los costos adicionales del período. No incluye la inversión publicitaria."
-                      />
-                      <ShopifyMetric
-                        icon={Coins}
-                        label="Ganancia neta"
-                        value={fmtBaseMoney(metaProfit.net)}
-                        change={getMetaChange(metaProfit.net, prevMetaProfit.net)}
-                        trend={metaProfit.net >= prevMetaProfit.net ? "up" : "down"}
-                        data={metaProfitDaily.map((d: any) => ({ val: d.net, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-neto"}
-                        onClick={() => setExpandedMetric(expandedMetric === "meta-neto" ? null : "meta-neto")}
-                        info="Ganancia neta es el retorno que informa Meta Ads menos los costos y la inversión publicitaria. Es una estimación: solo cuenta las compras que Meta atribuye a tus anuncios."
-                      />
-                      <ShopifyMetric
-                        icon={BarChart2}
-                        label="Margen neto"
-                        value={`${metaProfit.margin.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%`}
-                        change={getMetaChange(metaProfit.margin, prevMetaProfit.margin)}
-                        trend={metaProfit.margin >= prevMetaProfit.margin ? "up" : "down"}
-                        data={metaProfitDaily.map((d: any) => ({ val: d.margin, date: d.date }))}
-                        color={MAIN_COLOR} loading={fetchingMeta} active={expandedMetric === "meta-margen"}
-                        onClick={() => setExpandedMetric(expandedMetric === "meta-margen" ? null : "meta-margen")}
-                        info="Margen neto es la ganancia neta dividida por el retorno de Meta Ads: cuánto te queda de cada peso facturado después de costos y pauta."
-                      />
-                    </div>
-                  </div>
+                {isMetaOnly && selectedMetaGoal === 'purchases' && metaProfit.costs > 0 && (
+                  <p className="px-1 pt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    El beneficio descuenta <span className="font-bold text-zinc-700 dark:text-zinc-200">{fmtMetaMoney(metaProfit.costs)}</span> de costos cargados. Margen sobre el valor generado: <span className="font-bold text-zinc-700 dark:text-zinc-200">{metaProfit.margin.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%</span>.
+                  </p>
                 )}
                 {expandedMetric?.startsWith("meta-") && !fetchingMeta && (
                   <MetricDetailChart
                     label={
-                      expandedMetaProfit ? expandedMetaProfit.label
-                        : expandedMetric === "meta-inversion" ? "Inversión"
-                        : expandedMetric === "meta-alcance" ? "Alcance"
+                      expandedMetric === "meta-inversion" ? "Inversión"
+                        : expandedMetric === "meta-beneficio" ? "Beneficio"
                         : expandedMetric === "meta-purchases" ? "Compras"
                         : expandedMetric === "meta-roas" ? "ROAS"
-                        : expandedMetric === "meta-roas-v" ? "Retorno"
+                        : expandedMetric === "meta-roas-v" ? "Valor generado"
                         : expandedMetric === "meta-leads" ? "Leads"
                         : expandedMetric === "meta-cpl" ? "CPL"
                         : expandedMetric === "meta-messages" ? "Mensajes"
@@ -2760,9 +2726,8 @@ export default function DashboardPage() {
                     }
                     color={MAIN_COLOR}
                     data={
-                      expandedMetaProfit ? metaProfitDaily.map((d: any) => ({ val: d[expandedMetaProfit.key], date: d.date }))
-                        : expandedMetric === "meta-inversion" ? metaDaily?.map((d: any) => ({ val: d.spend, date: d.date }))
-                        : expandedMetric === "meta-alcance" ? metaDaily?.map((d: any) => ({ val: d.reach, date: d.date }))
+                      expandedMetric === "meta-inversion" ? metaDaily?.map((d: any) => ({ val: d.spend, date: d.date }))
+                        : expandedMetric === "meta-beneficio" ? metaProfitByDay(metaDaily, metaAdditional)
                         : expandedMetric === "meta-purchases" ? metaDaily?.map((d: any) => ({ val: d.purchases, date: d.date }))
                         : expandedMetric === "meta-roas" ? metaDaily?.map((d: any) => ({ val: d.roas, date: d.date }))
                         : expandedMetric === "meta-roas-v" ? metaDaily?.map((d: any) => ({ val: d.purchase_value, date: d.date }))
@@ -2773,9 +2738,8 @@ export default function DashboardPage() {
                         : []
                     }
                     prevData={
-                      expandedMetaProfit ? prevMetaProfitDaily.map((d: any) => ({ val: d[expandedMetaProfit.key], date: d.date }))
-                        : expandedMetric === "meta-inversion" ? prevMetaDaily?.map((d: any) => ({ val: d.spend, date: d.date }))
-                        : expandedMetric === "meta-alcance" ? prevMetaDaily?.map((d: any) => ({ val: d.reach, date: d.date }))
+                      expandedMetric === "meta-inversion" ? prevMetaDaily?.map((d: any) => ({ val: d.spend, date: d.date }))
+                        : expandedMetric === "meta-beneficio" ? metaProfitByDay(prevMetaDaily, prevMetaAdditional)
                         : expandedMetric === "meta-purchases" ? prevMetaDaily?.map((d: any) => ({ val: d.purchases, date: d.date }))
                         : expandedMetric === "meta-roas" ? prevMetaDaily?.map((d: any) => ({ val: d.roas, date: d.date }))
                         : expandedMetric === "meta-roas-v" ? prevMetaDaily?.map((d: any) => ({ val: d.purchase_value, date: d.date }))
