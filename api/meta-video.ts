@@ -38,6 +38,49 @@ async function getMetaToken(): Promise<string> {
   return value;
 }
 
+// Estado de los tokens de usuario de los clientes. Meta los invalida (error 190) cuando el
+// dueño cambia la contraseña de Facebook, cierra la sesión o vencen. Un token muerto se trata
+// como si no existiera, así la consulta cae al token de la agencia en vez de devolver el error.
+const userTokenAlive = new Map<string, { alive: boolean; expiresAt: number }>();
+const USER_TOKEN_CHECK_TTL_MS = 10 * 60 * 1000;
+
+function isInvalidTokenError(err: any): boolean {
+  return Number(err?.code) === 190;
+}
+
+function markUserTokenDead(token: string) {
+  userTokenAlive.set(token, { alive: false, expiresAt: Date.now() + USER_TOKEN_CHECK_TTL_MS });
+}
+
+function isUserTokenKnownDead(token: string): boolean {
+  const hit = userTokenAlive.get(token);
+  return !!hit && !hit.alive && hit.expiresAt > Date.now();
+}
+
+async function isUserTokenAlive(token: string): Promise<boolean> {
+  const hit = userTokenAlive.get(token);
+  if (hit && hit.expiresAt > Date.now()) return hit.alive;
+  let alive = true;
+  try {
+    const url = new URL('https://graph.facebook.com/v21.0/me');
+    url.searchParams.set('fields', 'id');
+    url.searchParams.set('access_token', token);
+    const data = await fetch(url.toString()).then(r => r.json()).catch(() => ({}));
+    alive = !isInvalidTokenError(data?.error);
+  } catch {
+    // Un corte de red no alcanza para dar el token por muerto.
+  }
+  userTokenAlive.set(token, { alive, expiresAt: Date.now() + USER_TOKEN_CHECK_TTL_MS });
+  return alive;
+}
+
+// Paginas para las que no se pudo conseguir token: no reintentar en cada request.
+const pageTokenMisses = new Map<string, number>();
+
+function pageTokenFailedRecently(pageId: string): boolean {
+  return (pageTokenMisses.get(pageId) || 0) > Date.now();
+}
+
 function getBearer(req: VercelRequest): string {
   const header = req.headers.authorization || '';
   if (!header.toLowerCase().startsWith('bearer ')) return '';
@@ -131,8 +174,12 @@ async function getClientMetaTokens(clientId: string, bearer: string): Promise<{ 
     pageToken = '';
   }
 
-  if (pageId && !pageToken && userToken) {
-    pageToken = await derivePageTokenFromUserToken(pageId, userToken);
+  if (pageId && !pageToken && !pageTokenFailedRecently(pageId)) {
+    // Si el token de usuario del cliente ya no sirve, la pagina se resuelve con el token de
+    // la agencia (funciona cuando la pagina esta asignada al usuario del sistema).
+    pageToken = await derivePageTokenFromUserToken(pageId, userToken)
+      || await derivePageTokenFromUserToken(pageId, await getMetaToken());
+    if (!pageToken) pageTokenMisses.set(pageId, Date.now() + USER_TOKEN_CHECK_TTL_MS);
     if (pageToken && supabase) {
       const current = data?.connection_statuses || {};
       await supabase
@@ -203,60 +250,71 @@ async function handleGraphProxy(req: VercelRequest, res: VercelResponse) {
   const clientTokens = await getClientMetaTokens(graphClientId, bearer);
   const needsClientPageToken = graphClientId && graphPathNeedsClientPageToken(graphPath, clientTokens);
 
-  // Paths me/* con el token de agencia listan activos de TODA la agencia: solo admins.
-  // Con token propio del cliente (OAuth), me/* devuelve sus propios activos y está permitido.
-  if ((graphPath === 'me' || graphPath.startsWith('me/')) && !clientTokens.userToken && !clientTokens.pageToken) {
-    const { data: adminRow } = await supabaseUser
-      .from('car_clients')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('is_admin', true)
-      .maybeSingle();
-    if (!adminRow) return res.status(403).json({ error: 'No autorizado' });
-  }
+  let userToken = isUserTokenKnownDead(clientTokens.userToken) ? '' : clientTokens.userToken;
 
-  const token = graphPath.startsWith('act_')
-    ? (clientTokens.userToken || await getMetaToken())
-    : (clientTokens.pageToken || (!needsClientPageToken ? (clientTokens.userToken || await getMetaToken()) : ''));
-  if (!token) {
-    return res.status(409).json({
-      error: needsClientPageToken
-        ? 'La conexion de Facebook/Instagram necesita reconectarse para renovar permisos.'
-        : 'No Meta token configured',
-    });
-  }
+  // Segunda vuelta solo si Meta rechaza el token de usuario del cliente: se repite sin él.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // Paths me/* con el token de agencia listan activos de TODA la agencia: solo admins.
+    // Con token propio del cliente (OAuth), me/* devuelve sus propios activos y está permitido.
+    if ((graphPath === 'me' || graphPath.startsWith('me/')) && !userToken && !clientTokens.pageToken) {
+      const { data: adminRow } = await supabaseUser
+        .from('car_clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_admin', true)
+        .maybeSingle();
+      if (!adminRow) return res.status(403).json({ error: 'No autorizado' });
+    }
 
-  const graphUrl = new URL(`https://graph.facebook.com/v21.0/${graphPath}`);
-  Object.entries(req.query).forEach(([key, raw]) => {
-    if (key === 'action' || key === 'path' || key === 'clientId' || READ_ONLY_DENY.has(key)) return;
-    const value = Array.isArray(raw) ? raw[0] : raw;
-    if (value !== undefined) graphUrl.searchParams.set(key, String(value));
-  });
-  graphUrl.searchParams.set('access_token', token);
-
-  try {
-    const metaRes = await fetch(graphUrl.toString());
-    const data = await metaRes.json().catch(() => ({}));
-    if (!metaRes.ok || data?.error) {
-      return res.status(metaRes.ok ? 502 : metaRes.status).json({
-        error: data?.error?.message || `Meta API error ${metaRes.status}`,
-        metaError: data?.error || null,
+    const token = graphPath.startsWith('act_')
+      ? (userToken || await getMetaToken())
+      : (clientTokens.pageToken || (!needsClientPageToken ? (userToken || await getMetaToken()) : ''));
+    if (!token) {
+      return res.status(409).json({
+        error: needsClientPageToken
+          ? 'La conexion de Facebook/Instagram necesita reconectarse para renovar permisos.'
+          : 'No Meta token configured',
       });
     }
-    // Las URLs de paging de Meta incluyen el access_token del servidor: redactarlo
-    // antes de responder. El cliente pagina con paging.cursors.after vía este proxy.
-    if (data?.paging) {
-      for (const key of ['next', 'previous']) {
-        if (typeof data.paging[key] === 'string') {
-          data.paging[key] = data.paging[key].replace(/access_token=[^&]+/g, 'access_token=redacted');
+
+    const graphUrl = new URL(`https://graph.facebook.com/v21.0/${graphPath}`);
+    Object.entries(req.query).forEach(([key, raw]) => {
+      if (key === 'action' || key === 'path' || key === 'clientId' || READ_ONLY_DENY.has(key)) return;
+      const value = Array.isArray(raw) ? raw[0] : raw;
+      if (value !== undefined) graphUrl.searchParams.set(key, String(value));
+    });
+    graphUrl.searchParams.set('access_token', token);
+
+    try {
+      const metaRes = await fetch(graphUrl.toString());
+      const data = await metaRes.json().catch(() => ({}));
+      if (!metaRes.ok || data?.error) {
+        if (userToken && token === userToken && isInvalidTokenError(data?.error)) {
+          markUserTokenDead(userToken);
+          userToken = '';
+          continue;
+        }
+        return res.status(metaRes.ok ? 502 : metaRes.status).json({
+          error: data?.error?.message || `Meta API error ${metaRes.status}`,
+          metaError: data?.error || null,
+        });
+      }
+      // Las URLs de paging de Meta incluyen el access_token del servidor: redactarlo
+      // antes de responder. El cliente pagina con paging.cursors.after vía este proxy.
+      if (data?.paging) {
+        for (const key of ['next', 'previous']) {
+          if (typeof data.paging[key] === 'string') {
+            data.paging[key] = data.paging[key].replace(/access_token=[^&]+/g, 'access_token=redacted');
+          }
         }
       }
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      return res.status(200).json(data);
+    } catch (err: any) {
+      return res.status(502).json({ error: err?.message || 'Meta API request failed' });
     }
-    res.setHeader('Cache-Control', 'private, max-age=60');
-    return res.status(200).json(data);
-  } catch (err: any) {
-    return res.status(502).json({ error: err?.message || 'Meta API request failed' });
   }
+  return res.status(502).json({ error: 'Meta API request failed' });
 }
 
 async function getPageToken(pageId: string, systemToken: string): Promise<string | null> {
@@ -339,6 +397,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       clientToken = clientData?.facebook_access_token || null;
       dbPageToken = clientData?.fb_page_access_token || null;
     }
+
+    if (clientToken && !(await isUserTokenAlive(clientToken))) clientToken = null;
 
     const token = clientToken || await getMetaToken();
     if (!token) return res.status(500).json({ error: 'No Meta token configured' });
