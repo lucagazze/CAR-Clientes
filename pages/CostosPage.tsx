@@ -10,6 +10,9 @@ import {
   Info, Coins, Sparkles, Loader2, Landmark, Check, HelpCircle, Package
 } from 'lucide-react';
 import { AppleLoader } from '../components/ui/AppleLoader';
+import { useNavigate } from 'react-router-dom';
+import { normalizeCurrencySettings } from '../utils/currencySettings';
+import { DEFAULT_META_ONLY_COSTS, normalizeMetaOnlyCosts, metaOnlyPerSale, metaOnlyPct, type MetaOnlyCosts } from '../utils/metaCosts';
 
 interface CatalogVariant {
   id: string;
@@ -53,9 +56,14 @@ export default function CostosPage() {
     if (!configuredPlatform && p?.tiendanube_store_id && p.tiendanube_access_token) return 'tiendanube';
     return null;
   }, [profile]);
+  // Sin tienda pero con Meta Ads: los costos se cargan por venta y se aplican sobre
+  // las compras y el retorno que informa Meta.
+  const metaOnly = !detectedPlatform && !!(profile as any)?.meta_account_id;
+  const navigate = useNavigate();
 
   // Accordion Open/Close states
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
+    meta: true,
     productos: true,
     plataforma: false,
     pago: false,
@@ -103,6 +111,9 @@ export default function CostosPage() {
     type: 'custom' as 'order' | 'custom',
     customShippingCost: 1500
   });
+  const [metaCosts, setMetaCosts] = useState<MetaOnlyCosts>(DEFAULT_META_ONLY_COSTS);
+  // Guardar reescribe toda la config: no se permite hasta haberla leído de la base.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // Additional costs lists
   const [additionalCosts, setAdditionalCosts] = useState<{
@@ -208,6 +219,7 @@ export default function CostosPage() {
 
     const fetchCosts = async () => {
       setLoadingProducts(true);
+      setSettingsLoaded(false);
       try {
         const costsData = await callCostsApi('costs-load');
         const varData = costsData.variantCosts || [];
@@ -278,6 +290,8 @@ export default function CostosPage() {
           if (cfg.gateways) setGateways((prev: any) => ({ ...prev, ...cfg.gateways }));
           if (cfg.shipping) setShipping((prev: any) => ({ ...prev, ...cfg.shipping }));
         }
+        setMetaCosts(normalizeMetaOnlyCosts(cfg?.metaCosts));
+        setSettingsLoaded(true);
 
         if (maxTime) {
           const formatted = (maxTime as Date).toLocaleString('es-AR', {
@@ -321,13 +335,12 @@ export default function CostosPage() {
   const [savingSettings, setSavingSettings] = useState<string | null>(null);
   const [rawSettings, setRawSettings] = useState<any>({});
 
-  const saveCostSettings = async (updatedData: any, successMessage: string, key: string) => {
+  // storeSections: false para cuentas sin tienda, así no quedan guardados los valores por
+  // defecto de comisiones y envíos de una tienda que no existe.
+  const saveCostSettings = async (updatedData: any, successMessage: string, key: string, storeSections = true) => {
     const mergedSettings = {
       ...rawSettings,
-      platformCommissions,
-      paymentFees,
-      gateways,
-      shipping,
+      ...(storeSections ? { platformCommissions, paymentFees, gateways, shipping } : {}),
       ...updatedData,
       updatedSections: {
         ...(rawSettings?.updatedSections || {}),
@@ -583,6 +596,37 @@ export default function CostosPage() {
   };
 
   // ─── SECTION 4: SHIPPING COSTS ────────────────────────────────────────
+  // ─── SOLO META ADS (sin tienda) ────────────────────────────────────
+  const handleSaveMetaCosts = () => {
+    if (!settingsLoaded) {
+      showToast('Todavía no se cargó la configuración. Recargá la página e intentá de nuevo.', 'error');
+      return;
+    }
+    const normalized = normalizeMetaOnlyCosts(metaCosts);
+    setMetaCosts(normalized);
+    saveCostSettings({ metaCosts: normalized }, 'Costos por venta guardados con éxito.', 'meta', false);
+  };
+  const metaCurrency = normalizeCurrencySettings(rawSettings);
+  const metaCostField = (key: keyof MetaOnlyCosts, label: string, hint: string, suffix: string) => (
+    <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/[0.04]">
+      <span className="text-[12px] font-bold text-zinc-800 dark:text-zinc-200 block">{label}</span>
+      <p className="text-[11px] text-zinc-400 mt-0.5 mb-3">{hint}</p>
+      <div className="relative">
+        <input
+          type="number"
+          min="0"
+          step="any"
+          placeholder="0"
+          disabled={!settingsLoaded}
+          value={metaCosts[key] || ''}
+          onChange={e => setMetaCosts(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
+          className="apple-input pr-12 font-black text-zinc-900 dark:text-zinc-100"
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[12px]">{suffix}</span>
+      </div>
+    </div>
+  );
+
   const handleSaveShipping = () => {
     // configured: el dashboard solo descuenta envíos cuando el usuario los guardó explícitamente
     const configuredShipping = { ...shipping, configured: true } as any;
@@ -821,19 +865,93 @@ export default function CostosPage() {
         )}
       </div>
 
-      {!detectedPlatform ? (
+      {!detectedPlatform && !metaOnly ? (
         <div className="rounded-[16px] border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#111113] p-10 text-center">
           <ShoppingBag className="w-10 h-10 mx-auto mb-4 text-zinc-350 dark:text-zinc-600" />
-          <h2 className="text-[16px] font-black text-zinc-900 dark:text-white mb-2">Conectá una tienda para cargar costos</h2>
+          <h2 className="text-[16px] font-black text-zinc-900 dark:text-white mb-2">Conectá una tienda o Meta Ads para cargar costos</h2>
           <p className="text-[13px] text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
-            Cuando tengas Shopify, WooCommerce o Tiendanube conectado, acá van a aparecer tus productos para asignar costo unitario, embalaje, envíos y costos adicionales.
+            Cuando tengas Shopify, WooCommerce o Tiendanube conectado, acá van a aparecer tus productos para asignar costo unitario, embalaje, envíos y costos adicionales. Con Meta Ads solo, vas a poder cargar los costos por venta.
           </p>
         </div>
       ) : (
       <>
       {/* Accordions Stack */}
       <div className="space-y-4">
-        
+
+        {/* Solo Meta Ads: costos por venta */}
+        {metaOnly && (
+        <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] overflow-hidden shadow-sm transition-all">
+          <button
+            onClick={() => toggleAccordion('meta')}
+            className="w-full flex items-center justify-between p-5 hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                <img src="/assets/meta (1).webp" alt="Meta" className="w-4 h-4 object-contain" />
+              </div>
+              <span className="text-[15px] font-bold text-zinc-900 dark:text-white flex flex-wrap items-center gap-2">
+                Costos por venta
+                {rawSettings?.updatedSections?.meta && (
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">
+                    Guardado: {new Date(rawSettings.updatedSections.meta).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit' })}
+                  </span>
+                )}
+              </span>
+            </div>
+            <ChevronLeft className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${openAccordions.meta ? '-rotate-90' : ''}`} />
+          </button>
+
+          {openAccordions.meta && (
+            <div className="p-6 border-t border-zinc-100 dark:border-white/[0.03] space-y-6">
+              <p className="text-[13px] text-zinc-500 dark:text-zinc-400 max-w-2xl">
+                Esta cuenta no tiene una tienda conectada, así que la ganancia se calcula con las compras y el retorno que informa Meta Ads. Cargá lo que te cuesta cada venta y el Inicio descuenta eso y la pauta.
+              </p>
+
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400 mb-3">Por cada venta</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {metaCostField('productCostPerSale', 'Costo del producto', 'Lo que te cuesta cada venta. En productos digitales suele ser 0.', metaCurrency.costsCurrency)}
+                  {metaCostField('otherPerSale', 'Otros costos por venta', 'Envío, embalaje o un cargo fijo por transacción.', metaCurrency.costsCurrency)}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400 mb-3">Sobre lo facturado</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {metaCostField('productCostPct', 'Costo del producto', 'Si tu costo es un porcentaje del precio.', '%')}
+                  {metaCostField('platformPct', 'Comisión de la plataforma', 'Lo que cobra la tienda donde vendés.', '%')}
+                  {metaCostField('paymentPct', 'Comisión de cobro', 'Mercado Pago, Stripe, PayPal u otro.', '%')}
+                  {metaCostField('taxPct', 'Impuestos', 'IIBB, IVA u otros sobre la venta.', '%')}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-white/[0.04] p-4 text-[12px] text-zinc-500 dark:text-zinc-400 space-y-1">
+                <p className="text-zinc-800 dark:text-zinc-200 font-bold">
+                  Por cada venta se descuentan {metaCurrency.costsCurrency} {metaOnlyPerSale(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })} más el {metaOnlyPct(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })}% de lo facturado.
+                </p>
+                <p>
+                  Los montos fijos van en {metaCurrency.costsCurrency}. Meta Ads está cargado en {metaCurrency.metaCurrency} y el Inicio muestra {metaCurrency.baseCurrency}.{' '}
+                  <button onClick={() => navigate('/moneda')} className="font-bold text-zinc-800 dark:text-zinc-200 underline underline-offset-2">Cambiar en Moneda</button>
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveMetaCosts}
+                  disabled={!settingsLoaded || savingSettings === 'meta'}
+                  className="h-9 px-6 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99] hover:opacity-90 flex items-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  <Save className="w-4 h-4" />
+                  Guardar costos
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        )}
+
+        {detectedPlatform && (
+        <>
         {/* Accordion 1: Costos de productos */}
         <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] overflow-hidden shadow-sm transition-all">
           <button 
@@ -1511,6 +1629,8 @@ export default function CostosPage() {
             </div>
           )}
         </div>
+        </>
+        )}
 
         {/* Accordion 5: Costos Adicionales */}
         <div className="bg-white dark:bg-[#111113] border border-black/[0.06] dark:border-white/[0.05] rounded-[16px] overflow-hidden shadow-sm transition-all">
@@ -1936,7 +2056,11 @@ export default function CostosPage() {
               <span className="text-[14px] font-bold text-emerald-600 dark:text-emerald-400 block">
                 Los costos se aplican automáticamente en el Dashboard
               </span>
-              <p className="text-[11px] text-zinc-400 mt-0.5">La Facturación neta y el ROAS real descuentan costos de productos, comisiones, envíos, costos adicionales y pauta según el período seleccionado.</p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                {metaOnly
+                  ? 'La Ganancia neta del bloque Meta Ads descuenta los costos por venta, los costos adicionales y la pauta según el período seleccionado.'
+                  : 'La Facturación neta y el ROAS real descuentan costos de productos, comisiones, envíos, costos adicionales y pauta según el período seleccionado.'}
+              </p>
             </div>
           </div>
         </div>

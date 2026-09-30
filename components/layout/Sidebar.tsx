@@ -156,7 +156,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     { path: '/pedidos',        icon: ShoppingCart,  label: 'Pedidos',         configured: hasEcommerce, badge: pendingOrdersCount, badgeLoading: ordersLoading },
     { path: '/inventario',     icon: Package,       label: 'Inventario',      configured: hasEcommerce },
     { path: '/clientes',       icon: Users,         label: 'Clientes',        configured: hasEcommerce },
-    { path: '/costos',         icon: Coins,         label: 'Costos',          configured: hasEcommerce },
+    { path: '/costos',         icon: Coins,         label: 'Costos',          configured: hasEcommerce || hasMeta },
     { path: '/moneda',         icon: ArrowRightLeft, label: 'Moneda',         configured: true },
   ].filter(i => isAdmin || i.configured);
 

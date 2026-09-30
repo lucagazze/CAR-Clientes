@@ -392,7 +392,7 @@ export const MainLayout = () => {
               <Route path="/informes" element={<InformesPage />} />
               <Route
                 path="/costos"
-                element={hasEcommerce || profile?.is_admin ? <CostosPage /> : <Navigate to="/dashboard" replace />}
+                element={hasEcommerce || (activeProfile as any)?.meta_account_id || profile?.is_admin ? <CostosPage /> : <Navigate to="/dashboard" replace />}
               />
               <Route path="/moneda" element={<MonedaPage />} />
               <Route path="/perfil" element={<PerfilPage />} />
