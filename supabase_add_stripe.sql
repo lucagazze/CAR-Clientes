@@ -27,6 +27,7 @@ create table if not exists car_stripe_transactions (
   currency text not null,
   source_id text,                    -- ch_ / re_ / dp_ / po_
   charge_id text,                    -- cargo original (también en reembolsos y disputas)
+  payment_intent text,               -- pi_... (el "IDPago" del Excel de Impultienda)
   order_id text,                     -- metadata.orderId de Impultienda
   store_id text,                     -- metadata.storeId de Impultienda
   customer_email text,
@@ -39,6 +40,7 @@ create table if not exists car_stripe_transactions (
 );
 create index if not exists car_stripe_tx_account_date on car_stripe_transactions (account_id, created_at desc);
 create index if not exists car_stripe_tx_charge on car_stripe_transactions (charge_id);
+create index if not exists car_stripe_tx_pi on car_stripe_transactions (payment_intent);
 alter table car_stripe_transactions enable row level security;
 
 -- Hasta dónde está sincronizada cada cuenta (epoch del último movimiento guardado).

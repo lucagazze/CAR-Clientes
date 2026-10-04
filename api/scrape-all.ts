@@ -257,14 +257,15 @@ async function readStripeTx(supabase: any, clientId: string, opts: { categories:
 }
 
 // Producto, tienda y UTMs de Impultienda para cada cobro (el cobro trae metadata.orderId).
-async function attachImpultienda(supabase: any, clientId: string, charges: any[]) {
+// No se filtra por cliente: un solo webhook "Todas mis tiendas" puede estar guardado en otro
+// cliente, y el orderId sale de un cobro de las propias cuentas de Stripe de este cliente.
+async function attachImpultienda(supabase: any, _clientId: string, charges: any[]) {
   const ids = [...new Set(charges.map(c => c.order_id).filter(Boolean))];
   const byOrder = new Map<string, any>();
   for (let i = 0; i < ids.length; i += 300) {
     const { data } = await supabase
       .from('car_impultienda_orders')
       .select('order_id, store_name, data')
-      .eq('client_id', clientId)
       .in('order_id', ids.slice(i, i + 300));
     (data || []).forEach((r: any) => byOrder.set(r.order_id, r));
   }

@@ -4095,6 +4095,7 @@ const stripeTxRow = (accountId: string, t: any) => {
     currency: t.currency,
     source_id: s?.id || (typeof t.source === 'string' ? t.source : null),
     charge_id: charge ? charge.id : (typeof s?.charge === 'string' ? s.charge : s?.charge?.id) || null,
+    payment_intent: charge ? (typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id) || null : null,
     order_id: md.orderId || null,
     store_id: md.storeId || null,
     customer_email: email ? String(email).trim().toLowerCase() : null,
