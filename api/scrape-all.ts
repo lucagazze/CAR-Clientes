@@ -231,6 +231,46 @@ async function readImpultiendaOrders(supabase: any, clientId: string, opts: { st
   return rows;
 }
 
+// Movimientos de Stripe guardados por /api/oauth?action=stripe-sync, de las cuentas del cliente.
+async function readStripeTx(supabase: any, clientId: string, opts: { categories: string[]; sinceIso?: string; untilIso?: string; limit?: number; columns?: string }) {
+  const { data: links } = await supabase.from('car_stripe_links').select('account_id').eq('client_id', clientId);
+  const accounts = (links || []).map((l: any) => l.account_id);
+  if (!accounts.length) return [];
+  const max = opts.limit ?? 30000;
+  const rows: any[] = [];
+  for (let from = 0; from < max; from += 1000) {
+    let q = supabase
+      .from('car_stripe_transactions')
+      .select(opts.columns || 'txn_id, account_id, reporting_category, created_at, amount, fee, net, currency, charge_id, order_id, store_id, customer_email, customer_name, buyer_amount, buyer_currency, country, is_post_purchase')
+      .in('account_id', accounts)
+      .in('reporting_category', opts.categories)
+      .order('created_at', { ascending: false })
+      .range(from, Math.min(from + 999, max - 1));
+    if (opts.sinceIso) q = q.gte('created_at', opts.sinceIso);
+    if (opts.untilIso) q = q.lte('created_at', opts.untilIso);
+    const { data, error } = await q;
+    if (error) throw new Error(`No se pudieron leer los movimientos de Stripe: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return rows;
+}
+
+// Producto, tienda y UTMs de Impultienda para cada cobro (el cobro trae metadata.orderId).
+async function attachImpultienda(supabase: any, clientId: string, charges: any[]) {
+  const ids = [...new Set(charges.map(c => c.order_id).filter(Boolean))];
+  const byOrder = new Map<string, any>();
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data } = await supabase
+      .from('car_impultienda_orders')
+      .select('order_id, store_name, data')
+      .eq('client_id', clientId)
+      .in('order_id', ids.slice(i, i + 300));
+    (data || []).forEach((r: any) => byOrder.set(r.order_id, r));
+  }
+  return charges.map(c => ({ ...c, _impul: c.order_id ? byOrder.get(c.order_id) || null : null }));
+}
+
 function normalizePlatform(platform?: string | null) {
   const value = String(platform || '').trim().toLowerCase();
   if (value === 'woocommerce' || value === 'woo' || value === 'wordpress') return 'wordpress';
@@ -365,6 +405,66 @@ function normalizeOrder(o: any, platform: string) {
         orders_count: 1,
         total_spent: parseFloat(o.total || 0)
       } : null
+    };
+  }
+  if (platform === 'stripe') {
+    // Un cobro de Stripe (car_stripe_transactions, reporting_category = charge). Montos en la
+    // moneda de liquidación; producto y UTMs salen de Impultienda si llegó el aviso de esa orden.
+    const d = o._impul?.data || {};
+    const t = d.tracking || {};
+    const utm = new URLSearchParams();
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id']) if (t[k]) utm.set(k, String(t[k]));
+    const items = Array.isArray(d.items) ? d.items : [];
+    const name = String(o.customer_name || `${d.customer?.name || ''} ${d.customer?.last_name || ''}`).trim();
+    const total = Number(o.amount) || 0;
+    const refunded = Number(o._refunded || 0);
+    return {
+      id: o.charge_id || o.txn_id,
+      order_number: d.order_number ? `#${d.order_number}` : `#${String(o.charge_id || o.txn_id).slice(-8)}`,
+      created_at: o.created_at,
+      cancelled_at: null,
+      total_price: total,
+      subtotal_price: total,
+      total_discounts: 0,
+      total_tax: 0,
+      currency: String(o.currency || '').toUpperCase() || null,
+      financial_status: refunded >= total - 0.005 && refunded > 0 ? 'refunded' : refunded > 0 ? 'partially_refunded' : 'paid',
+      fulfillment_status: 'fulfilled',
+      customer_name: name || o.customer_email || 'Sin Cliente',
+      email: o.customer_email || null,
+      phone: d.customer?.phone || null,
+      landing_site: utm.toString() ? `/?${utm.toString()}` : null,
+      line_items: items.length
+        ? items.map((it: any) => ({
+            product_id: it.name || it.product_id,
+            variant_id: it.product_id || it.name,
+            title: it.name,
+            product_name: it.name,
+            quantity: Number(it.quantity) || 1,
+            price: parseFloat(it.price || 0) || 0,
+            variant_title: it.type === 'upsell' ? 'Order bump' : it.type === 'bonus' ? 'Bono' : null,
+          }))
+        : [{ product_id: o.is_post_purchase ? 'upsell-post-compra' : (o._account_name || 'venta'), variant_id: null, title: o.is_post_purchase ? 'Upsell post-compra' : (o._account_name || 'Venta'), quantity: 1, price: total, variant_title: null }],
+      shipping_address: null,
+      customer: o.customer_email ? {
+        first_name: name.split(' ')[0] || '',
+        last_name: name.split(' ').slice(1).join(' '),
+        email: o.customer_email,
+        phone: d.customer?.phone || null,
+        orders_count: 1,
+        total_spent: total,
+      } : null,
+      _stripe: {
+        account_id: o.account_id,
+        fee: Number(o.fee) || 0,
+        net: Number(o.net) || 0,
+        refunded,
+        buyer_amount: o.buyer_amount,
+        buyer_currency: o.buyer_currency ? String(o.buyer_currency).toUpperCase() : null,
+        country: o.country,
+        is_post_purchase: !!o.is_post_purchase,
+        store_name: o._impul?.store_name || null,
+      },
     };
   }
   if (platform === 'impultienda') {
@@ -1200,6 +1300,42 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
     }
   }
 
+  // ── STRIPE — cobros guardados (Pedidos), con reembolsos y datos de Impultienda ──
+  if (type === 'stripe-orders') {
+    try {
+      const { since, until } = req.body as any;
+      const sinceIso = since ? new Date(`${since}T00:00:00-03:00`).toISOString() : undefined;
+      const untilIso = until ? new Date(`${until}T23:59:59-03:00`).toISOString() : undefined;
+      const [charges, refunds, history, links] = await Promise.all([
+        readStripeTx(supabase, clientId, { categories: ['charge'], sinceIso, untilIso, limit: 5000 }),
+        readStripeTx(supabase, clientId, { categories: ['refund', 'dispute'], sinceIso, limit: 5000, columns: 'charge_id, amount' }),
+        readStripeTx(supabase, clientId, { categories: ['charge'], limit: 30000, columns: 'amount, customer_email' }),
+        supabase.from('car_stripe_links').select('account_id, account_name').eq('client_id', clientId),
+      ]);
+      const refundedBy = new Map<string, number>();
+      refunds.forEach(r => r.charge_id && refundedBy.set(r.charge_id, (refundedBy.get(r.charge_id) || 0) - Number(r.amount || 0)));
+      const byEmail: Record<string, { count: number; spent: number }> = {};
+      history.forEach(h => {
+        const e = String(h.customer_email || '');
+        if (!e) return;
+        byEmail[e] = byEmail[e] || { count: 0, spent: 0 };
+        byEmail[e].count += 1;
+        byEmail[e].spent += Number(h.amount) || 0;
+      });
+      const names = new Map<string, string>((links.data || []).map((l: any) => [l.account_id, l.account_name]));
+      const enriched = await attachImpultienda(supabase, clientId, charges);
+      const orders = enriched.map(c => {
+        const o: any = normalizeOrder({ ...c, _refunded: refundedBy.get(c.charge_id) || 0, _account_name: names.get(c.account_id) || null }, 'stripe');
+        const life = c.customer_email ? byEmail[c.customer_email] : null;
+        if (life && o.customer) o.customer = { ...o.customer, orders_count: life.count, total_spent: life.spent };
+        return o;
+      });
+      return res.status(200).json({ orders });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Error interno' });
+    }
+  }
+
   // ── IMPULTIENDA — listado de órdenes guardadas (Pedidos) ──
   if (type === 'impultienda-orders') {
     try {
@@ -1277,6 +1413,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
       let rawOrders: any[] = [];
       let rawRecent: any[] = [];
       let rawHistory: any[] = []; // all-time sample for nth-purchase counting (TN/WC only)
+      let stripeSummary: any = null;
 
       if (active_platform === 'shopify') {
         const domain = (active_shopify_domain || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -1449,6 +1586,33 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
         rawRecent = wRecent.response.ok ? wRecent.orders : [];
         rawHistory = rawRecent;
       }
+      else if (active_platform === 'stripe') {
+        // Cobros de Stripe guardados (stripe-sync). Bruto = cobros; reembolsos, contracargos y
+        // comisiones van aparte en stripeSummary, con el neto que realmente queda.
+        if (!clientId) return res.status(400).json({ error: 'Stripe requiere clientId' });
+        const [inRange, moves, recent, history, links] = await Promise.all([
+          readStripeTx(supabase, clientId, { categories: ['charge'], sinceIso, untilIso }),
+          readStripeTx(supabase, clientId, { categories: ['charge', 'refund', 'dispute', 'dispute_reversal'], sinceIso, untilIso, columns: 'reporting_category, amount, fee, net, currency, created_at' }),
+          readStripeTx(supabase, clientId, { categories: ['charge'], limit: 40 }),
+          readStripeTx(supabase, clientId, { categories: ['charge'], limit: 30000, columns: 'txn_id, charge_id, amount, customer_email' }),
+          supabase.from('car_stripe_links').select('account_id, account_name').eq('client_id', clientId),
+        ]);
+        const accountNames = new Map<string, string>((links.data || []).map((l: any) => [l.account_id, l.account_name]));
+        const withNames = (rows: any[]) => rows.map(r => ({ ...r, id: r.charge_id || r.txn_id, total: r.amount, _account_name: accountNames.get(r.account_id) || null }));
+        rawOrders = withNames(await attachImpultienda(supabase, clientId, inRange));
+        rawRecent = withNames(await attachImpultienda(supabase, clientId, recent));
+        rawHistory = history.map(r => ({ ...r, id: r.charge_id || r.txn_id, total: r.amount }));
+        const sum = (cat: string[], field: 'amount' | 'fee' | 'net') => moves.filter(m => cat.includes(m.reporting_category)).reduce((acc, m) => acc + (Number(m[field]) || 0), 0);
+        stripeSummary = {
+          currency: String(moves[0]?.currency || inRange[0]?.currency || 'usd').toUpperCase(),
+          gross: sum(['charge'], 'amount'),
+          refunds: -sum(['refund'], 'amount'),
+          disputes: -sum(['dispute', 'dispute_reversal'], 'amount'),
+          fees: sum(['charge', 'refund', 'dispute', 'dispute_reversal'], 'fee'),
+          net: sum(['charge', 'refund', 'dispute', 'dispute_reversal'], 'net'),
+          charges: inRange.length,
+        };
+      }
       else if (active_platform === 'impultienda') {
         // Órdenes guardadas en Supabase (webhook + importación). Solo cuentan las aprobadas.
         if (!clientId) return res.status(400).json({ error: 'Impultienda requiere clientId' });
@@ -1508,7 +1672,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
             nonShopifyLifetime[email] = (nonShopifyLifetime[email] || 0) + 1;
             nonShopifySpent[email] = (nonShopifySpent[email] || 0) + parseFloat(o.total || 0);
           }
-        } else if (active_platform === 'impultienda') {
+        } else if (active_platform === 'impultienda' || active_platform === 'stripe') {
           for (const o of allFetchedOrders) {
             const email = String(o.customer_email || o.data?.customer?.email || '').toLowerCase().trim();
             if (!email) continue;
@@ -1709,6 +1873,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
         topCities,
         attribution: buildOrderAttribution(validOrders),
         ...(active_platform === 'impultienda' ? { currency: validOrders[0]?.currency || recentFormatted[0]?.currency || null } : {}),
+        ...(active_platform === 'stripe' ? { currency: stripeSummary?.currency || null, stripe: stripeSummary } : {}),
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Error interno' });

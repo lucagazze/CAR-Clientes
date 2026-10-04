@@ -10,7 +10,7 @@ import { useViewAs } from '../../contexts/ViewAsContext';
 import { useUnread } from '../../contexts/UnreadContext';
 import { db } from '../../services/db';
 import { supabase } from '../../services/supabase';
-import { hasImpultienda } from '../../services/ecommerce';
+import { hasImpultienda, hasStripe } from '../../services/ecommerce';
 import { isDemoEmail, isDemoProfile } from '../../services/demoData';
 
 interface SidebarProps {
@@ -138,8 +138,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const hasKlaviyo   = !!(activeProfile?.klaviyo_api_key);
   const connectionStatuses = activeProfile?.connection_statuses || {};
   const hasEcommerce = !!detectedPlatform;
-  // Impultienda: solo Pedidos y Costos (no hay catálogo ni stock para Inventario, Tienda o Análisis).
-  const hasImpul = hasImpultienda(activeProfile);
+  // Impultienda y Stripe: solo Pedidos y Costos (no hay catálogo ni stock para Inventario, Tienda o Análisis).
+  const hasImpul = hasImpultienda(activeProfile) || hasStripe(activeProfile);
   const hasRedes = !!(
     activeProfile?.fb_page_id ||
     (activeProfile as any)?.ig_business_id

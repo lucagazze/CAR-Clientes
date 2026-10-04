@@ -15,7 +15,7 @@ import {
   daysAgo,
 } from "../services/metaAds";
 import { klaviyo } from "../services/klaviyo";
-import { ecommerce, normalizeEcommercePlatform, hasImpultienda } from "../services/ecommerce";
+import { ecommerce, normalizeEcommercePlatform, hasImpultienda, hasStripe, stripeApi } from "../services/ecommerce";
 import { chatwoot } from "../services/chatwoot";
 import { db } from "../services/db";
 import { isDemoProfile, withDemoProfileDefaults } from "../services/demoData";
@@ -1004,6 +1004,7 @@ export default function DashboardPage() {
     if (detectedPlatform === 'tiendanube') return 'tiendanube';
     if (detectedPlatform === 'wordpress') return 'wordpress';
     if (detectedPlatform === 'impultienda') return 'impultienda';
+    if (detectedPlatform === 'stripe') return 'stripe';
     return 'shopify';
   }, [detectedPlatform]);
 
@@ -1237,7 +1238,8 @@ export default function DashboardPage() {
       (detectedPlatform === 'shopify' && prof?.shopify_domain && prof?.shopify_access_token) ||
       (detectedPlatform === 'wordpress' && prof?.wordpress_url && prof?.woo_consumer_key && prof?.woo_consumer_secret) ||
       (detectedPlatform === 'tiendanube' && prof?.tiendanube_store_id && prof?.tiendanube_access_token) ||
-      (detectedPlatform === 'impultienda' && hasImpultienda(prof))
+      (detectedPlatform === 'impultienda' && hasImpultienda(prof)) ||
+      (detectedPlatform === 'stripe' && hasStripe(prof))
     );
     
     const storeVal = statuses[storeStatusKey] || statuses.shopify;
@@ -1343,7 +1345,8 @@ export default function DashboardPage() {
           (detectedPlatform === 'shopify' && prof.shopify_domain && prof.shopify_access_token) ||
           (detectedPlatform === 'wordpress' && prof.wordpress_url && prof.woo_consumer_key && prof.woo_consumer_secret) ||
           (detectedPlatform === 'tiendanube' && prof.tiendanube_store_id && prof.tiendanube_access_token) ||
-          (detectedPlatform === 'impultienda' && hasImpultienda(prof))
+          (detectedPlatform === 'impultienda' && hasImpultienda(prof)) ||
+      (detectedPlatform === 'stripe' && hasStripe(prof))
         );
         if (!hasStoreConfig) {
           setFetchingStore(false);
@@ -1352,6 +1355,10 @@ export default function DashboardPage() {
         setFetchingStore(true);
         setShopifyError(null);
         try {
+          // Stripe: antes de leer, traer los movimientos nuevos (si falla, se muestra lo guardado).
+          if (detectedPlatform === 'stripe') {
+            await stripeApi.sync(prof.id).catch(err => console.error('Stripe sync error:', err));
+          }
           const [currStore, prevStoreData] = await Promise.all([
             ecommerce.getDashboardData(
               detectedPlatform!,
@@ -1698,7 +1705,8 @@ export default function DashboardPage() {
         (detectedPlatform === 'shopify' && prof.shopify_domain && prof.shopify_access_token) ||
         (detectedPlatform === 'wordpress' && prof.wordpress_url && prof.woo_consumer_key && prof.woo_consumer_secret) ||
         (detectedPlatform === 'tiendanube' && prof.tiendanube_store_id && prof.tiendanube_access_token) ||
-        (detectedPlatform === 'impultienda' && hasImpultienda(prof))
+        (detectedPlatform === 'impultienda' && hasImpultienda(prof)) ||
+      (detectedPlatform === 'stripe' && hasStripe(prof))
       );
       if (!hasStoreConfig) return;
       setFetching90d(true);
@@ -1890,7 +1898,7 @@ export default function DashboardPage() {
 
   const showMER = false;
   // Impultienda informa la moneda de cada orden (la del vendedor): manda sobre la de /moneda.
-  const storeCurrencyCode: string = (detectedPlatform === 'impultienda' && (currentStore?.currency || prevStore?.currency)) || currencySettings.storeCurrency;
+  const storeCurrencyCode: string = ((detectedPlatform === 'impultienda' || detectedPlatform === 'stripe') && (currentStore?.currency || prevStore?.currency)) || currencySettings.storeCurrency;
   // MER con monedas mixtas: ingresos (moneda tienda) y pauta (moneda Meta) a base
   const merStoreToBase = (n: number) => convertCurrency(n, storeCurrencyCode, currencySettings.baseCurrency, currencySettings);
   const merMetaToBase = (n: number) => convertCurrency(n, currencySettings.metaCurrency, currencySettings.baseCurrency, currencySettings);
@@ -1936,9 +1944,20 @@ export default function DashboardPage() {
   // Comisiones de plataforma + fees de pago (% sobre ingresos) y envíos (por pedido), desde Costos.
   // El % se aplica sobre ingresos convertidos a base; los envíos vienen en moneda de costos.
   const calcConfigCosts = (store: any): number => {
-    if (!costsConfig || !store) return 0;
+    if (!store) return 0;
     const revenueBase = convertStoreToDashboard(store.revenue || 0);
     const orders = store.orders || 0;
+    // Stripe: comisiones, reembolsos y contracargos reales del período. De los "costos por venta"
+    // solo cuentan producto e impuestos: la comisión de cobro y la de plataforma ya vienen de Stripe.
+    if (detectedPlatform === 'stripe') {
+      const st = store.stripe || {};
+      const perSale = normalizeMetaOnlyCosts(costsConfig?.metaCosts);
+      const real = convertStoreToDashboard((Number(st.fees) || 0) + (Number(st.refunds) || 0) + (Number(st.disputes) || 0));
+      return real
+        + revenueBase * ((perSale.productCostPct + perSale.taxPct) / 100)
+        + convertCurrency(metaOnlyPerSale(perSale) * orders, metaAccountCurrency, currencySettings.baseCurrency, currencySettings);
+    }
+    if (!costsConfig) return 0;
     // Impultienda no tiene catálogo con costos por variante: usa los "Costos por venta" de /costos
     // (% sobre lo facturado + monto fijo por venta en la moneda de la cuenta de Meta).
     if (detectedPlatform === 'impultienda') {
@@ -1963,8 +1982,9 @@ export default function DashboardPage() {
   const currentConfigCosts = calcConfigCosts(currentStore);
   const prevConfigCosts = calcConfigCosts(prevStore);
 
-  const currentNetRevenue = Math.max(0, convertStoreToDashboard(currentStore?.revenue || 0) - convertCostToDashboard(costSummary.current) - currentSpend - currentCogs - currentConfigCosts);
-  const prevNetRevenue = Math.max(0, convertStoreToDashboard(prevStore?.revenue || 0) - convertCostToDashboard(costSummary.previous) - prevSpend - prevCogs - prevConfigCosts);
+  // Sin piso en 0: si la pauta y los costos superan lo cobrado, la pérdida tiene que verse.
+  const currentNetRevenue = convertStoreToDashboard(currentStore?.revenue || 0) - convertCostToDashboard(costSummary.current) - currentSpend - currentCogs - currentConfigCosts;
+  const prevNetRevenue = convertStoreToDashboard(prevStore?.revenue || 0) - convertCostToDashboard(costSummary.previous) - prevSpend - prevCogs - prevConfigCosts;
   const realRoas = currentSpend > 0 ? currentNetRevenue / currentSpend : 0;
   const prevRealRoas = prevSpend > 0 ? prevNetRevenue / prevSpend : 0;
   const showProfitMetrics = !!currentStore && (costSummary.current > 0 || currentSpend > 0 || currentCogs > 0 || currentConfigCosts > 0);
@@ -2446,6 +2466,33 @@ export default function DashboardPage() {
                     />
                   )}
                 </div>
+                {/* Stripe: de dónde sale lo que queda (todo en la moneda base) */}
+                {detectedPlatform === 'stripe' && currentStore?.stripe && (() => {
+                  const st = currentStore.stripe;
+                  const code = currencySettings.baseCurrency;
+                  const fmt = (v: number) => `${v < 0 ? '−' : ''}${code} ${Math.abs(v).toLocaleString("es-AR", { maximumFractionDigits: 0 })}`;
+                  const items = [
+                    { label: 'Cobrado (bruto)', value: convertStoreToDashboard(st.gross || 0), hint: `${(st.charges || 0).toLocaleString("es-AR")} cobros` },
+                    { label: 'Comisiones', value: -convertStoreToDashboard(st.fees || 0), hint: 'Stripe + Impultienda' },
+                    { label: 'Reembolsos y contracargos', value: -convertStoreToDashboard((st.refunds || 0) + (st.disputes || 0)), hint: 'devuelto al comprador' },
+                    { label: 'Neto cobrado', value: convertStoreToDashboard(st.net || 0), hint: 'lo que deposita Stripe' },
+                    { label: 'Inversión Meta', value: -currentSpend, hint: 'pauta del período' },
+                    { label: 'Te queda', value: currentNetRevenue, hint: 'neto − pauta − otros costos', strong: true },
+                  ];
+                  return (
+                    <div className="mt-2 bg-white dark:bg-zinc-900 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06] p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                      {items.map(it => (
+                        <div key={it.label} className="min-w-0">
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider truncate">{it.label}</p>
+                          <p className={`text-[16px] font-black tracking-tight ${it.strong ? (it.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-zinc-900 dark:text-white'}`}>
+                            {fetchingStore || (it.label === 'Inversión Meta' || it.strong) && fetchingMeta ? '…' : fmt(it.value)}
+                          </p>
+                          <p className="text-[10.5px] text-zinc-400 truncate">{it.hint}</p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {(expandedMetric?.startsWith("s-") || expandedMetric === "mer-efficiency") && !(expandedMetric === "mer-efficiency" ? (fetchingStore || fetchingMeta) : fetchingStore) && (
                   <MetricDetailChart
                     label={

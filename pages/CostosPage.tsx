@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
-import { ecommerce, normalizeEcommercePlatform, hasImpultienda } from '../services/ecommerce';
+import { ecommerce, normalizeEcommercePlatform, hasImpultienda, hasStripe } from '../services/ecommerce';
 import { 
   ShoppingBag, Percent, CreditCard, Truck, FileText, Calendar, Plus, 
   Search, Trash2, Edit3, Save, AlertCircle, X, ChevronLeft, ChevronRight, 
@@ -61,7 +61,10 @@ export default function CostosPage() {
   // Impultienda (órdenes guardadas en C.A.R) no tiene catálogo: usa el mismo formulario de
   // costos por venta, aplicado a las ventas reales en la Facturación neta.
   const impultienda = hasImpultienda(profile);
-  const metaOnly = !detectedPlatform && (!!(profile as any)?.meta_account_id || impultienda);
+  // Stripe: las comisiones de cobro y de plataforma son las reales de cada cobro; acá solo se
+  // cargan costo de producto, impuestos y montos fijos por venta.
+  const stripe = hasStripe(profile);
+  const metaOnly = !detectedPlatform && (!!(profile as any)?.meta_account_id || impultienda || stripe);
 
   // Accordion Open/Close states
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
@@ -931,7 +934,9 @@ export default function CostosPage() {
           {openAccordions.meta && (
             <div className="p-6 border-t border-zinc-100 dark:border-white/[0.03] space-y-6">
               <p className="text-[13px] text-zinc-500 dark:text-zinc-400 max-w-2xl">
-                {impultienda
+                {stripe
+                  ? 'Las ventas y las comisiones de cobro salen de Stripe: la comisión de Stripe y la de Impultienda se descuentan solas, cobro por cobro. Acá cargá solo lo demás (costo del producto, impuestos o un monto fijo por venta).'
+                  : impultienda
                   ? 'Las ventas llegan de Impultienda. Cargá lo que te cuesta cada venta y el Inicio lo descuenta de la Facturación neta junto con la inversión en Meta Ads.'
                   : 'Esta cuenta no tiene una tienda conectada, así que el beneficio se calcula con las compras y el valor generado que informa Meta Ads. Cargá lo que te cuesta cada venta y el Inicio lo descuenta junto con la inversión.'}
               </p>
@@ -948,15 +953,15 @@ export default function CostosPage() {
                 <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400 mb-3">Sobre lo facturado</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {metaCostField('productCostPct', 'Costo del producto', 'Si tu costo es un porcentaje del precio.', '%')}
-                  {metaCostField('platformPct', 'Comisión de la plataforma', 'Lo que cobra la tienda donde vendés.', '%')}
-                  {metaCostField('paymentPct', 'Comisión de cobro', 'Mercado Pago, Stripe, PayPal u otro.', '%')}
+                  {!stripe && metaCostField('platformPct', 'Comisión de la plataforma', 'Lo que cobra la tienda donde vendés.', '%')}
+                  {!stripe && metaCostField('paymentPct', 'Comisión de cobro', 'Mercado Pago, Stripe, PayPal u otro.', '%')}
                   {metaCostField('taxPct', 'Impuestos', 'IIBB, IVA u otros sobre la venta.', '%')}
                 </div>
               </div>
 
               <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-white/[0.04] p-4 text-[12px] text-zinc-500 dark:text-zinc-400 space-y-1">
                 <p className="text-zinc-800 dark:text-zinc-200 font-bold">
-                  Por cada venta se descuentan {metaCostsCurrency} {metaOnlyPerSale(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })} más el {metaOnlyPct(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })}% {impultienda ? 'de lo facturado' : 'del valor generado'}.
+                  Por cada venta se descuentan {metaCostsCurrency} {metaOnlyPerSale(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })} más el {(stripe ? metaCosts.productCostPct + metaCosts.taxPct : metaOnlyPct(metaCosts)).toLocaleString('es-AR', { maximumFractionDigits: 2 })}% {impultienda || stripe ? 'de lo facturado' : 'del valor generado'}{stripe ? ', además de las comisiones reales de Stripe' : ''}.
                 </p>
                 <p>
                   Los montos fijos van en {metaCostsCurrency}, la moneda de tu cuenta de Meta Ads: es la misma en que se muestran la inversión, el valor generado y el beneficio.
@@ -2085,7 +2090,7 @@ export default function CostosPage() {
                 Los costos se aplican automáticamente en el Dashboard
               </span>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                {impultienda
+                {impultienda || stripe
                   ? 'La Facturación neta descuenta los costos por venta, los costos adicionales y la inversión según el período seleccionado.'
                   : metaOnly
                   ? 'El Beneficio del bloque Meta Ads descuenta los costos por venta, los costos adicionales y la inversión según el período seleccionado.'

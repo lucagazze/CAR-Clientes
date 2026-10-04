@@ -4048,6 +4048,197 @@ async function handleImpultienda(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+// ── Stripe como tienda ────────────────────────────────────────────────────────
+// Guarda los movimientos de saldo (balance transactions) de las cuentas de Stripe del
+// cliente en car_stripe_transactions: cobro bruto, comisión exacta (Stripe + plataforma),
+// reembolsos, contracargos y neto. Las cuentas de la organización de Luca se leen con la
+// clave de organización (env STRIPE_ORG_KEY + Stripe-Context); un cliente externo puede
+// cargar su propia clave restringida. Qué cuentas ve cada cliente vive en car_stripe_links
+// (solo servidor): car_clients lo edita el propio cliente.
+const STRIPE_ORG_KEY = process.env.STRIPE_ORG_KEY || '';
+const STRIPE_ORG_ACCOUNTS = (process.env.STRIPE_ORG_ACCOUNTS || '').split(',').map(s => s.trim()).filter(Boolean);
+const STRIPE_API_VERSION = '2025-08-27.basil';
+
+async function stripeGet(path: string, params: [string, string][], link: { account_id: string; api_key?: string | null }) {
+  const key = link.api_key || STRIPE_ORG_KEY;
+  if (!key) throw new Error('Falta la clave de Stripe en el servidor (STRIPE_ORG_KEY).');
+  const qs = new URLSearchParams(params);
+  const r = await fetch(`https://api.stripe.com/v1/${path}${params.length ? `?${qs.toString()}` : ''}`, {
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Stripe-Version': STRIPE_API_VERSION,
+      ...(link.api_key ? {} : { 'Stripe-Context': link.account_id }),
+    },
+  });
+  const json: any = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`Stripe (${link.account_id}): ${json?.error?.message || `HTTP ${r.status}`}`);
+  return json;
+}
+
+const stripeAccountName = (acc: any) =>
+  acc?.settings?.dashboard?.display_name || acc?.business_profile?.name || acc?.email || acc?.id || 'Cuenta de Stripe';
+
+const stripeTxRow = (accountId: string, t: any) => {
+  const s = t.source && typeof t.source === 'object' ? t.source : null;
+  const charge = s?.object === 'charge' ? s : null;
+  const md = charge?.metadata || {};
+  const email = charge ? (charge.billing_details?.email || charge.receipt_email || '') : '';
+  return {
+    account_id: accountId,
+    txn_id: t.id,
+    reporting_category: t.reporting_category || t.type,
+    type: t.type,
+    created_at: new Date(t.created * 1000).toISOString(),
+    amount: t.amount / 100,
+    fee: t.fee / 100,
+    net: t.net / 100,
+    currency: t.currency,
+    source_id: s?.id || (typeof t.source === 'string' ? t.source : null),
+    charge_id: charge ? charge.id : (typeof s?.charge === 'string' ? s.charge : s?.charge?.id) || null,
+    order_id: md.orderId || null,
+    store_id: md.storeId || null,
+    customer_email: email ? String(email).trim().toLowerCase() : null,
+    customer_name: charge?.billing_details?.name || null,
+    buyer_amount: charge ? charge.amount / 100 : null,
+    buyer_currency: charge?.currency || null,
+    country: charge ? (charge.billing_details?.address?.country || charge.payment_method_details?.card?.country || null) : null,
+    is_post_purchase: md.isPostPurchase === 'true',
+  };
+};
+
+async function isAdminUser(supabase: any, accessToken: string) {
+  const { data: userData } = await supabase.auth.getUser(accessToken);
+  if (!userData?.user?.id) return false;
+  const { data } = await supabase.from('car_clients').select('id').eq('user_id', userData.user.id).eq('is_admin', true).maybeSingle();
+  return !!data;
+}
+
+async function stripeStatus(supabase: any, clientId: string, admin: boolean) {
+  const { data: links } = await supabase.from('car_stripe_links').select('account_id, account_name, api_key').eq('client_id', clientId);
+  const ids = (links || []).map((l: any) => l.account_id);
+  const { data: syncRows } = ids.length
+    ? await supabase.from('car_stripe_sync').select('account_id, synced_until, synced_at').in('account_id', ids)
+    : { data: [] as any[] };
+  const accounts = [];
+  for (const l of links || []) {
+    const { count } = await supabase.from('car_stripe_transactions').select('txn_id', { count: 'exact', head: true }).eq('account_id', l.account_id);
+    const sync = (syncRows || []).find((r: any) => r.account_id === l.account_id);
+    accounts.push({
+      id: l.account_id,
+      name: l.account_name,
+      ownKey: !!l.api_key,
+      transactions: count || 0,
+      syncedUntil: sync?.synced_until ? new Date(Number(sync.synced_until) * 1000).toISOString() : null,
+      syncedAt: sync?.synced_at || null,
+    });
+  }
+  // Para el admin: las cuentas de la organización que todavía no están conectadas.
+  let available: { id: string; name: string }[] = [];
+  if (admin && STRIPE_ORG_KEY) {
+    available = await Promise.all(STRIPE_ORG_ACCOUNTS.filter(id => !ids.includes(id)).map(async id => {
+      try { return { id, name: stripeAccountName(await stripeGet('account', [], { account_id: id })) }; }
+      catch { return { id, name: id }; }
+    }));
+  }
+  return { accounts, available, canUseOrgKey: admin && !!STRIPE_ORG_KEY };
+}
+
+async function handleStripe(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
+  if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Servidor no configurado' });
+  const action = req.query.action as string;
+  const authHeader = req.headers.authorization || '';
+  const bearer = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+  const accessToken = bearer.startsWith('Bearer ') ? bearer.slice('Bearer '.length) : '';
+  if (!accessToken) return res.status(401).json({ error: 'Sesión requerida' });
+  const body = parseRequestBody(req.body);
+  const clientId = String(body.clientId || '');
+  if (!clientId) return res.status(400).json({ error: 'clientId requerido' });
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  try {
+    await assertClientAccess(supabase, accessToken, clientId);
+  } catch (err: any) {
+    return res.status(isAuthSessionError(err) ? 401 : 403).json({ error: err?.message || 'Sin permisos' });
+  }
+  const admin = await isAdminUser(supabase, accessToken);
+
+  try {
+    if (action === 'stripe-status') return res.status(200).json(await stripeStatus(supabase, clientId, admin));
+
+    if (action === 'stripe-setup') {
+      if (body.remove) {
+        await supabase.from('car_stripe_links').delete().eq('client_id', clientId).eq('account_id', String(body.remove));
+        const { count } = await supabase.from('car_stripe_links').select('account_id', { count: 'exact', head: true }).eq('client_id', clientId);
+        if (!count) {
+          const { data: cl } = await supabase.from('car_clients').select('ecommerce_platform, impultienda_webhook_token').eq('id', clientId).maybeSingle();
+          if (cl?.ecommerce_platform === 'stripe') {
+            await supabase.from('car_clients').update({ ecommerce_platform: cl.impultienda_webhook_token ? 'impultienda' : null }).eq('id', clientId);
+          }
+        }
+        return res.status(200).json(await stripeStatus(supabase, clientId, admin));
+      }
+
+      const accountId = String(body.accountId || '').trim();
+      const apiKey = String(body.apiKey || '').trim() || null;
+      if (apiKey && !/^rk_live_/.test(apiKey)) return res.status(400).json({ error: 'Usá una clave restringida de solo lectura (rk_live_...), no la secreta.' });
+      if (!apiKey) {
+        // La clave de organización mueve plata en todas las cuentas de Luca: solo el admin la usa.
+        if (!admin) return res.status(403).json({ error: 'Pegá una clave restringida de Stripe (rk_live_...) con permiso de lectura.' });
+        if (!STRIPE_ORG_ACCOUNTS.includes(accountId)) return res.status(400).json({ error: 'Esa cuenta no está en la organización de Stripe configurada.' });
+      }
+
+      const acc = await stripeGet('account', [], { account_id: accountId || 'self', api_key: apiKey });
+      const { error } = await supabase.from('car_stripe_links').upsert({
+        client_id: clientId, account_id: acc.id || accountId, account_name: stripeAccountName(acc), api_key: apiKey,
+      }, { onConflict: 'client_id,account_id' });
+      if (error) throw new Error(error.message);
+      await supabase.from('car_clients').update({ ecommerce_platform: 'stripe' }).eq('id', clientId);
+      return res.status(200).json(await stripeStatus(supabase, clientId, admin));
+    }
+
+    if (action === 'stripe-sync') {
+      // Una cuenta por llamada, hasta 4 páginas de 100 (de lo más nuevo a lo más viejo). El
+      // navegador vuelve a llamar con cursor/top hasta done=true; recién ahí avanza synced_until.
+      const accountId = String(body.accountId || '');
+      const { data: link } = await supabase.from('car_stripe_links').select('account_id, api_key').eq('client_id', clientId).eq('account_id', accountId).maybeSingle();
+      if (!link) return res.status(404).json({ error: 'Esa cuenta de Stripe no está conectada a este cliente.' });
+      const { data: sync } = await supabase.from('car_stripe_sync').select('synced_until').eq('account_id', accountId).maybeSingle();
+      const since = Number(sync?.synced_until || 0);
+      let cursor: string | null = body.cursor ? String(body.cursor) : null;
+      let top = Number(body.top || 0);
+      let imported = 0;
+      let done = false;
+      const maxPages = Math.min(Number(body.pages) || 4, 8);
+      for (let page = 0; page < maxPages; page++) {
+        const params: [string, string][] = [['limit', '100'], ['expand[]', 'data.source']];
+        if (since) params.push(['created[gte]', String(since)]);
+        if (cursor) params.push(['starting_after', cursor]);
+        const result = await stripeGet('balance_transactions', params, link);
+        const list: any[] = result.data || [];
+        if (list.length) {
+          top = Math.max(top, list[0].created);
+          const { error } = await supabase.from('car_stripe_transactions').upsert(list.map(t => stripeTxRow(accountId, t)), { onConflict: 'account_id,txn_id' });
+          if (error) throw new Error(`No se pudieron guardar los movimientos: ${error.message}`);
+          imported += list.length;
+          cursor = list[list.length - 1].id;
+        }
+        if (!result.has_more || !list.length) { done = true; break; }
+      }
+      if (done) {
+        await supabase.from('car_stripe_sync').upsert({
+          account_id: accountId, synced_until: Math.max(top, since), synced_at: new Date().toISOString(),
+        }, { onConflict: 'account_id' });
+      }
+      return res.status(200).json({ accountId, imported, done, cursor: done ? null : cursor, top });
+    }
+
+    return res.status(400).json({ error: 'Acción de Stripe desconocida' });
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'Error con Stripe' });
+  }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -4064,6 +4255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (action === 'whatsapp-test') return handleWhatsappTest(req, res);
   if (action.startsWith('costs-')) return handleCosts(req, res);
   if (action.startsWith('impultienda-')) return handleImpultienda(req, res);
+  if (action.startsWith('stripe-')) return handleStripe(req, res);
   if (!action && req.url?.includes('/api/impultienda-webhook')) {
     (req.query as any).action = 'impultienda-webhook';
     return handleImpultienda(req, res);

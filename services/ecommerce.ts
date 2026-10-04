@@ -21,6 +21,14 @@ function ecSetCache(key: string, data: any) {
   } catch { /* silently skip if storage full */ }
 }
 
+// Tras sincronizar Stripe con movimientos nuevos, el dashboard cacheado de ese cliente quedó viejo.
+export function clearDashboardCache(clientId: string) {
+  try {
+    const prefix = `${EC_PREFIX}dashboard:${DASHBOARD_CACHE_VERSION}:${clientId}:`;
+    Object.keys(sessionStorage).filter(k => k.startsWith(prefix)).forEach(k => sessionStorage.removeItem(k));
+  } catch { /* sin sessionStorage */ }
+}
+
 const BASE = '/api/shopify';
 
 // Sin la aprobación de "Protected Customer Data" (Partner Dashboard), Shopify devuelve
@@ -49,6 +57,59 @@ export const normalizeEcommercePlatform = (platform?: string | null) => {
 // se guardan en C.A.R. Está "conectada" cuando el cliente generó su webhook en Integraciones.
 export const hasImpultienda = (profile: any) =>
   normalizeEcommercePlatform(profile?.ecommerce_platform) === 'impultienda' && !!profile?.impultienda_webhook_token;
+
+// Stripe como tienda: los movimientos se guardan en C.A.R (car_stripe_transactions). Qué
+// cuentas tiene el cliente vive en el servidor; acá alcanza con la plataforma.
+export const hasStripe = (profile: any) => normalizeEcommercePlatform(profile?.ecommerce_platform) === 'stripe';
+
+const callStripe = async (action: string, body: Record<string, any>) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`/api/oauth?action=${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  return json;
+};
+
+export const stripeApi = {
+  status: (clientId: string) => callStripe('stripe-status', { clientId }),
+  setup: (clientId: string, body: Record<string, any>) => callStripe('stripe-setup', { clientId, ...body }),
+  // Trae lo nuevo de cada cuenta (o todo el historial la primera vez). onProgress recibe los
+  // movimientos importados en total.
+  sync: async (clientId: string, onProgress?: (imported: number) => void) => {
+    const status = await callStripe('stripe-status', { clientId });
+    let total = 0;
+    await Promise.all((status.accounts || []).map(async (acc: any) => {
+      let cursor: string | null = null;
+      let top = 0;
+      for (let i = 0; i < 500; i++) {
+        const r: any = await callStripe('stripe-sync', { clientId, accountId: acc.id, cursor, top });
+        total += r.imported || 0;
+        onProgress?.(total);
+        if (r.done) break;
+        cursor = r.cursor;
+        top = r.top;
+      }
+    }));
+    if (total > 0) clearDashboardCache(clientId);
+    return total;
+  },
+};
+
+export const getStripeOrders = async (clientId: string, opts: { since?: string; until?: string } = {}) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/scrape-all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+    body: JSON.stringify({ clientId, type: 'stripe-orders', ...opts }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  return (json.orders || []) as any[];
+};
 
 export const getImpultiendaOrders = async (clientId: string, opts: { since?: string; until?: string; statuses?: string[] } = {}) => {
   const { data: { session } } = await supabase.auth.getSession();

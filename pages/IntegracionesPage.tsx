@@ -9,6 +9,7 @@ import { PortalOverlay } from "../components/ui/PortalOverlay";
 import { ecommerce } from "../services/ecommerce";
 import { klaviyo } from "../services/klaviyo";
 import ImpultiendaSetup from "../components/ImpultiendaSetup";
+import StripeSetup from "../components/StripeSetup";
 import {
   Loader2,
   Check,
@@ -33,7 +34,8 @@ import {
   Facebook,
   MessageSquare,
   Youtube,
-  ShoppingBag
+  ShoppingBag,
+  CreditCard
 } from "lucide-react";
 
 interface IntegrationPlatform {
@@ -92,6 +94,14 @@ const PLATFORMS: IntegrationPlatform[] = [
     category: "ecommerce",
     description: "Recibí cada venta, reembolso y contracargo de tus tiendas de Impultienda e importá el historial de órdenes.",
     logoComponent: ShoppingBag,
+    isSimulated: false
+  },
+  {
+    id: "stripe",
+    name: "Stripe",
+    category: "ecommerce",
+    description: "Usá tus cuentas de Stripe como tienda: cobrado bruto, comisiones reales, reembolsos y lo que te queda, al lado de la pauta.",
+    logoComponent: CreditCard,
     isSimulated: false
   },
   {
@@ -513,7 +523,7 @@ export default function IntegracionesPage() {
 
   // Refresco silencioso tras configurar Impultienda: loadClientData muestra el spinner de página
   // y desmontaría el modal. También actualiza el perfil activo para que Inicio y Pedidos lo vean.
-  const refreshAfterImpultienda = async () => {
+  const refreshAfterImpultienda = async () => {  // también lo usa Stripe
     if (!activeProfileId) return;
     const { data } = await supabase.from("car_clients").select("*").eq("id", activeProfileId).maybeSingle();
     if (!data) return;
@@ -1226,7 +1236,7 @@ export default function IntegracionesPage() {
   const handleSaveRealPlatform = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlatform || !activeProfileId) return;
-    if (selectedPlatform.id === "impultienda") return;
+    if (selectedPlatform.id === "impultienda" || selectedPlatform.id === "stripe") return;
 
     setSavingSettings(true);
     setTestingConnection(true);
@@ -1698,6 +1708,10 @@ export default function IntegracionesPage() {
     
     if (platformId === "impultienda") {
       return clientData.impultienda_webhook_token ? "ok" : "disconnected";
+    }
+
+    if (platformId === "stripe") {
+      return clientData.ecommerce_platform === "stripe" ? "ok" : "disconnected";
     }
 
     if (platformId === "chatwoot") {
@@ -2264,6 +2278,12 @@ export default function IntegracionesPage() {
                         <span className="flex items-center gap-1.5 truncate">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
                           API Key conectada
+                        </span>
+                      )}
+                      {platform.id === "stripe" && (
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                          Cuentas de Stripe conectadas
                         </span>
                       )}
                       {platform.id === "impultienda" && (
@@ -3003,7 +3023,12 @@ export default function IntegracionesPage() {
                   </div>
                 )}
 
-                {/* IMPULTIENDA - webhook + API de órdenes (componente propio, sin el submit del form) */}
+                {/* STRIPE - cuentas de Stripe como tienda (componente propio, sin el submit del form) */}
+                {selectedPlatform.id === "stripe" && activeProfileId && (
+                  <StripeSetup clientId={activeProfileId} onChanged={refreshAfterImpultienda} onClose={() => closeConfigModal(true)} />
+                )}
+
+                {/* IMPULTIENDA - webhook + Excel (componente propio, sin el submit del form) */}
                 {selectedPlatform.id === "impultienda" && activeProfileId && (
                   <ImpultiendaSetup clientId={activeProfileId} onChanged={refreshAfterImpultienda} onClose={() => closeConfigModal(true)} />
                 )}
