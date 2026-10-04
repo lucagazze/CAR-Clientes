@@ -17,6 +17,10 @@
       "destination": "/api/oauth?action=impultienda-webhook"
     },
     {
+      "source": "/api/stripe-webhook",
+      "destination": "/api/oauth?action=stripe-webhook"
+    },
+    {
       "source": "/api/tiendanube-callback",
       "destination": "/api/oauth?action=tiendanube-callback"
     },

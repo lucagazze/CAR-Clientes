@@ -470,9 +470,9 @@ export default function PedidosPage() {
   const [visibleCount, setVisibleCount]           = useState(PAGE_SIZE);
   const [loadingMore, setLoadingMore]             = useState(false);
 
-  const load = useCallback(async (s: string, u: string, isInitial = false) => {
+  const load = useCallback(async (s: string, u: string, isInitial = false, silent = false) => {
     if (!isShopify && !isWoo && !isTiendaNube && !isImpultienda && !isStripe) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     try {
       let raw: any[] = [];
@@ -533,9 +533,9 @@ export default function PedidosPage() {
       }
       setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     } catch (e: any) {
-      setError(e?.message || 'Error al cargar pedidos');
+      if (!silent) setError(e?.message || 'Error al cargar pedidos');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
       if (isInitial) setInitialLoad(false);
     }
   }, [isShopify, isWoo, isTiendaNube, isImpultienda, isStripe, clientId, shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret, tiendanubeStoreId, tiendanubeToken]);
@@ -548,6 +548,13 @@ export default function PedidosPage() {
     if (initialLoad) return;
     load(since, until, false);
   }, [since, until]);
+
+  // Stripe registra cada cobro al instante (webhook): la lista se refresca sola cada minuto.
+  useEffect(() => {
+    if (!isStripe) return;
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') load(since, until, false, true); }, 60_000);
+    return () => clearInterval(timer);
+  }, [isStripe, load, since, until]);
 
   useEffect(() => {
     const handleNewOrder = () => {

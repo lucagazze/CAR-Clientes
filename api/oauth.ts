@@ -4107,6 +4107,105 @@ const stripeTxRow = (accountId: string, t: any) => {
   };
 };
 
+// Trae los movimientos nuevos de una cuenta (de lo más nuevo a lo más viejo, desde synced_until).
+// Recién cuando llega al final (done) avanza synced_until; si no, devuelve cursor/top para seguir.
+async function stripeSyncAccount(supabase: any, link: { account_id: string; api_key?: string | null }, opts: { cursor?: string | null; top?: number; maxPages?: number } = {}) {
+  const accountId = link.account_id;
+  const { data: sync } = await supabase.from('car_stripe_sync').select('synced_until').eq('account_id', accountId).maybeSingle();
+  const since = Number(sync?.synced_until || 0);
+  let cursor = opts.cursor || null;
+  let top = Number(opts.top || 0);
+  let imported = 0;
+  let done = false;
+  const maxPages = Math.min(opts.maxPages || 4, 8);
+  for (let page = 0; page < maxPages; page++) {
+    const params: [string, string][] = [['limit', '100'], ['expand[]', 'data.source']];
+    if (since) params.push(['created[gte]', String(since)]);
+    if (cursor) params.push(['starting_after', cursor]);
+    const result = await stripeGet('balance_transactions', params, link);
+    const list: any[] = result.data || [];
+    if (list.length) {
+      top = Math.max(top, list[0].created);
+      const { error } = await supabase.from('car_stripe_transactions').upsert(list.map(t => stripeTxRow(accountId, t)), { onConflict: 'account_id,txn_id' });
+      if (error) throw new Error(`No se pudieron guardar los movimientos: ${error.message}`);
+      imported += list.length;
+      cursor = list[list.length - 1].id;
+    }
+    if (!result.has_more || !list.length) { done = true; break; }
+  }
+  if (done) {
+    // Otra sincronización (el webhook) pudo avanzar mientras tanto: nunca se retrocede.
+    const { data: latest } = await supabase.from('car_stripe_sync').select('synced_until').eq('account_id', accountId).maybeSingle();
+    await supabase.from('car_stripe_sync').upsert({
+      account_id: accountId, synced_until: Math.max(top, since, Number(latest?.synced_until || 0)), synced_at: new Date().toISOString(),
+    }, { onConflict: 'account_id' });
+  }
+  return { imported, done, cursor: done ? null : cursor, top };
+}
+
+const STRIPE_WEBHOOK_EVENTS = [
+  'charge.succeeded', 'charge.refunded',
+  'charge.dispute.created', 'charge.dispute.closed', 'charge.dispute.funds_withdrawn', 'charge.dispute.funds_reinstated',
+];
+const stripeWebhookOrigin = (req: VercelRequest) => {
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'car.algoritmiadesarrollos.com.ar';
+  return `https://${Array.isArray(host) ? host[0] : host}`;
+};
+
+async function stripePost(path: string, form: [string, string][], link: { account_id: string; api_key?: string | null }) {
+  const key = link.api_key || STRIPE_ORG_KEY;
+  if (!key) throw new Error('Falta la clave de Stripe en el servidor (STRIPE_ORG_KEY).');
+  const r = await fetch(`https://api.stripe.com/v1/${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Stripe-Version': STRIPE_API_VERSION,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...(link.api_key ? {} : { 'Stripe-Context': link.account_id }),
+    },
+    body: new URLSearchParams(form).toString(),
+  });
+  const json: any = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`Stripe (${link.account_id}): ${json?.error?.message || `HTTP ${r.status}`}`);
+  return json;
+}
+
+// Un webhook por cuenta que avisa a C.A.R en cada cobro, reembolso o contracargo.
+async function stripeEnsureWebhook(link: { account_id: string; api_key?: string | null }, origin: string) {
+  const url = `${origin}/api/stripe-webhook?a=${link.account_id}`;
+  try {
+    const existing = await stripeGet('webhook_endpoints', [['limit', '100']], link);
+    const found = (existing.data || []).find((w: any) => w.url === url);
+    if (found) return { account: link.account_id, ok: true, created: false, status: found.status };
+    const form: [string, string][] = [['url', url], ['description', 'C.A.R — registrar cobros al instante']];
+    STRIPE_WEBHOOK_EVENTS.forEach(e => form.push(['enabled_events[]', e]));
+    const created = await stripePost('webhook_endpoints', form, link);
+    return { account: link.account_id, ok: true, created: true, status: created.status };
+  } catch (err: any) {
+    return { account: link.account_id, ok: false, error: err?.message || 'No se pudo crear el webhook' };
+  }
+}
+
+// Aviso de Stripe: solo se usa como señal para traer lo nuevo con la API (no se confía en el
+// contenido, así no hace falta verificar la firma sobre el cuerpo crudo).
+async function handleStripeWebhook(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
+  if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Servidor no configurado' });
+  const accountId = String(req.query.a || '');
+  if (!/^acct_[A-Za-z0-9]+$/.test(accountId)) return res.status(400).json({ error: 'cuenta inválida' });
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: links } = await supabase.from('car_stripe_links').select('account_id, api_key').eq('account_id', accountId).limit(1);
+  const link = links?.[0];
+  if (!link) return res.status(200).json({ ok: false, reason: 'cuenta no conectada' });
+  try {
+    const r = await stripeSyncAccount(supabase, link, { maxPages: 3 });
+    return res.status(200).json({ ok: true, imported: r.imported });
+  } catch (err: any) {
+    console.error('[stripe-webhook]', accountId, err?.message);
+    return res.status(500).json({ error: 'No se pudo sincronizar' }); // Stripe reintenta
+  }
+}
+
 async function isAdminUser(supabase: any, accessToken: string) {
   const { data: userData } = await supabase.auth.getUser(accessToken);
   if (!userData?.user?.id) return false;
@@ -4195,43 +4294,25 @@ async function handleStripe(req: VercelRequest, res: VercelResponse) {
       }, { onConflict: 'client_id,account_id' });
       if (error) throw new Error(error.message);
       await supabase.from('car_clients').update({ ecommerce_platform: 'stripe' }).eq('id', clientId);
+      await stripeEnsureWebhook({ account_id: acc.id || accountId, api_key: apiKey }, stripeWebhookOrigin(req));
       return res.status(200).json(await stripeStatus(supabase, clientId, admin));
     }
 
     if (action === 'stripe-sync') {
-      // Una cuenta por llamada, hasta 4 páginas de 100 (de lo más nuevo a lo más viejo). El
-      // navegador vuelve a llamar con cursor/top hasta done=true; recién ahí avanza synced_until.
+      // Una cuenta por llamada; el navegador vuelve a llamar con cursor/top hasta done=true.
       const accountId = String(body.accountId || '');
       const { data: link } = await supabase.from('car_stripe_links').select('account_id, api_key').eq('client_id', clientId).eq('account_id', accountId).maybeSingle();
       if (!link) return res.status(404).json({ error: 'Esa cuenta de Stripe no está conectada a este cliente.' });
-      const { data: sync } = await supabase.from('car_stripe_sync').select('synced_until').eq('account_id', accountId).maybeSingle();
-      const since = Number(sync?.synced_until || 0);
-      let cursor: string | null = body.cursor ? String(body.cursor) : null;
-      let top = Number(body.top || 0);
-      let imported = 0;
-      let done = false;
-      const maxPages = Math.min(Number(body.pages) || 4, 8);
-      for (let page = 0; page < maxPages; page++) {
-        const params: [string, string][] = [['limit', '100'], ['expand[]', 'data.source']];
-        if (since) params.push(['created[gte]', String(since)]);
-        if (cursor) params.push(['starting_after', cursor]);
-        const result = await stripeGet('balance_transactions', params, link);
-        const list: any[] = result.data || [];
-        if (list.length) {
-          top = Math.max(top, list[0].created);
-          const { error } = await supabase.from('car_stripe_transactions').upsert(list.map(t => stripeTxRow(accountId, t)), { onConflict: 'account_id,txn_id' });
-          if (error) throw new Error(`No se pudieron guardar los movimientos: ${error.message}`);
-          imported += list.length;
-          cursor = list[list.length - 1].id;
-        }
-        if (!result.has_more || !list.length) { done = true; break; }
-      }
-      if (done) {
-        await supabase.from('car_stripe_sync').upsert({
-          account_id: accountId, synced_until: Math.max(top, since), synced_at: new Date().toISOString(),
-        }, { onConflict: 'account_id' });
-      }
-      return res.status(200).json({ accountId, imported, done, cursor: done ? null : cursor, top });
+      const r = await stripeSyncAccount(supabase, link, { cursor: body.cursor ? String(body.cursor) : null, top: Number(body.top || 0), maxPages: Number(body.pages) || 4 });
+      return res.status(200).json({ accountId, ...r });
+    }
+
+    if (action === 'stripe-webhooks') {
+      // Crea (o confirma) el aviso de Stripe → C.A.R en cada cuenta del cliente.
+      const { data: links } = await supabase.from('car_stripe_links').select('account_id, api_key').eq('client_id', clientId);
+      const results = [];
+      for (const link of links || []) results.push(await stripeEnsureWebhook(link, stripeWebhookOrigin(req)));
+      return res.status(200).json({ results });
     }
 
     return res.status(400).json({ error: 'Acción de Stripe desconocida' });
@@ -4256,6 +4337,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (action === 'whatsapp-test') return handleWhatsappTest(req, res);
   if (action.startsWith('costs-')) return handleCosts(req, res);
   if (action.startsWith('impultienda-')) return handleImpultienda(req, res);
+  if (action === 'stripe-webhook') return handleStripeWebhook(req, res);
+  if (!action && req.url?.includes('/api/stripe-webhook')) return handleStripeWebhook(req, res);
   if (action.startsWith('stripe-')) return handleStripe(req, res);
   if (!action && req.url?.includes('/api/impultienda-webhook')) {
     (req.query as any).action = 'impultienda-webhook';
