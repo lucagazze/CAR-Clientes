@@ -41,6 +41,7 @@ create table if not exists car_stripe_transactions (
 create index if not exists car_stripe_tx_account_date on car_stripe_transactions (account_id, created_at desc);
 create index if not exists car_stripe_tx_charge on car_stripe_transactions (charge_id);
 create index if not exists car_stripe_tx_pi on car_stripe_transactions (payment_intent);
+create index if not exists car_stripe_tx_store_date on car_stripe_transactions (store_id, created_at desc);
 alter table car_stripe_transactions enable row level security;
 
 -- Hasta dónde está sincronizada cada cuenta (epoch del último movimiento guardado).

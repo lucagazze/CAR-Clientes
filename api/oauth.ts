@@ -3874,6 +3874,30 @@ async function impulStatus(supabase: any, clientId: string, origin: string) {
   };
 }
 
+// Cada venta, reembolso o contracargo que avisa Impultienda dispara la sincronización de la
+// cuenta de Stripe de esa tienda: el cobro queda registrado al instante sin webhook de Stripe
+// (la clave de organización no puede crearlos). Si la tienda es nueva, se revisan todas.
+async function impulTriggerStripeSync(supabase: any, storeId: string | null) {
+  try {
+    let accounts: string[] = [];
+    if (storeId) {
+      const { data } = await supabase.from('car_stripe_transactions').select('account_id')
+        .eq('store_id', storeId).order('created_at', { ascending: false }).limit(1);
+      accounts = (data || []).map((r: any) => r.account_id);
+    }
+    if (!accounts.length) {
+      const { data } = await supabase.from('car_stripe_links').select('account_id');
+      accounts = [...new Set<string>((data || []).map((r: any) => r.account_id))];
+    }
+    for (const accountId of accounts) {
+      const { data: links } = await supabase.from('car_stripe_links').select('account_id, api_key').eq('account_id', accountId).limit(1);
+      if (links?.[0]) await stripeSyncAccount(supabase, links[0], { maxPages: 2 });
+    }
+  } catch (err: any) {
+    console.error('[impultienda→stripe]', err?.message);
+  }
+}
+
 async function handleImpultiendaWebhook(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
   if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Servidor no configurado' });
@@ -3938,6 +3962,9 @@ async function handleImpultiendaWebhook(req: VercelRequest, res: VercelResponse)
   }
   if (xlsxId && (existingRows || []).some((r: any) => r.order_id === xlsxId)) {
     await supabase.from('car_impultienda_orders').delete().eq('client_id', clientId).eq('order_id', xlsxId);
+  }
+  if (['order.approved', 'order.refunded', 'order.chargeback'].includes(event)) {
+    await impulTriggerStripeSync(supabase, store?.id || null);
   }
   return res.status(200).json({ ok: true });
 }
