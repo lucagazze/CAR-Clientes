@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
-import { ecommerce, normalizeEcommercePlatform } from '../services/ecommerce';
+import { ecommerce, normalizeEcommercePlatform, hasImpultienda, getImpultiendaOrders } from '../services/ecommerce';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 import {
   ShoppingCart, Search, ChevronDown, ChevronUp, Package,
@@ -447,7 +447,10 @@ export default function PedidosPage() {
   const isShopify           = inferredPlatform === 'shopify' && !!(shopifyDomain && shopifyToken);
   const isWoo               = inferredPlatform === 'wordpress' && !!(wordpressUrl && wooConsumerKey && wooConsumerSecret);
   const isTiendaNube        = inferredPlatform === 'tiendanube' && !!(tiendanubeStoreId && tiendanubeToken);
-  const hasEcommerce        = isShopify || isWoo || isTiendaNube;
+  // Impultienda: las órdenes ya están guardadas en C.A.R (webhook + importación); se muestran las ventas.
+  const isImpultienda       = inferredPlatform === 'impultienda' && hasImpultienda(profile);
+  const clientId            = profile?.id || '';
+  const hasEcommerce        = isShopify || isWoo || isTiendaNube || isImpultienda;
 
   const [orders, setOrders]               = useState<any[]>([]);
   const [productImages, setProductImages] = useState<Record<string, string>>({});
@@ -466,7 +469,7 @@ export default function PedidosPage() {
   const [loadingMore, setLoadingMore]             = useState(false);
 
   const load = useCallback(async (s: string, u: string, isInitial = false) => {
-    if (!isShopify && !isWoo && !isTiendaNube) return;
+    if (!isShopify && !isWoo && !isTiendaNube && !isImpultienda) return;
     setLoading(true);
     setError(null);
     try {
@@ -519,6 +522,8 @@ export default function PedidosPage() {
         ]);
         if (products !== null) setProductImages(products);
         raw = orders;
+      } else if (isImpultienda) {
+        raw = await getImpultiendaOrders(clientId, { since: s, until: u, statuses: ['approved', 'refunded', 'chargeback'] });
       }
       setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     } catch (e: any) {
@@ -527,11 +532,11 @@ export default function PedidosPage() {
       setLoading(false);
       if (isInitial) setInitialLoad(false);
     }
-  }, [isShopify, isWoo, isTiendaNube, shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret, tiendanubeStoreId, tiendanubeToken]);
+  }, [isShopify, isWoo, isTiendaNube, isImpultienda, clientId, shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret, tiendanubeStoreId, tiendanubeToken]);
 
   useEffect(() => {
     load(since, until, true);
-  }, [shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret, tiendanubeStoreId, tiendanubeToken]);
+  }, [shopifyDomain, shopifyToken, wordpressUrl, wooConsumerKey, wooConsumerSecret, tiendanubeStoreId, tiendanubeToken, isImpultienda, clientId]);
 
   useEffect(() => {
     if (initialLoad) return;

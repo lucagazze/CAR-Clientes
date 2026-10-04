@@ -8,6 +8,7 @@ import { useToast } from "../components/Toast";
 import { PortalOverlay } from "../components/ui/PortalOverlay";
 import { ecommerce } from "../services/ecommerce";
 import { klaviyo } from "../services/klaviyo";
+import ImpultiendaSetup from "../components/ImpultiendaSetup";
 import {
   Loader2,
   Check,
@@ -31,7 +32,8 @@ import {
   Instagram,
   Facebook,
   MessageSquare,
-  Youtube
+  Youtube,
+  ShoppingBag
 } from "lucide-react";
 
 interface IntegrationPlatform {
@@ -82,6 +84,14 @@ const PLATFORMS: IntegrationPlatform[] = [
     category: "ecommerce",
     description: "Vinculá tu tienda de WordPress WooCommerce mediante REST API para consolidar datos.",
     logoUrl: "/assets/logowordpress.webp",
+    isSimulated: false
+  },
+  {
+    id: "impultienda",
+    name: "Impultienda",
+    category: "ecommerce",
+    description: "Recibí cada venta, reembolso y contracargo de tus tiendas de Impultienda e importá el historial de órdenes.",
+    logoComponent: ShoppingBag,
     isSimulated: false
   },
   {
@@ -500,6 +510,27 @@ export default function IntegracionesPage() {
       loadClientData();
     }
   }, [activeProfileId]);
+
+  // Refresco silencioso tras configurar Impultienda: loadClientData muestra el spinner de página
+  // y desmontaría el modal. También actualiza el perfil activo para que Inicio y Pedidos lo vean.
+  const refreshAfterImpultienda = async () => {
+    if (!activeProfileId) return;
+    const { data } = await supabase.from("car_clients").select("*").eq("id", activeProfileId).maybeSingle();
+    if (!data) return;
+    setClientData(data);
+    if (isViewingAs) {
+      setViewAsProfile(prev => prev ? ({
+        ...prev,
+        ecommerce_platform: data.ecommerce_platform,
+        impultienda_webhook_token: data.impultienda_webhook_token,
+        impultienda_api_key: data.impultienda_api_key,
+        impultienda_store_ids: data.impultienda_store_ids,
+        connection_statuses: data.connection_statuses,
+      } as any) : prev);
+    } else {
+      refreshProfile();
+    }
+  };
 
   const loadClientData = async () => {
     try {
@@ -1195,6 +1226,7 @@ export default function IntegracionesPage() {
   const handleSaveRealPlatform = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlatform || !activeProfileId) return;
+    if (selectedPlatform.id === "impultienda") return;
 
     setSavingSettings(true);
     setTestingConnection(true);
@@ -1664,6 +1696,10 @@ export default function IntegracionesPage() {
   const getPlatformStatus = (platformId: string): "ok" | "error" | "disconnected" => {
     if (!clientData) return "disconnected";
     
+    if (platformId === "impultienda") {
+      return clientData.impultienda_webhook_token ? "ok" : "disconnected";
+    }
+
     if (platformId === "chatwoot") {
       if (!clientData.chatwoot_url || !clientData.chatwoot_token) return "disconnected";
       const val = clientData.connection_statuses?.chatwoot;
@@ -2228,6 +2264,14 @@ export default function IntegracionesPage() {
                         <span className="flex items-center gap-1.5 truncate">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
                           API Key conectada
+                        </span>
+                      )}
+                      {platform.id === "impultienda" && (
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                          {clientData.connection_statuses?.impultienda_last_event
+                            ? `Último aviso: ${clientData.connection_statuses.impultienda_last_event}`
+                            : 'Webhook listo, esperando el primer aviso'}
                         </span>
                       )}
                       {platform.id === "chatwoot" && (
@@ -2957,6 +3001,11 @@ export default function IntegracionesPage() {
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* IMPULTIENDA - webhook + API de órdenes (componente propio, sin el submit del form) */}
+                {selectedPlatform.id === "impultienda" && activeProfileId && (
+                  <ImpultiendaSetup clientId={activeProfileId} onChanged={refreshAfterImpultienda} onClose={() => closeConfigModal(true)} />
                 )}
 
                 {/* CHATWOOT FORM - manual settings URL and Access Token */}

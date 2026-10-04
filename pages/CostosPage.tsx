@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
 import { useToast } from '../components/Toast';
 import { supabase } from '../services/supabase';
-import { ecommerce, normalizeEcommercePlatform } from '../services/ecommerce';
+import { ecommerce, normalizeEcommercePlatform, hasImpultienda } from '../services/ecommerce';
 import { 
   ShoppingBag, Percent, CreditCard, Truck, FileText, Calendar, Plus, 
   Search, Trash2, Edit3, Save, AlertCircle, X, ChevronLeft, ChevronRight, 
@@ -58,7 +58,10 @@ export default function CostosPage() {
   }, [profile]);
   // Sin tienda pero con Meta Ads: los costos se cargan por venta y se aplican sobre
   // las compras y el retorno que informa Meta.
-  const metaOnly = !detectedPlatform && !!(profile as any)?.meta_account_id;
+  // Impultienda (órdenes guardadas en C.A.R) no tiene catálogo: usa el mismo formulario de
+  // costos por venta, aplicado a las ventas reales en la Facturación neta.
+  const impultienda = hasImpultienda(profile);
+  const metaOnly = !detectedPlatform && (!!(profile as any)?.meta_account_id || impultienda);
 
   // Accordion Open/Close states
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
@@ -928,7 +931,9 @@ export default function CostosPage() {
           {openAccordions.meta && (
             <div className="p-6 border-t border-zinc-100 dark:border-white/[0.03] space-y-6">
               <p className="text-[13px] text-zinc-500 dark:text-zinc-400 max-w-2xl">
-                Esta cuenta no tiene una tienda conectada, así que el beneficio se calcula con las compras y el valor generado que informa Meta Ads. Cargá lo que te cuesta cada venta y el Inicio lo descuenta junto con la inversión.
+                {impultienda
+                  ? 'Las ventas llegan de Impultienda. Cargá lo que te cuesta cada venta y el Inicio lo descuenta de la Facturación neta junto con la inversión en Meta Ads.'
+                  : 'Esta cuenta no tiene una tienda conectada, así que el beneficio se calcula con las compras y el valor generado que informa Meta Ads. Cargá lo que te cuesta cada venta y el Inicio lo descuenta junto con la inversión.'}
               </p>
 
               <div>
@@ -951,7 +956,7 @@ export default function CostosPage() {
 
               <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-white/[0.04] p-4 text-[12px] text-zinc-500 dark:text-zinc-400 space-y-1">
                 <p className="text-zinc-800 dark:text-zinc-200 font-bold">
-                  Por cada venta se descuentan {metaCostsCurrency} {metaOnlyPerSale(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })} más el {metaOnlyPct(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })}% del valor generado.
+                  Por cada venta se descuentan {metaCostsCurrency} {metaOnlyPerSale(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })} más el {metaOnlyPct(metaCosts).toLocaleString('es-AR', { maximumFractionDigits: 2 })}% {impultienda ? 'de lo facturado' : 'del valor generado'}.
                 </p>
                 <p>
                   Los montos fijos van en {metaCostsCurrency}, la moneda de tu cuenta de Meta Ads: es la misma en que se muestran la inversión, el valor generado y el beneficio.
@@ -2080,7 +2085,9 @@ export default function CostosPage() {
                 Los costos se aplican automáticamente en el Dashboard
               </span>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                {metaOnly
+                {impultienda
+                  ? 'La Facturación neta descuenta los costos por venta, los costos adicionales y la inversión según el período seleccionado.'
+                  : metaOnly
                   ? 'El Beneficio del bloque Meta Ads descuenta los costos por venta, los costos adicionales y la inversión según el período seleccionado.'
                   : 'La Facturación neta y el ROAS real descuentan costos de productos, comisiones, envíos, costos adicionales y pauta según el período seleccionado.'}
               </p>

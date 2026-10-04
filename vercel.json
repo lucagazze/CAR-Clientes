@@ -13,6 +13,10 @@
       "destination": "/api/oauth?action=shopify-callback"
     },
     {
+      "source": "/api/impultienda-webhook",
+      "destination": "/api/oauth?action=impultienda-webhook"
+    },
+    {
       "source": "/api/tiendanube-callback",
       "destination": "/api/oauth?action=tiendanube-callback"
     },

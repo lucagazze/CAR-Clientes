@@ -3740,6 +3740,314 @@ async function handleCurrencyRates(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+// ── Impultienda ───────────────────────────────────────────────────────────────
+// Es la única integración que GUARDA las órdenes (car_impultienda_orders): Impultienda no
+// tiene API de lectura. Las ventas nuevas llegan por webhook y el historial se importa con
+// el Excel de "Ventas realizadas → Exportar XLSX" (uno por tienda).
+// Un webhook por cliente: /api/impultienda-webhook?c=<clientId>, autenticado con el token
+// fijo que Impultienda manda en x-impultienda-token (la firma HMAC necesita el cuerpo
+// crudo y esta función recibe el JSON ya parseado). Se guardan las órdenes de TODAS las
+// tiendas; el filtro de tiendas del cliente se aplica al leer.
+// El Excel no trae el id interno de la orden: esas filas van como "xlsx-<tienda>-<número>"
+// y el webhook las reemplaza cuando llega un aviso de la misma orden.
+const IMPUL_RANK: Record<string, number> = { pending: 0, abandoned: 1, rejected: 1, approved: 2, refunded: 3, chargeback: 3 };
+const IMPUL_EVENT_STATUS: Record<string, string> = {
+  'order.created': 'pending',
+  'order.approved': 'approved',
+  'order.rejected': 'rejected',
+  'order.abandoned': 'abandoned',
+  'order.refunded': 'refunded',
+  'order.chargeback': 'chargeback',
+};
+const impulXlsxId = (storeId: string, orderNumber: number) => `xlsx-${storeId}-${orderNumber}`;
+
+const impulOrderRow = (clientId: string, data: any, status: string, event: string) => ({
+  client_id: clientId,
+  order_id: String(data.order_id),
+  order_number: Number.isFinite(Number(data.order_number)) ? Number(data.order_number) : null,
+  status,
+  store_id: data.store?.id || null,
+  store_name: data.store?.name || null,
+  total: Number(data.total) || 0,
+  currency: data.currency || null,
+  customer_email: String(data.customer?.email || '').trim().toLowerCase() || null,
+  order_created_at: data.order_created_at || null,
+  data,
+  last_event: event,
+  updated_at: new Date().toISOString(),
+});
+
+const impulSafeEqual = (a: string, b: string) => {
+  const ab = Buffer.from(a || '');
+  const bb = Buffer.from(b || '');
+  return ab.length > 0 && ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+};
+
+// Una fila del Excel de Impultienda → la misma forma que el "data" del webhook.
+// Productos viene como "Nombre (Principal) x1 - 19.99 | Otro (Upsell) x1 - 7.00".
+const impulDataFromXlsx = (row: any, store: { id: string; name: string }) => {
+  const orderNumber = parseInt(String(row.Orden ?? '').replace(/\D/g, ''), 10);
+  if (!orderNumber) return null;
+  const fecha = new Date(row.Fecha);
+  const num = (v: any) => (v === '' || v == null ? null : Number(v));
+  const typeMap: Record<string, string> = { Principal: 'main', Upsell: 'upsell', Bonus: 'bonus' };
+  const items = String(row.Productos || '').split(' | ').map((part: string) => {
+    const m = part.trim().match(/^(.*) \((Principal|Upsell|Bonus)\) x(\d+)(?: - ([\d.]+))?$/);
+    if (!m) return part.trim() ? { product_id: null, name: part.trim(), price: 0, quantity: 1, type: 'main' } : null;
+    return { product_id: null, name: m[1], price: m[4] ? Number(m[4]) : 0, quantity: Number(m[3]) || 1, type: typeMap[m[2]] || 'main' };
+  }).filter(Boolean);
+  return {
+    orderNumber,
+    status: ({ aprobado: 'approved', reembolsado: 'refunded' } as Record<string, string>)[String(row.EstadoPago || '').trim().toLowerCase()] || 'pending',
+    data: {
+      order_id: impulXlsxId(store.id, orderNumber),
+      order_number: orderNumber,
+      customer: { email: String(row.Email || '').trim() || null, name: String(row.Nombre || '').trim(), last_name: '', phone: String(row.Telefono || '').trim() || null, tax_id: null },
+      items,
+      total: num(row.Total) ?? 0,
+      subtotal: num(row.Subtotal) ?? num(row.Total) ?? 0,
+      discount: num(row.Descuento) ?? 0,
+      currency: row.Moneda || null,
+      buyer_total: num(row.Cobrado),
+      buyer_currency: row.MonedaCobro || null,
+      buyer_country: row.Pais || null,
+      payment_method: String(row.Pasarela || row.Metodo || '').toLowerCase() || null,
+      payment_id: row.IDPago || null,
+      order_created_at: isNaN(fecha.getTime()) ? null : fecha.toISOString(),
+      tracking: {
+        utm_source: row.UTMSource || null,
+        utm_medium: row.UTMMedium || null,
+        utm_campaign: row.UTMCampaign || null,
+        utm_content: row.UTMAd || null,
+        utm_term: null,
+        utm_id: null,
+        utm_adset: row.UTMAdset || null,
+      },
+      store: { id: store.id, name: store.name },
+      source: 'xlsx',
+    },
+  };
+};
+
+async function impulStatus(supabase: any, clientId: string, origin: string) {
+  const { data: cl } = await supabase
+    .from('car_clients')
+    .select('ecommerce_platform, impultienda_webhook_token, impultienda_store_ids, connection_statuses')
+    .eq('id', clientId)
+    .maybeSingle();
+  const st = cl?.connection_statuses || {};
+  const stores: Record<string, { id: string; name: string; orders: number; approved: number; imported: number; last: string | null }> = {};
+  const addStore = (id: string, name: string) => {
+    if (!stores[id]) stores[id] = { id, name, orders: 0, approved: 0, imported: 0, last: null };
+    return stores[id];
+  };
+  for (const [id, name] of Object.entries(st.impultienda_stores || {})) addStore(id, String(name));
+  let total = 0;
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data: rows, error } = await supabase
+      .from('car_impultienda_orders')
+      .select('order_id, store_id, store_name, status, order_created_at')
+      .eq('client_id', clientId)
+      .range(from, from + 999);
+    if (error || !rows?.length) break;
+    for (const r of rows) {
+      const s = addStore(r.store_id || 'sin-tienda', r.store_name || 'Sin tienda');
+      s.orders += 1;
+      if (r.status === 'approved') s.approved += 1;
+      if (String(r.order_id).startsWith('xlsx-')) s.imported += 1;
+      if (r.order_created_at && (!s.last || r.order_created_at > s.last)) s.last = r.order_created_at;
+    }
+    total += rows.length;
+    if (rows.length < 1000) break;
+  }
+  return {
+    connected: !!cl?.impultienda_webhook_token,
+    platform: cl?.ecommerce_platform || null,
+    webhookUrl: cl?.impultienda_webhook_token ? `${origin}/api/impultienda-webhook?c=${clientId}` : null,
+    token: cl?.impultienda_webhook_token || null,
+    storeIds: cl?.impultienda_store_ids || [],
+    stores: Object.values(stores).sort((a, b) => b.orders - a.orders),
+    totalOrders: total,
+    lastEvent: st.impultienda_last_event || null,
+    lastEventAt: st.impultienda_last_event_at || null,
+    lastImportAt: st.impultienda_last_import_at || null,
+  };
+}
+
+async function handleImpultiendaWebhook(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
+  if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Servidor no configurado' });
+  const clientId = String(req.query.c || '');
+  const tokenHeader = req.headers['x-impultienda-token'];
+  const token = String(Array.isArray(tokenHeader) ? tokenHeader[0] : tokenHeader || '');
+  if (!/^[0-9a-f-]{36}$/i.test(clientId)) return res.status(401).json({ error: 'cliente inválido' });
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: cl } = await supabase
+    .from('car_clients')
+    .select('impultienda_webhook_token, connection_statuses')
+    .eq('id', clientId)
+    .maybeSingle();
+  // 401 corta los reintentos de Impultienda: con token equivocado no tiene sentido reintentar.
+  if (!cl?.impultienda_webhook_token || !impulSafeEqual(token, cl.impultienda_webhook_token)) {
+    return res.status(401).json({ error: 'token inválido' });
+  }
+
+  const payload = parseRequestBody(req.body);
+  const eventHeader = req.headers['x-impultienda-event'];
+  const event = String(payload.event || (Array.isArray(eventHeader) ? eventHeader[0] : eventHeader) || '');
+  const data = payload.data || {};
+  const isTest = payload.test === true || String(data.order_id || '').startsWith('TEST-');
+  const store = data.store?.id ? { id: String(data.store.id), name: String(data.store.name || 'Tienda') } : null;
+
+  // También los simulacros registran la tienda: así se puede elegir al importar su Excel.
+  const statuses = cl.connection_statuses || {};
+  await supabase.from('car_clients').update({
+    connection_statuses: {
+      ...statuses,
+      impultienda: 'ok',
+      impultienda_last_event: `${event}${isTest ? ' (prueba)' : ''}`,
+      impultienda_last_event_at: new Date().toISOString(),
+      ...(store ? { impultienda_stores: { ...(statuses.impultienda_stores || {}), [store.id]: store.name } } : {}),
+    },
+  }).eq('id', clientId);
+
+  // Los simulacros del botón "Probar" no se guardan (lo pide la documentación de Impultienda).
+  if (isTest) return res.status(200).json({ ok: true, test: true });
+  if (!data.order_id) return res.status(200).json({ ok: false, reason: 'sin order_id' });
+
+  const orderId = String(data.order_id);
+  const xlsxId = store && data.order_number ? impulXlsxId(store.id, Number(data.order_number)) : null;
+  const { data: existingRows } = await supabase
+    .from('car_impultienda_orders')
+    .select('order_id, status')
+    .eq('client_id', clientId)
+    .in('order_id', xlsxId ? [orderId, xlsxId] : [orderId]);
+  const prevStatus = (existingRows || []).reduce((best: string | null, r: any) =>
+    best && (IMPUL_RANK[best] ?? 0) >= (IMPUL_RANK[r.status] ?? 0) ? best : r.status, null);
+  // Un aviso viejo que llega tarde (p. ej. order.created después del approved) no pisa el estado.
+  let status = IMPUL_EVENT_STATUS[event] || prevStatus || 'approved'; // order.email_bounced: la orden sigue aprobada
+  if (prevStatus && (IMPUL_RANK[status] ?? 0) < (IMPUL_RANK[prevStatus] ?? 0)) status = prevStatus;
+
+  const { error } = await supabase
+    .from('car_impultienda_orders')
+    .upsert(impulOrderRow(clientId, data, status, event), { onConflict: 'client_id,order_id' });
+  if (error) {
+    console.error('[impultienda-webhook] upsert:', error);
+    return res.status(500).json({ error: 'No se pudo guardar la orden' }); // 5xx → Impultienda reintenta
+  }
+  if (xlsxId && (existingRows || []).some((r: any) => r.order_id === xlsxId)) {
+    await supabase.from('car_impultienda_orders').delete().eq('client_id', clientId).eq('order_id', xlsxId);
+  }
+  return res.status(200).json({ ok: true });
+}
+
+async function handleImpultienda(req: VercelRequest, res: VercelResponse) {
+  const action = req.query.action as string;
+  if (action === 'impultienda-webhook') return handleImpultiendaWebhook(req, res);
+
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
+  if (!SUPABASE_SERVICE_ROLE_KEY) return res.status(500).json({ error: 'Servidor no configurado' });
+  const authHeader = req.headers.authorization || '';
+  const bearer = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+  const accessToken = bearer.startsWith('Bearer ') ? bearer.slice('Bearer '.length) : '';
+  if (!accessToken) return res.status(401).json({ error: 'Sesión requerida' });
+  const body = parseRequestBody(req.body);
+  const clientId = String(body.clientId || '');
+  if (!clientId) return res.status(400).json({ error: 'clientId requerido' });
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  try {
+    await assertClientAccess(supabase, accessToken, clientId);
+  } catch (err: any) {
+    return res.status(isAuthSessionError(err) ? 401 : 403).json({ error: err?.message || 'Sin permisos' });
+  }
+  const hostHeader = req.headers['x-forwarded-host'] || req.headers.host || 'car.algoritmiadesarrollos.com.ar';
+  const origin = `https://${Array.isArray(hostHeader) ? hostHeader[0] : hostHeader}`;
+
+  try {
+    if (action === 'impultienda-status') return res.status(200).json(await impulStatus(supabase, clientId, origin));
+
+    if (action === 'impultienda-setup') {
+      const { data: cl } = await supabase
+        .from('car_clients')
+        .select('ecommerce_platform, impultienda_webhook_token, connection_statuses')
+        .eq('id', clientId)
+        .maybeSingle();
+      if (!cl) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+      if (body.disconnect) {
+        const restStatuses = Object.fromEntries(Object.entries(cl.connection_statuses || {}).filter(([k]) => !k.startsWith('impultienda')));
+        await supabase.from('car_clients').update({
+          impultienda_webhook_token: null,
+          impultienda_store_ids: null,
+          connection_statuses: restStatuses,
+          ...(cl.ecommerce_platform === 'impultienda' ? { ecommerce_platform: null } : {}),
+        }).eq('id', clientId);
+        return res.status(200).json(await impulStatus(supabase, clientId, origin));
+      }
+
+      const update: Record<string, any> = {
+        ecommerce_platform: 'impultienda',
+        impultienda_webhook_token: cl.impultienda_webhook_token || crypto.randomBytes(24).toString('hex'),
+      };
+      if (Array.isArray(body.storeIds)) {
+        const ids = body.storeIds.map((s: any) => String(s)).filter(Boolean);
+        update.impultienda_store_ids = ids.length ? ids : null;
+      }
+      const { error } = await supabase.from('car_clients').update(update).eq('id', clientId);
+      if (error) throw new Error(error.message);
+      return res.status(200).json(await impulStatus(supabase, clientId, origin));
+    }
+
+    if (action === 'impultienda-import') {
+      // Filas del Excel de "Ventas realizadas" de UNA tienda, de a tandas (el navegador lo parte).
+      const storeId = String(body.store?.id || '').slice(0, 64);
+      const rowsIn: any[] = Array.isArray(body.rows) ? body.rows.slice(0, 1000) : [];
+      if (!storeId) return res.status(400).json({ error: 'Elegí la tienda del Excel.' });
+      const known = await impulStatus(supabase, clientId, origin);
+      const knownStore = known.stores.find(s => s.id === storeId);
+      if (!knownStore || storeId === 'sin-tienda') return res.status(400).json({ error: 'Esa tienda todavía no le avisó nada a C.A.R. Usá el botón Probar del webhook con un producto de esa tienda.' });
+      const store = { id: storeId, name: knownStore.name };
+
+      // Las órdenes que ya llegaron por webhook mandan: no se pisan con la fila del Excel.
+      const realNumbers = new Set<number>();
+      for (let from = 0; from < 100000; from += 1000) {
+        const { data: real } = await supabase
+          .from('car_impultienda_orders')
+          .select('order_number')
+          .eq('client_id', clientId)
+          .eq('store_id', storeId)
+          .not('order_id', 'like', 'xlsx-%')
+          .range(from, from + 999);
+        (real || []).forEach((r: any) => realNumbers.add(r.order_number));
+        if (!real || real.length < 1000) break;
+      }
+
+      let skipped = 0;
+      const rows: any[] = [];
+      for (const raw of rowsIn) {
+        const parsed = impulDataFromXlsx(raw, store);
+        if (!parsed || realNumbers.has(parsed.orderNumber)) { skipped++; continue; }
+        rows.push(impulOrderRow(clientId, parsed.data, parsed.status, 'xlsx-import'));
+      }
+      if (rows.length) {
+        const { error } = await supabase.from('car_impultienda_orders').upsert(rows, { onConflict: 'client_id,order_id' });
+        if (error) throw new Error(`No se pudieron guardar las órdenes: ${error.message}`);
+      }
+      const { data: cl } = await supabase.from('car_clients').select('connection_statuses').eq('id', clientId).maybeSingle();
+      await supabase.from('car_clients').update({
+        connection_statuses: { ...(cl?.connection_statuses || {}), impultienda_last_import_at: new Date().toISOString() },
+      }).eq('id', clientId);
+      return res.status(200).json({ imported: rows.length, skipped });
+    }
+
+    return res.status(400).json({ error: 'Acción de Impultienda desconocida' });
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'Error con Impultienda' });
+  }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -3755,6 +4063,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (action === 'social-draft-caption') return handleSocialDraftCaption(req, res);
   if (action === 'whatsapp-test') return handleWhatsappTest(req, res);
   if (action.startsWith('costs-')) return handleCosts(req, res);
+  if (action.startsWith('impultienda-')) return handleImpultienda(req, res);
+  if (!action && req.url?.includes('/api/impultienda-webhook')) {
+    (req.query as any).action = 'impultienda-webhook';
+    return handleImpultienda(req, res);
+  }
   if (action === 'brain-save') return handleBrainSave(req, res);
 
   // Email preview (routed from /api/preview via vercel.json rewrite)

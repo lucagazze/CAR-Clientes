@@ -15,7 +15,7 @@ import {
   daysAgo,
 } from "../services/metaAds";
 import { klaviyo } from "../services/klaviyo";
-import { ecommerce, normalizeEcommercePlatform } from "../services/ecommerce";
+import { ecommerce, normalizeEcommercePlatform, hasImpultienda } from "../services/ecommerce";
 import { chatwoot } from "../services/chatwoot";
 import { db } from "../services/db";
 import { isDemoProfile, withDemoProfileDefaults } from "../services/demoData";
@@ -1003,6 +1003,7 @@ export default function DashboardPage() {
   const storeStatusKey = useMemo(() => {
     if (detectedPlatform === 'tiendanube') return 'tiendanube';
     if (detectedPlatform === 'wordpress') return 'wordpress';
+    if (detectedPlatform === 'impultienda') return 'impultienda';
     return 'shopify';
   }, [detectedPlatform]);
 
@@ -1235,7 +1236,8 @@ export default function DashboardPage() {
     const hasStoreConfig = detectedPlatform && (
       (detectedPlatform === 'shopify' && prof?.shopify_domain && prof?.shopify_access_token) ||
       (detectedPlatform === 'wordpress' && prof?.wordpress_url && prof?.woo_consumer_key && prof?.woo_consumer_secret) ||
-      (detectedPlatform === 'tiendanube' && prof?.tiendanube_store_id && prof?.tiendanube_access_token)
+      (detectedPlatform === 'tiendanube' && prof?.tiendanube_store_id && prof?.tiendanube_access_token) ||
+      (detectedPlatform === 'impultienda' && hasImpultienda(prof))
     );
     
     const storeVal = statuses[storeStatusKey] || statuses.shopify;
@@ -1340,7 +1342,8 @@ export default function DashboardPage() {
         const hasStoreConfig = detectedPlatform && (
           (detectedPlatform === 'shopify' && prof.shopify_domain && prof.shopify_access_token) ||
           (detectedPlatform === 'wordpress' && prof.wordpress_url && prof.woo_consumer_key && prof.woo_consumer_secret) ||
-          (detectedPlatform === 'tiendanube' && prof.tiendanube_store_id && prof.tiendanube_access_token)
+          (detectedPlatform === 'tiendanube' && prof.tiendanube_store_id && prof.tiendanube_access_token) ||
+          (detectedPlatform === 'impultienda' && hasImpultienda(prof))
         );
         if (!hasStoreConfig) {
           setFetchingStore(false);
@@ -1694,7 +1697,8 @@ export default function DashboardPage() {
       const hasStoreConfig = detectedPlatform && (
         (detectedPlatform === 'shopify' && prof.shopify_domain && prof.shopify_access_token) ||
         (detectedPlatform === 'wordpress' && prof.wordpress_url && prof.woo_consumer_key && prof.woo_consumer_secret) ||
-        (detectedPlatform === 'tiendanube' && prof.tiendanube_store_id && prof.tiendanube_access_token)
+        (detectedPlatform === 'tiendanube' && prof.tiendanube_store_id && prof.tiendanube_access_token) ||
+        (detectedPlatform === 'impultienda' && hasImpultienda(prof))
       );
       if (!hasStoreConfig) return;
       setFetching90d(true);
@@ -1885,8 +1889,10 @@ export default function DashboardPage() {
   const activePrevRange = getPrevPeriod(activeRange.since, activeRange.until);
 
   const showMER = false;
+  // Impultienda informa la moneda de cada orden (la del vendedor): manda sobre la de /moneda.
+  const storeCurrencyCode: string = (detectedPlatform === 'impultienda' && (currentStore?.currency || prevStore?.currency)) || currencySettings.storeCurrency;
   // MER con monedas mixtas: ingresos (moneda tienda) y pauta (moneda Meta) a base
-  const merStoreToBase = (n: number) => convertCurrency(n, currencySettings.storeCurrency, currencySettings.baseCurrency, currencySettings);
+  const merStoreToBase = (n: number) => convertCurrency(n, storeCurrencyCode, currencySettings.baseCurrency, currencySettings);
   const merMetaToBase = (n: number) => convertCurrency(n, currencySettings.metaCurrency, currencySettings.baseCurrency, currencySettings);
   const currentMER = (currentStore && currentMeta && currentMeta.spend > 0)
     ? merStoreToBase(currentStore.revenue) / merMetaToBase(currentMeta.spend)
@@ -1909,7 +1915,7 @@ export default function DashboardPage() {
 
   // Conversión de moneda: cada fuente puede venir en una moneda distinta (config en /moneda).
   // Todo lo que cruza fuentes (neto, MER, ROAS real) se lleva a la moneda base.
-  const convertStoreToDashboard = (amount: number) => convertCurrency(amount, currencySettings.storeCurrency, currencySettings.baseCurrency, currencySettings);
+  const convertStoreToDashboard = (amount: number) => convertCurrency(amount, storeCurrencyCode, currencySettings.baseCurrency, currencySettings);
   // La moneda de Meta es la que informa la propia cuenta publicitaria; la de Moneda es el respaldo.
   const metaAccountCurrency: string = currentMeta?.currency || currencySettings.metaCurrency;
   const convertMetaToDashboard = (amount: number) => convertCurrency(amount, metaAccountCurrency, currencySettings.baseCurrency, currencySettings);
@@ -1933,6 +1939,13 @@ export default function DashboardPage() {
     if (!costsConfig || !store) return 0;
     const revenueBase = convertStoreToDashboard(store.revenue || 0);
     const orders = store.orders || 0;
+    // Impultienda no tiene catálogo con costos por variante: usa los "Costos por venta" de /costos
+    // (% sobre lo facturado + monto fijo por venta en la moneda de la cuenta de Meta).
+    if (detectedPlatform === 'impultienda') {
+      const perSale = normalizeMetaOnlyCosts(costsConfig.metaCosts);
+      return revenueBase * (metaOnlyPct(perSale) / 100)
+        + convertCurrency(metaOnlyPerSale(perSale) * orders, metaAccountCurrency, currencySettings.baseCurrency, currencySettings);
+    }
     const platformKey = detectedPlatform === 'tiendanube' ? 'tiendanube' : detectedPlatform === 'shopify' ? 'shopify' : 'custom';
     const commissionPct = Number(costsConfig.platformCommissions?.[platformKey]) || 0;
     const paymentPct = (Number(costsConfig.paymentFees?.shopifyFees) || 0)

@@ -205,6 +205,32 @@ const SKIP_EXTENSIONS = /\.(css|js|jpg|jpeg|png|gif|svg|webp|ico|woff|woff2|ttf|
 const SKIP_PATHS = /\/(wp-content|wp-includes|wp-json|wp-admin|feed|tag|author|page\/\d+|cart|checkout|mi-cuenta|my-account|wishlist|compare|carrito)\//i;
 const SKIP_PRODUCT_PAGES = /\/(product|producto|shop\/|tienda\/|categoria-producto|product-category|collections\/|collection\/).+/i;
 
+// Órdenes de Impultienda guardadas por el webhook / la importación (api/oauth.ts).
+// Respeta el filtro de tiendas del cliente (impultienda_store_ids vacío = todas).
+async function readImpultiendaOrders(supabase: any, clientId: string, opts: { statuses?: string[]; sinceIso?: string; untilIso?: string; limit?: number; columns?: string }) {
+  const { data: cl } = await supabase.from('car_clients').select('impultienda_store_ids').eq('id', clientId).maybeSingle();
+  const storeIds: string[] = cl?.impultienda_store_ids || [];
+  const max = opts.limit ?? 20000;
+  const rows: any[] = [];
+  for (let from = 0; from < max; from += 1000) {
+    let q = supabase
+      .from('car_impultienda_orders')
+      .select(opts.columns || 'order_id, status, store_name, total, currency, customer_email, order_created_at, updated_at, data')
+      .eq('client_id', clientId)
+      .order('order_created_at', { ascending: false })
+      .range(from, Math.min(from + 999, max - 1));
+    if (opts.statuses?.length) q = q.in('status', opts.statuses);
+    if (opts.sinceIso) q = q.gte('order_created_at', opts.sinceIso);
+    if (opts.untilIso) q = q.lte('order_created_at', opts.untilIso);
+    if (storeIds.length) q = q.in('store_id', storeIds);
+    const { data, error } = await q;
+    if (error) throw new Error(`No se pudieron leer las órdenes de Impultienda: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return rows;
+}
+
 function normalizePlatform(platform?: string | null) {
   const value = String(platform || '').trim().toLowerCase();
   if (value === 'woocommerce' || value === 'woo' || value === 'wordpress') return 'wordpress';
@@ -339,6 +365,65 @@ function normalizeOrder(o: any, platform: string) {
         orders_count: 1,
         total_spent: parseFloat(o.total || 0)
       } : null
+    };
+  }
+  if (platform === 'impultienda') {
+    // Filas de car_impultienda_orders: { status, data } (data = payload del webhook / la API).
+    // Productos digitales: una venta aprobada ya está entregada.
+    const d = o.data || {};
+    const c = d.customer || {};
+    const t = d.tracking || {};
+    const utm = new URLSearchParams();
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id']) if (t[k]) utm.set(k, String(t[k]));
+    const items = Array.isArray(d.items) ? d.items : [];
+    const fullName = `${c.name || ''} ${c.last_name || ''}`.trim();
+    const total = parseFloat(d.total ?? o.total ?? 0) || 0;
+    return {
+      id: o.order_id,
+      order_number: d.order_number ? `#${d.order_number}` : `#${String(o.order_id).slice(0, 8)}`,
+      created_at: o.order_created_at || d.order_created_at,
+      cancelled_at: ['refunded', 'chargeback'].includes(o.status) ? (o.updated_at || d.order_created_at) : null,
+      total_price: total,
+      subtotal_price: parseFloat(d.subtotal ?? total) || 0,
+      total_discounts: 0,
+      total_tax: 0,
+      currency: d.currency || o.currency || null,
+      financial_status: o.status === 'approved' ? 'paid' : o.status === 'refunded' ? 'refunded' : o.status === 'chargeback' ? 'voided' : 'pending',
+      fulfillment_status: o.status === 'approved' ? 'fulfilled' : 'unfulfilled',
+      customer_name: fullName || c.email || 'Sin Cliente',
+      email: c.email || null,
+      phone: c.phone || null,
+      landing_site: utm.toString() ? `/?${utm.toString()}` : null,
+      // Se agrupa por nombre: las filas importadas del Excel no traen product_id.
+      line_items: items.map((it: any) => ({
+        product_id: it.name || it.product_id,
+        variant_id: it.product_id || it.name,
+        title: it.name,
+        product_name: it.name,
+        quantity: Number(it.quantity) || 1,
+        price: parseFloat(it.price || 0) || 0,
+        variant_title: it.type === 'upsell' ? 'Order bump' : it.type === 'bonus' ? 'Bono' : null,
+      })),
+      shipping_address: null,
+      customer: c.email ? {
+        first_name: c.name || '',
+        last_name: c.last_name || '',
+        email: c.email,
+        phone: c.phone || null,
+        orders_count: 1,
+        total_spent: total,
+      } : null,
+      // Datos propios de Impultienda para Pedidos
+      _impultienda: {
+        status: o.status,
+        store_name: d.store?.name || o.store_name || null,
+        payment_method: d.payment_method || null,
+        buyer_total: d.buyer_total ?? null,
+        buyer_currency: d.buyer_currency || null,
+        buyer_country: d.buyer_country || null,
+        is_post_purchase: !!d.is_post_purchase,
+        tracking: d.tracking || null,
+      },
     };
   }
   if (platform === 'wordpress') {
@@ -1115,6 +1200,38 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
     }
   }
 
+  // ── IMPULTIENDA — listado de órdenes guardadas (Pedidos) ──
+  if (type === 'impultienda-orders') {
+    try {
+      const { since, until, statuses } = req.body as any;
+      const rows = await readImpultiendaOrders(supabase, clientId, {
+        statuses: Array.isArray(statuses) && statuses.length ? statuses : undefined,
+        sinceIso: since ? new Date(`${since}T00:00:00-03:00`).toISOString() : undefined,
+        untilIso: until ? new Date(`${until}T23:59:59-03:00`).toISOString() : undefined,
+        limit: 5000,
+      });
+      // Compras aprobadas por email en todo el historial, para marcar clientes nuevos vs. recurrentes.
+      const history = await readImpultiendaOrders(supabase, clientId, { statuses: ['approved'], limit: 20000, columns: 'order_id, total, customer_email' });
+      const byEmail: Record<string, { count: number; spent: number }> = {};
+      for (const h of history) {
+        const email = String(h.customer_email || '').toLowerCase();
+        if (!email) continue;
+        byEmail[email] = byEmail[email] || { count: 0, spent: 0 };
+        byEmail[email].count += 1;
+        byEmail[email].spent += parseFloat(h.total || 0) || 0;
+      }
+      const orders = rows.map(r => {
+        const o: any = normalizeOrder(r, 'impultienda');
+        const life = o.customer?.email ? byEmail[String(o.customer.email).toLowerCase()] : null;
+        if (life) o.customer = { ...o.customer, orders_count: life.count, total_spent: life.spent };
+        return o;
+      });
+      return res.status(200).json({ orders });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Error interno' });
+    }
+  }
+
   // ── E-COMMERCE DASHBOARD DATA AGGREGATION ──
   if (type === 'dashboard') {
     try {
@@ -1332,6 +1449,19 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
         rawRecent = wRecent.response.ok ? wRecent.orders : [];
         rawHistory = rawRecent;
       }
+      else if (active_platform === 'impultienda') {
+        // Órdenes guardadas en Supabase (webhook + importación). Solo cuentan las aprobadas.
+        if (!clientId) return res.status(400).json({ error: 'Impultienda requiere clientId' });
+        // El historial solo se usa para contar compras por email (clientes que repiten): sin el JSON.
+        const [inRange, recent, history] = await Promise.all([
+          readImpultiendaOrders(supabase, clientId, { statuses: ['approved'], sinceIso, untilIso }),
+          readImpultiendaOrders(supabase, clientId, { statuses: ['approved'], limit: 40 }),
+          readImpultiendaOrders(supabase, clientId, { statuses: ['approved'], limit: 20000, columns: 'order_id, total, customer_email' }),
+        ]);
+        rawOrders = inRange.map(r => ({ ...r, id: r.order_id }));
+        rawRecent = recent.map(r => ({ ...r, id: r.order_id }));
+        rawHistory = history.map(r => ({ ...r, id: r.order_id }));
+      }
 
       const orders = rawOrders.map(o => normalizeOrder(o, active_platform));
       const recentOrders = rawRecent.map(o => normalizeOrder(o, active_platform));
@@ -1374,6 +1504,13 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
         } else if (active_platform === 'tiendanube') {
           for (const o of allFetchedOrders) {
             const email = (o.customer?.email || '').toLowerCase().trim();
+            if (!email) continue;
+            nonShopifyLifetime[email] = (nonShopifyLifetime[email] || 0) + 1;
+            nonShopifySpent[email] = (nonShopifySpent[email] || 0) + parseFloat(o.total || 0);
+          }
+        } else if (active_platform === 'impultienda') {
+          for (const o of allFetchedOrders) {
+            const email = String(o.customer_email || o.data?.customer?.email || '').toLowerCase().trim();
             if (!email) continue;
             nonShopifyLifetime[email] = (nonShopifyLifetime[email] || 0) + 1;
             nonShopifySpent[email] = (nonShopifySpent[email] || 0) + parseFloat(o.total || 0);
@@ -1571,6 +1708,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
         topProvinces,
         topCities,
         attribution: buildOrderAttribution(validOrders),
+        ...(active_platform === 'impultienda' ? { currency: validOrders[0]?.currency || recentFormatted[0]?.currency || null } : {}),
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Error interno' });

@@ -10,6 +10,7 @@ import { useViewAs } from '../../contexts/ViewAsContext';
 import { useUnread } from '../../contexts/UnreadContext';
 import { db } from '../../services/db';
 import { supabase } from '../../services/supabase';
+import { hasImpultienda } from '../../services/ecommerce';
 import { isDemoEmail, isDemoProfile } from '../../services/demoData';
 
 interface SidebarProps {
@@ -137,6 +138,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
   const hasKlaviyo   = !!(activeProfile?.klaviyo_api_key);
   const connectionStatuses = activeProfile?.connection_statuses || {};
   const hasEcommerce = !!detectedPlatform;
+  // Impultienda: solo Pedidos y Costos (no hay catálogo ni stock para Inventario, Tienda o Análisis).
+  const hasImpul = hasImpultienda(activeProfile);
   const hasRedes = !!(
     activeProfile?.fb_page_id ||
     (activeProfile as any)?.ig_business_id
@@ -153,10 +156,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, darkMode, t
     { path: '/mensajeria',     icon: MessageSquare, label: 'Mensajería',      configured: hasChatwoot, badge: unreadCount },
     { path: '/comentarios',    icon: MessageCircle, label: 'Comentarios',     configured: hasRedes, badge: pendingCommentsCount },
     { path: '/redes-sociales', icon: Instagram,     label: 'Redes Sociales',  configured: hasRedes },
-    { path: '/pedidos',        icon: ShoppingCart,  label: 'Pedidos',         configured: hasEcommerce, badge: pendingOrdersCount, badgeLoading: ordersLoading },
+    { path: '/pedidos',        icon: ShoppingCart,  label: 'Pedidos',         configured: hasEcommerce || hasImpul, badge: pendingOrdersCount, badgeLoading: ordersLoading },
     { path: '/inventario',     icon: Package,       label: 'Inventario',      configured: hasEcommerce },
     { path: '/clientes',       icon: Users,         label: 'Clientes',        configured: hasEcommerce },
-    { path: '/costos',         icon: Coins,         label: 'Costos',          configured: hasEcommerce || hasMeta },
+    { path: '/costos',         icon: Coins,         label: 'Costos',          configured: hasEcommerce || hasMeta || hasImpul },
     { path: '/moneda',         icon: ArrowRightLeft, label: 'Moneda',         configured: true },
   ].filter(i => isAdmin || i.configured);
 

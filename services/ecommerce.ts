@@ -45,6 +45,23 @@ export const normalizeEcommercePlatform = (platform?: string | null) => {
   return value || null;
 };
 
+// Impultienda no tiene credenciales de tienda: las órdenes llegan por webhook / importación y
+// se guardan en C.A.R. Está "conectada" cuando el cliente generó su webhook en Integraciones.
+export const hasImpultienda = (profile: any) =>
+  normalizeEcommercePlatform(profile?.ecommerce_platform) === 'impultienda' && !!profile?.impultienda_webhook_token;
+
+export const getImpultiendaOrders = async (clientId: string, opts: { since?: string; until?: string; statuses?: string[] } = {}) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/scrape-all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+    body: JSON.stringify({ clientId, type: 'impultienda-orders', ...opts }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  return (json.orders || []) as any[];
+};
+
 // ─── Order attribution ────────────────────────────────────────────────────────
 
 export type OrderAttribution = {
