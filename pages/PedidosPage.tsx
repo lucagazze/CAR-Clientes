@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useViewAs } from '../contexts/ViewAsContext';
-import { ecommerce, normalizeEcommercePlatform, hasImpultienda, getImpultiendaOrders, hasStripe, getStripeOrders } from '../services/ecommerce';
+import { ecommerce, normalizeEcommercePlatform, hasImpultienda, getImpultiendaOrders, hasStripe, getStripeOrders, stripeApi } from '../services/ecommerce';
 import { CenteredPageLoader } from '../components/ui/CenteredPageLoader';
 import {
   ShoppingCart, Search, ChevronDown, ChevronUp, Package,
@@ -527,6 +527,8 @@ export default function PedidosPage() {
       } else if (isImpultienda) {
         raw = await getImpultiendaOrders(clientId, { since: s, until: u, statuses: ['approved', 'refunded', 'chargeback'] });
       } else if (isStripe) {
+        // Igual que Inicio: primero trae los cobros nuevos (si falla, muestra lo guardado).
+        await stripeApi.sync(clientId).catch(err => console.error('Stripe sync error:', err));
         raw = await getStripeOrders(clientId, { since: s, until: u });
       }
       setOrders([...raw].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));

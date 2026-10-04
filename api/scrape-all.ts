@@ -1310,7 +1310,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
       const [charges, refunds, history, links] = await Promise.all([
         readStripeTx(supabase, clientId, { categories: ['charge'], sinceIso, untilIso, limit: 5000 }),
         readStripeTx(supabase, clientId, { categories: ['refund', 'dispute'], sinceIso, limit: 5000, columns: 'charge_id, amount' }),
-        readStripeTx(supabase, clientId, { categories: ['charge'], limit: 30000, columns: 'amount, customer_email' }),
+        readStripeTx(supabase, clientId, { categories: ['charge'], limit: 30000, columns: 'amount, customer_email, is_post_purchase' }),
         supabase.from('car_stripe_links').select('account_id, account_name').eq('client_id', clientId),
       ]);
       const refundedBy = new Map<string, number>();
@@ -1318,7 +1318,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
       const byEmail: Record<string, { count: number; spent: number }> = {};
       history.forEach(h => {
         const e = String(h.customer_email || '');
-        if (!e) return;
+        if (!e || h.is_post_purchase) return;
         byEmail[e] = byEmail[e] || { count: 0, spent: 0 };
         byEmail[e].count += 1;
         byEmail[e].spent += Number(h.amount) || 0;
@@ -1595,7 +1595,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
           readStripeTx(supabase, clientId, { categories: ['charge'], sinceIso, untilIso }),
           readStripeTx(supabase, clientId, { categories: ['charge', 'refund', 'dispute', 'dispute_reversal'], sinceIso, untilIso, columns: 'reporting_category, amount, fee, net, currency, created_at' }),
           readStripeTx(supabase, clientId, { categories: ['charge'], limit: 40 }),
-          readStripeTx(supabase, clientId, { categories: ['charge'], limit: 30000, columns: 'txn_id, charge_id, amount, customer_email' }),
+          readStripeTx(supabase, clientId, { categories: ['charge'], limit: 30000, columns: 'txn_id, charge_id, amount, customer_email, is_post_purchase' }),
           supabase.from('car_stripe_links').select('account_id, account_name').eq('client_id', clientId),
         ]);
         const accountNames = new Map<string, string>((links.data || []).map((l: any) => [l.account_id, l.account_name]));
@@ -1675,6 +1675,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
           }
         } else if (active_platform === 'impultienda' || active_platform === 'stripe') {
           for (const o of allFetchedOrders) {
+            if (o.is_post_purchase) continue; // el upsell 1-click no es una segunda compra
             const email = String(o.customer_email || o.data?.customer?.email || '').toLowerCase().trim();
             if (!email) continue;
             nonShopifyLifetime[email] = (nonShopifyLifetime[email] || 0) + 1;
@@ -1704,6 +1705,7 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
             seq[email] = Math.max(1, seq[email] - 1);
           }
         } else {
+          arr = arr.filter((o: any) => !o._stripe?.is_post_purchase);
           const rangeCount: Record<string, number> = {};
           for (const o of arr) {
             const email = (o.customer?.email || '').toLowerCase().trim();
@@ -1734,7 +1736,9 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
       const validOrders = orders.filter((o: any) => !o.cancelled_at && o.financial_status !== 'voided');
 
       const totalRevenue = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_price || 0), 0);
-      const ordersCount = validOrders.length;
+      // Stripe: el upsell post-compra es un cobro aparte; suma a la facturación pero no es otro pedido.
+      const isUpsellCharge = (o: any) => !!o._stripe?.is_post_purchase;
+      const ordersCount = validOrders.filter((o: any) => !isUpsellCharge(o)).length;
       const aov = ordersCount > 0 ? totalRevenue / ordersCount : 0;
       const totalDiscounts = validOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_discounts || 0), 0);
 
@@ -1770,18 +1774,22 @@ ${JSON.stringify(signals).slice(0, 6000)}`;
         const date = getArgentinaDateStr(new Date(o.created_at));
         if (date && dailyData[date]) {
           dailyData[date].revenue += parseFloat(o.total_price || 0);
-          dailyData[date].orders += 1;
+          if (!isUpsellCharge(o)) dailyData[date].orders += 1;
         }
 
-        if (o.customer) {
+        if (isUpsellCharge(o)) {
+          // solo cuenta para productos (abajo), no para clientes ni envíos
+        } else if (o.customer) {
           if ((o.customer.orders_count || 1) > 1) returningCustomers++;
           else newCustomers++;
         } else {
           newCustomers++;
         }
 
-        if (o.fulfillment_status === 'fulfilled') fulfilledOrders++;
-        else unfulfilledOrders++;
+        if (!isUpsellCharge(o)) {
+          if (o.fulfillment_status === 'fulfilled') fulfilledOrders++;
+          else unfulfilledOrders++;
+        }
 
         if (o.line_items) {
           o.line_items.forEach((item: any) => {
